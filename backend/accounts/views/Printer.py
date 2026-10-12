@@ -268,6 +268,14 @@ def _printer_bid_is_unspecified(value):
 
 
 def _printer_catalogue_match_value(bid_value, catalogue_value, field=""):
+    if field == "main_paper_tray_count":
+        # "2 Additional Tray Can be Added" (OM240, OM249): the model ships with
+        # one main tray and takes up to that many, so a bid asking for any
+        # count from 1 to 2 matches.
+        expandable = re.search(r"(\d+)\s*additional\s+tray", str(catalogue_value or ""), re.IGNORECASE)
+        wanted = re.search(r"\d+", str(bid_value or ""))
+        if expandable and wanted and 1 <= int(wanted.group()) <= int(expandable.group(1)):
+            return True, 100
     bid_semantic = _printer_semantic_value(field, bid_value)
     catalogue_semantic = _printer_semantic_value(field, catalogue_value)
     if bid_semantic and bid_semantic == catalogue_semantic:
