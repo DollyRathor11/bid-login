@@ -301,7 +301,7 @@ export default function WorkstationAnalyserDashboard() {
                       {(safePage - 1) * ITEMS_PER_PAGE + i + 1}
                     </td>
                     <td className="px-5 py-4 border-b border-gray-100">
-                      <span className="text-sm font-bold text-blue-600">{bid.bid_no}</span>
+                      <span className="block break-all text-sm font-bold text-blue-600">{bid.bid_no}</span>
                     </td>
                     <td className="px-5 py-4 border-b border-gray-100">
                       <span className="text-sm font-bold text-gray-800 truncate max-w-[160px] block">{bid.dept_name || "-"}</span>

@@ -416,7 +416,7 @@ export default function AnalyserDashboard({ product = "desktop" }) {
 
                                     <td className="overflow-hidden px-5 py-4 border-b border-gray-100">
                                         <span
-                                            className="block truncate whitespace-nowrap text-sm font-bold text-blue-600"
+                                            className="block break-all text-sm font-bold text-blue-600"
                                             title={bid.bid_no}
                                         >
                                             {bid.bid_no}
