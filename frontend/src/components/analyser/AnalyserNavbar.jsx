@@ -142,7 +142,7 @@ const AnalyserHome = () => {
         fetch(`${api.monthly}?year=${selectedYear}`),
         fetch(api.daily),
         fetch(`${api.list}?status=pending&role=analyser&year=${selectedYear}`),
-        fetch(`${api.list}?status=reviewed&role=analyser&year=${selectedYear}`),
+        fetch(`${api.list}?status=${selectedProduct.key === "desktop" ? "approved" : "reviewed"}&role=analyser&year=${selectedYear}`),
         fetch(`${api.list}?status=re-analyze&role=analyser&year=${selectedYear}`),
       ]);
       const monthlyJson = monthlyRes.ok ? await monthlyRes.json() : [];
