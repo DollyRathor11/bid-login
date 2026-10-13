@@ -387,6 +387,7 @@ export default function PrinterBidDetailView() {
   const [modelMatches, setModelMatches] = useState([]);
   const [modelInputValue, setModelInputValue] = useState("");
   const isMultifunctionBid = String(form?.printer_type || "").toLowerCase().includes("multifunction");
+  const datesBesideWarranty = isMultifunctionBid && !readOnly;
   const activeRequiredFields = isMultifunctionBid
     ? REQUIRED_FIELDS
     : REQUIRED_FIELDS.filter((field) => !MULTIFUNCTION_ONLY_FIELDS.includes(field));
@@ -884,18 +885,35 @@ export default function PrinterBidDetailView() {
             </VerifiedInputWrapper>
           )}
 
+          {/* Multifunction bids: the bid dates follow Extended Warranty so its
+              row has no empty cells (the MFP-only fields shift the grid). */}
+          {datesBesideWarranty && (
+            <>
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
+                <input type="date" name="start_date" value={form?.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+              </VerifiedInputWrapper>
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
+                <input type="date" name="date" value={form?.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+              </VerifiedInputWrapper>
+            </>
+          )}
+
           <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
             {readOnly && (
               <VerifiedInputWrapper alignTwoLineLabel verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
                 <input type="text" name="extended_warranty" value={form?.extended_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
             )}
-            <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
-              <input type="date" name="start_date" value={form?.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
-            </VerifiedInputWrapper>
-            <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
-              <input type="date" name="date" value={form?.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
-            </VerifiedInputWrapper>
+            {!datesBesideWarranty && (
+              <>
+                <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
+                  <input type="date" name="start_date" value={form?.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+                </VerifiedInputWrapper>
+                <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
+                  <input type="date" name="date" value={form?.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+                </VerifiedInputWrapper>
+              </>
+            )}
 
             <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="freightInstallation" label="Freight and Installation">
               <select name="freightInstallation" value={form?.freightInstallation ?? "Yes"} onChange={handleChange} disabled={readOnly} className={inputCls}>
