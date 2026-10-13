@@ -924,6 +924,26 @@ export default function PrinterBidDetailView() {
             <textarea name="extra_requirements" value={form?.extra_requirements || ""} onChange={handleChange} disabled={readOnly} rows={readOnly ? 1 : 2} className={textareaCls} />
           </VerifiedInputWrapper>
 
+          {/* Every approved bid shows its Total Approved Price (Printer keeps it as final_amount). */}
+          {readOnly && isApproved && (
+            <div className="md:col-span-2 lg:col-span-3 rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="block text-sm font-semibold text-slate-800">Total Approved Price</label>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700">₹</span>
+                  <input
+                    type="text"
+                    value={Number(form?.final_amount) > 0 ? Number(form.final_amount).toLocaleString("en-IN", { maximumFractionDigits: 0 }) : ""}
+                    readOnly
+                    disabled
+                    placeholder="0"
+                    className="w-48 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-right text-lg font-semibold text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
           {!readOnly && (
           <div className="min-w-0">
           <div className="relative flex items-center gap-2 rounded-lg border border-blue-300 bg-blue-50/60 p-2 shadow-sm w-fit">
