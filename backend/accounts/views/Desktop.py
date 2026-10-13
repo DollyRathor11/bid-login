@@ -6834,6 +6834,7 @@ def desktop_monthly_performance(request):
                 "total": 0,
                 "pending": 0,
                 "reviewed": 0,
+                "approved": 0,
                 "reAnalyze": 0,
             })
 
@@ -6847,6 +6848,8 @@ def desktop_monthly_performance(request):
             status_label = _get_status_label(bid)
 
             result[month_index]["total"] += 1
+            if bid.review_status == "approved":
+                result[month_index]["approved"] += 1
 
             if status_label == "pending":
                 result[month_index]["pending"] += 1
@@ -6883,6 +6886,7 @@ def desktop_daily_activity(request):
                 "total": 0,
                 "pending": 0,
                 "reviewed": 0,
+                "approved": 0,
                 "reAnalyze": 0,
             })
 
@@ -6908,6 +6912,8 @@ def desktop_daily_activity(request):
             status_label = _get_status_label(bid)
 
             date_map[bid_date]["total"] += 1
+            if bid.review_status == "approved":
+                date_map[bid_date]["approved"] += 1
 
             if status_label == "pending":
                 date_map[bid_date]["pending"] += 1
