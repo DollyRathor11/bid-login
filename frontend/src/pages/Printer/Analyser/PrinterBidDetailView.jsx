@@ -388,6 +388,8 @@ export default function PrinterBidDetailView() {
   const [modelInputValue, setModelInputValue] = useState("");
   const isMultifunctionBid = String(form?.printer_type || "").toLowerCase().includes("multifunction");
   const datesBesideWarranty = isMultifunctionBid && !readOnly;
+  // Approved/view mode of a plain Printer bid (not Multifunction).
+  const printerView = readOnly && !isMultifunctionBid;
   const activeRequiredFields = isMultifunctionBid
     ? REQUIRED_FIELDS
     : REQUIRED_FIELDS.filter((field) => !MULTIFUNCTION_ONLY_FIELDS.includes(field));
@@ -879,7 +881,7 @@ export default function PrinterBidDetailView() {
             <input type="text" name="onsite_warranty" value={form?.onsite_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          {!readOnly && (
+          {(!readOnly || printerView) && (
             <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
               <input type="text" name="extended_warranty" value={form?.extended_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
             </VerifiedInputWrapper>
@@ -899,7 +901,7 @@ export default function PrinterBidDetailView() {
           )}
 
           <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-            {readOnly && (
+            {readOnly && !printerView && (
               <VerifiedInputWrapper alignTwoLineLabel verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
                 <input type="text" name="extended_warranty" value={form?.extended_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
@@ -922,16 +924,24 @@ export default function PrinterBidDetailView() {
               </select>
             </VerifiedInputWrapper>
 
-            {/* EPBG sits beside Freight and Installation, in the approved view too. */}
-            <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
-              <input type="text" name="epbg" value={form?.epbg || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
-            </VerifiedInputWrapper>
+            {/* EPBG sits beside Freight and Installation (the approved Printer
+                view puts it beside Extra Requirements instead). */}
+            {!printerView && (
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
+                <input type="text" name="epbg" value={form?.epbg || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+              </VerifiedInputWrapper>
+            )}
 
           </div>
 
         </div>
 
         <div className="mt-6 mb-4 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          {printerView && (
+            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
+              <input type="text" name="epbg" value={form?.epbg || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+            </VerifiedInputWrapper>
+          )}
           <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extra_requirements" label="Extra Requirements" optional>
             <textarea name="extra_requirements" value={form?.extra_requirements || ""} onChange={handleChange} disabled={readOnly} rows={readOnly ? 1 : 2} className={textareaCls} />
           </VerifiedInputWrapper>
