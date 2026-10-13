@@ -33,6 +33,12 @@ const BID_PRODUCTS = [
 const PRODUCTS = BID_PRODUCTS;
 const NAV_ENABLED_KEYS = new Set(["desktop", "aio", "workstation", "printer", "toner"]);
 const DASHBOARD_API_MAP = {
+  aio: {
+    years: `${API_BASE}/aio-bids/dashboard-years/`,
+    monthly: `${API_BASE}/aio-bids/monthly-performance/`,
+    daily: `${API_BASE}/aio-bids/daily-activity/`,
+    list: `${API_BASE}/aio-bids/list/`,
+  },
   desktop: {
     years: `${API_BASE}/desktop-bids/dashboard-years/`,
     monthly: `${API_BASE}/desktop-bids/monthly-performance/`,
@@ -142,7 +148,7 @@ const AnalyserHome = () => {
         fetch(`${api.monthly}?year=${selectedYear}`),
         fetch(api.daily),
         fetch(`${api.list}?status=pending&role=analyser&year=${selectedYear}`),
-        fetch(`${api.list}?status=${selectedProduct.key === "desktop" ? "approved" : "reviewed"}&role=analyser&year=${selectedYear}`),
+        fetch(`${api.list}?status=${["desktop", "aio"].includes(selectedProduct.key) ? "approved" : "reviewed"}&role=analyser&year=${selectedYear}`),
         fetch(`${api.list}?status=re-analyze&role=analyser&year=${selectedYear}`),
       ]);
       const monthlyJson = monthlyRes.ok ? await monthlyRes.json() : [];

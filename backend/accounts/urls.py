@@ -197,6 +197,9 @@ urlpatterns = [
 
     path("aio-bids/create/", create_aio_bid, name="create_aio_bid"),
     path("aio-bids/list/", list_aio_bids, name="list_aio_bids"),
+    path("aio-bids/dashboard-years/", product_dashboard.aio_dashboard_years),
+    path("aio-bids/monthly-performance/", product_dashboard.aio_monthly_performance),
+    path("aio-bids/daily-activity/", product_dashboard.aio_daily_activity),
     path("aio-bids/<int:bid_id>/update/", update_aio_bid, name="update_aio_bid"),
     path("aio-bids/<int:bid_id>/review/", review_aio_bid, name="review_aio_bid"),
     path("aio-bids/<int:bid_id>/admin-review/", admin_review_aio_bid, name="admin_review_aio_bid"),

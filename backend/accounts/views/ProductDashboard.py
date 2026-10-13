@@ -49,6 +49,8 @@ def _model(product):
 
 
 def _analyser_label(bid):
+    if not hasattr(bid, "review_status"):
+        return {"complete": "pending", "approved": "reviewed", "rejected": "reAnalyze", "re-analyze": "reAnalyze"}.get(bid.status)
     if bid.review_status == "pending":
         return "pending"
     if bid.review_status == "re-analyze":
@@ -72,7 +74,8 @@ def _admin_label(bid):
 
 def _base_queryset(product, role, year=None, analyser=None):
     if product in ("aio", "toner"):
-        queryset = _model(product).objects.filter(status__in=["analyzed", "approved", "rejected", "re-analyze"])
+        statuses = ["analyzed", "approved", "rejected", "re-analyze"] if role == "admin" else ["complete", "approved", "rejected", "re-analyze"]
+        queryset = _model(product).objects.filter(status__in=statuses)
     else:
         queryset = _model(product).objects.filter(status="complete")
         if role == "admin":
@@ -232,6 +235,15 @@ def admin_aio_daily_activity(request): return _daily(request, "aio", "admin")
 
 @require_http_methods(["GET"])
 def admin_aio_stats(request): return _stats(request, "aio")
+
+@require_http_methods(["GET"])
+def aio_dashboard_years(request): return _years(request, "aio")
+
+@require_http_methods(["GET"])
+def aio_monthly_performance(request): return _monthly(request, "aio", "analyser")
+
+@require_http_methods(["GET"])
+def aio_daily_activity(request): return _daily(request, "aio", "analyser")
 
 @require_http_methods(["GET"])
 def admin_toner_dashboard_years(request): return _years(request, "toner")
