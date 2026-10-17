@@ -387,6 +387,9 @@ export default function PrinterBidDetailView() {
   const [modelMatches, setModelMatches] = useState([]);
   const [modelInputValue, setModelInputValue] = useState("");
   const isMultifunctionBid = String(form?.printer_type || "").toLowerCase().includes("multifunction");
+  const datesBesideWarranty = isMultifunctionBid && !readOnly;
+  // Approved/view mode of a plain Printer bid (not Multifunction).
+  const printerView = readOnly && !isMultifunctionBid;
   const activeRequiredFields = isMultifunctionBid
     ? REQUIRED_FIELDS
     : REQUIRED_FIELDS.filter((field) => !MULTIFUNCTION_ONLY_FIELDS.includes(field));
@@ -878,24 +881,41 @@ export default function PrinterBidDetailView() {
             <input type="text" name="onsite_warranty" value={form?.onsite_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          {!readOnly && (
+          {(!readOnly || printerView) && (
             <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
               <input type="text" name="extended_warranty" value={form?.extended_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
             </VerifiedInputWrapper>
           )}
 
+          {/* Multifunction bids: the bid dates follow Extended Warranty so its
+              row has no empty cells (the MFP-only fields shift the grid). */}
+          {datesBesideWarranty && (
+            <>
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
+                <input type="date" name="start_date" value={form?.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+              </VerifiedInputWrapper>
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
+                <input type="date" name="date" value={form?.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+              </VerifiedInputWrapper>
+            </>
+          )}
+
           <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-            {readOnly && (
+            {readOnly && !printerView && (
               <VerifiedInputWrapper alignTwoLineLabel verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
                 <input type="text" name="extended_warranty" value={form?.extended_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
             )}
-            <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
-              <input type="date" name="start_date" value={form?.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
-            </VerifiedInputWrapper>
-            <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
-              <input type="date" name="date" value={form?.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
-            </VerifiedInputWrapper>
+            {!datesBesideWarranty && (
+              <>
+                <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
+                  <input type="date" name="start_date" value={form?.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+                </VerifiedInputWrapper>
+                <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
+                  <input type="date" name="date" value={form?.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+                </VerifiedInputWrapper>
+              </>
+            )}
 
             <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="freightInstallation" label="Freight and Installation">
               <select name="freightInstallation" value={form?.freightInstallation ?? "Yes"} onChange={handleChange} disabled={readOnly} className={inputCls}>
@@ -904,8 +924,10 @@ export default function PrinterBidDetailView() {
               </select>
             </VerifiedInputWrapper>
 
-            {!readOnly && (
-              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
+            {/* EPBG sits beside Freight and Installation (the approved Printer
+                view puts it beside Extra Requirements instead). */}
+            {!printerView && (
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
                 <input type="text" name="epbg" value={form?.epbg || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
             )}
@@ -915,7 +937,7 @@ export default function PrinterBidDetailView() {
         </div>
 
         <div className="mt-6 mb-4 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          {readOnly && (
+          {printerView && (
             <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
               <input type="text" name="epbg" value={form?.epbg || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
             </VerifiedInputWrapper>
@@ -923,6 +945,26 @@ export default function PrinterBidDetailView() {
           <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extra_requirements" label="Extra Requirements" optional>
             <textarea name="extra_requirements" value={form?.extra_requirements || ""} onChange={handleChange} disabled={readOnly} rows={readOnly ? 1 : 2} className={textareaCls} />
           </VerifiedInputWrapper>
+
+          {/* Every approved bid shows its Total Approved Price (Printer keeps it as final_amount). */}
+          {readOnly && isApproved && (
+            <div className="md:col-span-2 lg:col-span-3 rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <label className="block text-sm font-semibold text-slate-800">Total Approved Price</label>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-slate-700">₹</span>
+                  <input
+                    type="text"
+                    value={Number(form?.final_amount) > 0 ? Number(form.final_amount).toLocaleString("en-IN", { maximumFractionDigits: 0 }) : ""}
+                    readOnly
+                    disabled
+                    placeholder="0"
+                    className="w-48 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-right text-lg font-semibold text-slate-800"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {!readOnly && (
           <div className="min-w-0">

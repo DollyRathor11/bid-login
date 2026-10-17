@@ -1,9 +1,11 @@
 import json
 import os
 import re
+import urllib.request
 
 import openpyxl
 from django.conf import settings
+from django.core.files.base import ContentFile
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -178,6 +180,35 @@ def import_gem_product_specs(request):
 
 
 MARKET_BRAND = "acxxel"
+GEM_IMAGE_PREFIX = "https://assets-mkpbg.gem.gov.in/img/"
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+
+def attach_gem_image(product, url):
+    """Save the GeM listing's picture as the product image, replacing any
+    earlier one. Only GeM's own image host is downloaded from."""
+    url = str(url or "")
+    if not url.startswith(GEM_IMAGE_PREFIX):
+        return False
+    try:
+        request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(request, timeout=15) as response:
+            if not response.headers.get_content_type().startswith("image/"):
+                return False
+            data = response.read(MAX_IMAGE_BYTES + 1)
+    except Exception:
+        return False
+    if not data or len(data) > MAX_IMAGE_BYTES:
+        return False
+    name = re.sub(r"[^A-Za-z0-9-]+", "_", f"{product.model_no}_{product.gem_product_id}").strip("_")
+    filename = f"gem_{name[:80]}.jpg"
+    # A previous GeM picture of this product is replaced, not kept as a copy.
+    # Any other old image file stays on disk: another product may use it.
+    if product.image and os.path.basename(product.image.name).startswith(f"gem_{name[:80]}"):
+        product.image.delete(save=False)
+    product.image.save(filename, ContentFile(data), save=False)
+    product.save(update_fields=["image", "updated_at"])
+    return True
 
 
 def gem_sections(item):
@@ -255,6 +286,7 @@ def replace_from_gem_market(request):
         models[model_no] = models.get(model_no, 0) + 1
         entries[(model_no, gem_id)] = {
             "model_no": model_no, "gem_product_id": gem_id, "sections": gem_sections(item),
+            "image": item.get("image") or "",
             "specs": specs, "summary": _summary_fields(_normalize_extra_specs(specs)),
         }
     if problems:
@@ -262,6 +294,15 @@ def replace_from_gem_market(request):
 
     apply = desktop_excel.update_directory if mode == "update" else desktop_excel.replace_directory
     result = apply(list(entries.values()), dry_run=bool(data.get("dry_run")))
+    if not data.get("dry_run"):
+        # The Excel row needs no image; skip rewriting it once per picture.
+        with desktop_excel.paused():
+            for entry in entries.values():
+                product = CatalogueProduct.objects.filter(
+                    model_no=entry["model_no"], gem_product_id=entry["gem_product_id"],
+                ).first()
+                if product:
+                    attach_gem_image(product, entry["image"])
     result.update({
         "scanned": len(scanned),
         # Model numbers with more than one GeM configuration (all are kept).
@@ -385,6 +426,115 @@ def _save_toner_directory(items):
     return _save_category_directory(items, "toner", _toner_directory_fields, "Toner Cartridge")
 
 
+WORKSTATION_CATEGORY = re.compile(r"^fixed computer workstation", re.IGNORECASE)
+
+
+def _workstation_directory_fields(pairs):
+    """GeM "Fixed Computer Workstation" specs -> the keys the Workstation tab
+    and its Find Model read (the same ones worksation.xlsx rows get). GeM's
+    exact labels are matched by keyword, so small wording changes still map."""
+    raw, _get = _gem_specs(pairs)
+
+    def find(pattern, exclude=None):
+        for label, value in raw.items():
+            if value and re.search(pattern, label, re.IGNORECASE) and not (exclude and re.search(exclude, label, re.IGNORECASE)):
+                return value
+        return ""
+
+    processor = find(r"processor\s*(number|model|name)") or find(r"^processor", r"generation|core|thread|cache|speed|clock|description")
+    # GeM: "Installed System Memory (RAM) (in GB)", "System Memory (RAM) Type".
+    ram_size = find(r"(ram|memory).*(size|capacity|in gb)", r"expand|graphic|gpu|cache|video|max")
+    ram_type = find(r"type of ram|(ram|memory).*type")
+    ram = " ".join(x for x in [f"{ram_size}GB" if ram_size.isdigit() else ram_size, ram_type] if x)
+    ssd = find(r"ssd.*capacity|capacity.*ssd")
+    hdd = find(r"hdd.*capacity|capacity.*hdd")
+    storage_type = find(r"type of storage")
+    # GeM: "GPU Model" (and "Number of Factory-Fitted Discrete GPUs", skipped).
+    graphics = (find(r"gpu model|graphic.*(make|model|card)", r"memory|type of|number of")
+                or find(r"graphic|gpu", r"memory|type of|number of"))
+    os_value = find(r"operating system", r"recovery")
+    monitor = find(r"(screen|display|monitor).*size")
+    power = find(r"power supply", r"monitor")
+    chipset = find(r"chipset") or find(r"motherboard")
+    specs = {
+        **raw,
+        "Computer Type": "Workstation",
+        "Processor": processor, "Processor Number": processor,
+        "Motherboard": chipset, "RAM": ram,
+        "SSD": ssd, "HDD": hdd, "Storage": " + ".join(x for x in [ssd and f"{ssd} GB SSD", hdd and f"{hdd} GB HDD"] if x) or storage_type,
+        "Graphics Card": graphics, "Graphic Card Make and Model": graphics,
+        "Operating System": os_value, "Factory Pre-loaded Operating System": os_value,
+        "Monitor": monitor, "Screen Size": monitor,
+        "Power Supply": power,
+    }
+    summary = {"processor": processor, "ram": ram, "storage": specs["Storage"], "os": os_value}
+    return specs, summary
+
+
+def _save_workstation_directory(items):
+    result = _save_category_directory(items, "workstation", _workstation_directory_fields, "Workstation")
+    _update_workstation_sheet(items)
+    return result
+
+
+def _gb_text(value, kind):
+    value = _clean_text(value)
+    if not value or value in {"0", "NA"}:
+        return "None"
+    return f"{value} GB {kind}" if value.isdigit() else value
+
+
+def _update_workstation_sheet(items):
+    """worksation.xlsx (the Workstation tab's own sheet) gets every scanned
+    model: its row is updated, a new model is added at the end."""
+    path = os.path.join(settings.BASE_DIR, "worksation.xlsx")
+    if not os.path.exists(path):
+        return
+    with desktop_excel._file_lock(path):
+        workbook = openpyxl.load_workbook(path)
+        sheet = workbook.active
+        columns = {_label_key(cell.value): cell.column for cell in sheet[1] if cell.value}
+        model_col = columns.get("modelnumber")
+        if not model_col:
+            return
+        rows = {
+            _clean_text(sheet.cell(row, model_col).value).upper(): row
+            for row in range(2, sheet.max_row + 1)
+            if _clean_text(sheet.cell(row, model_col).value)
+        }
+        for item in items:
+            model_no = _clean_text(item.get("model_no")).upper()
+            if not model_no:
+                continue
+            specs, _summary = _workstation_directory_fields(item.get("pairs"))
+            values = {
+                "modelnumber": model_no,
+                "processor": specs["Processor"],
+                "ram": specs["RAM"],
+                "ssd": _gb_text(specs["SSD"], "SSD"),
+                "hdd": _gb_text(specs["HDD"], "HDD"),
+                "graphicscard": specs["Graphics Card"],
+                "operatingsystem": specs["Operating System"],
+                "monitorsize": specs["Monitor"],
+                "powersupply": specs["Power Supply"],
+            }
+            row = rows.get(model_no)
+            if row is None:
+                row = sheet.max_row + 1
+                rows[model_no] = row
+                values["modelnumber"] = _clean_text(item.get("model_no"))
+            else:
+                values.pop("modelnumber")  # keep the sheet's own spelling
+            for key, value in values.items():
+                if key in columns and value:
+                    sheet.cell(row, columns[key]).value = value
+        desktop_excel._save_workbook(workbook, path)
+
+
+# How each product category is written in the directory.
+CATEGORY_NAMES = {"aio": "AIO", "toner": "Toner", "workstation": "Workstation"}
+
+
 def _save_category_directory(items, category, fields, default_description):
     """acxxel GeM products -> the directory tab of `category`, one product
     per GeM listing (a model number can have several configurations)."""
@@ -406,7 +556,7 @@ def _save_category_directory(items, category, fields, default_description):
         if product and (product.category or "").lower() != category:
             continue  # another category's model with the same number
         if product is None:
-            product = CatalogueProduct(model_no=key[0], category=category)
+            product = CatalogueProduct(model_no=key[0], category=CATEGORY_NAMES.get(category, category))
             added += 1
         else:
             updated += 1
@@ -418,6 +568,7 @@ def _save_category_directory(items, category, fields, default_description):
             if value:
                 setattr(product, field, value)
         product.save()
+        attach_gem_image(product, item.get("image"))
     return added, updated
 
 
@@ -517,6 +668,8 @@ def save_gem_category_excel(request):
         directory_added, directory_updated = _save_aio_directory(items)
     elif TONER_CATEGORY.match(category):
         directory_added, directory_updated = _save_toner_directory(items)
+    elif WORKSTATION_CATEGORY.match(category):
+        directory_added, directory_updated = _save_workstation_directory(items)
     return JsonResponse({
         "directory_added": directory_added, "directory_updated": directory_updated,
         "file": os.path.join(CATEGORY_EXCEL_DIR, os.path.basename(path)),

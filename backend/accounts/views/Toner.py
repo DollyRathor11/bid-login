@@ -1,4 +1,5 @@
 import json, os, re, shutil, time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django.conf import settings
 from django.db import connection, models
 from django.http import JsonResponse
@@ -76,6 +77,7 @@ class TonerBid(models.Model):
     # only editable from TonerBidApproval.jsx, needed for the Make in India cert.
     local_content=models.CharField(max_length=20,blank=True,default="")
     unit_price=models.DecimalField(max_digits=12,decimal_places=2,default=0); total_price=models.DecimalField(max_digits=14,decimal_places=2,default=0)
+    margin=models.DecimalField(max_digits=12,decimal_places=0,null=True,blank=True)
     # ---- Documents step + review workflow (same shape as AioBid) ----
     upload_document=models.FileField(upload_to="toner_bid_documents/",null=True,blank=True); atc_special_document=models.FileField(upload_to="toner_bid_documents/special/",null=True,blank=True)
     selected_general_docs=models.TextField(blank=True,default="[]"); verified_fields=models.TextField(blank=True,default="[]"); status=models.CharField(max_length=30,default="draft")
@@ -180,9 +182,9 @@ def _json(b,r=None):
     # "Transfer Catalogue to GeM" tab.
     is_new_product=False
     if model_number:
-        cp=CatalogueProduct.objects.only("extra_specs").filter(model_no__iexact=model_number,category="toner").first()
+        cp=CatalogueProduct.objects.only("extra_specs").filter(model_no__iexact=model_number,category__iexact="toner").first()
         if cp:is_new_product=_catalogue_extra_specs(cp).get("_source")=="toner_bid"
-    submitted_by=b.username or (b.user.username if b.user else "")
+    submitted_by=b.user.username if b.user and b.user.role=="user" else b.username
     out.update(model_number=model_number,submitted_by=submitted_by,user_name=submitted_by,is_new_product=is_new_product)
     return out
 
@@ -191,7 +193,11 @@ def create_toner_bid(r):
     if r.method!="POST":return JsonResponse({"error":"POST required"},status=405)
     _ensure_table();d=_data(r)
     if not d.get("bid_no"):return JsonResponse({"error":"Bid number is required"},status=400)
-    t=request_user(r);u=t if t and t.role=="user" else User.objects.filter(id=d.get("user_id")).first();b=TonerBid(user=u,username=d.get("username","") or (u.username if u else ""),bid_no=d["bid_no"]);_assign(b,d);b.save()
+    t=request_user(r)
+    if t and t.role!="user":return JsonResponse({"error":"Please sign in as the submitting user to create a toner bid."},status=403)
+    u=t if t else User.objects.filter(id=d.get("user_id"),role="user").first()
+    if not u:return JsonResponse({"error":"User identity is missing. Please sign in again."},status=401)
+    b=TonerBid(user=u,username=u.username,bid_no=d["bid_no"]);_assign(b,d);b.save()
     return JsonResponse({"message":"Toner bid created","bid_id":b.id},status=201)
 
 @csrf_exempt
@@ -243,6 +249,19 @@ def admin_review_toner_bid(r,bid_id):
     if not b:return JsonResponse({"error":"Toner bid not found"},status=404)
     status=d.get("status")
     if status not in ("approved","rejected","re-analyze"):return JsonResponse({"error":"Invalid admin status"},status=400)
+    if "margin" in d:
+        margin_text=str(d.get("margin") if d.get("margin") is not None else "").strip()
+        try:
+            margin=Decimal(margin_text) if margin_text else None
+            if margin is not None and (not margin.is_finite() or margin<0 or margin!=margin.to_integral_value() or margin>=Decimal("1e12")):
+                raise InvalidOperation
+        except (InvalidOperation,ValueError):
+            return JsonResponse({"error":"Margin must be a non-negative whole rupee amount."},status=400)
+        b.margin=margin
+        if margin is not None:
+            d=d.copy()
+            base=Decimal(str(safe_float(d.get("unit_price",b.unit_price))))
+            d["total_price"]=str((base+margin).quantize(Decimal("1"),rounding=ROUND_HALF_UP))
     if status=="approved":
         local_content=str(d.get("local_content") or "").strip().rstrip("%")
         if not local_content:return JsonResponse({"error":"Local Content (%) is mandatory."},status=400)
@@ -341,7 +360,7 @@ def match_toner_catalogue_models(r,bid_id):
     bid_specs={k:str((body.get(k) if body.get(k) not in (None,"") else getattr(b,k,"")) or "").strip() for k in TONER_CATALOGUE_FIELD_MAP}
 
     results=[]
-    for product in CatalogueProduct.objects.filter(category="toner"):
+    for product in CatalogueProduct.objects.filter(category__iexact="toner"):
         matched_count,checked_count,total_score=_score_fields_toner(
             bid_specs,lambda k,v,p=product:_best_catalogue_match_toner(k,v,p,TONER_CATALOGUE_FIELD_MAP[k])
         )
@@ -396,14 +415,14 @@ def save_toner_model_number(r,bid_id):
             if cp is None:
                 try:
                     with transaction.atomic():
-                        CatalogueProduct.objects.create(model_no=model_number,category="toner",description="Toner Cartridge",extra_specs=extra_specs)
+                        CatalogueProduct.objects.create(model_no=model_number,category="Toner",description="Toner Cartridge",extra_specs=extra_specs)
                 except IntegrityError:
                     pass
             else:
                 existing=_catalogue_extra_specs(cp)
                 if existing.get("_source")=="toner_bid":
                     existing.update(extra_specs)
-                    cp.category="toner";cp.extra_specs=existing
+                    cp.category="Toner";cp.extra_specs=existing
                     cp.save(update_fields=["category","extra_specs","updated_at"])
     except Exception:
         pass

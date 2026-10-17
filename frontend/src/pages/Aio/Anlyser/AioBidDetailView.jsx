@@ -285,6 +285,9 @@ export default function AioBidDetailView() {
   const showGemUpload = state?.showGemUpload === true;
 
   const [form, setForm] = useState(null);
+  // Layout follows the bid's status when the page opened; saving a model
+  // changes the status and must not move the Assigned Model box.
+  const [openedAsPending, setOpenedAsPending] = useState(null);
   const [gemStarting, setGemStarting] = useState(false);
   const [gemJob, setGemJob] = useState(null);
   const [loadingBid, setLoadingBid] = useState(true);
@@ -309,6 +312,7 @@ export default function AioBidDetailView() {
   const [modelMatches, setModelMatches] = useState([]);
   const [showModelResult, setShowModelResult] = useState(false);
   const [noMatchFound, setNoMatchFound] = useState(false);
+  const [manualModelChosen, setManualModelChosen] = useState(false);
   const [newModelInput, setNewModelInput] = useState("");
 
   useEffect(() => {
@@ -424,7 +428,19 @@ export default function AioBidDetailView() {
 
   const handleModelInputChange = (e) => setModelInputValue(e.target.value);
 
+  // Saving / finding a model re-renders the whole form; keep the page
+  // where it was instead of jumping (same as toggleVerification).
   const handleFindModel = async () => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    try {
+      return await handleFindModelInner();
+    } finally {
+      requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
+    }
+  };
+
+  const handleFindModelInner = async () => {
     if (!form) return;
     setModelSearching(true);
     setModelMatches([]);
@@ -446,6 +462,7 @@ export default function AioBidDetailView() {
       if (!item?.model_no) {
         setModelMatches([]);
         setNoMatchFound(true);
+        setManualModelChosen(false);
         setShowModelResult(false);
         return;
       }
@@ -460,7 +477,19 @@ export default function AioBidDetailView() {
     }
   };
 
-  const saveModelNumberToDB = async (modelNo) => {
+  // Saving / finding a model re-renders the whole form; keep the page
+  // where it was instead of jumping (same as toggleVerification).
+  const saveModelNumberToDB = async (modelNo, createNew = false) => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    try {
+      return await saveModelNumberToDBInner(modelNo, createNew);
+    } finally {
+      requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
+    }
+  };
+
+  const saveModelNumberToDBInner = async (modelNo, createNew = false) => {
     const trimmedModelNo = String(modelNo || "").trim();
     if (!trimmedModelNo) {
       alert("Model number required.");
@@ -480,7 +509,7 @@ export default function AioBidDetailView() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model_number: trimmedModelNo,
+          model_number: trimmedModelNo, create_new_model: createNew,
           processor: form?.processor || "", ram: form?.ram || "",
           ssd: form?.ssd || "", hdd: form?.hdd || "", os: form?.os || "",
           screen_size: form?.screen_size || "", wifi: form?.wifi || "",
@@ -524,13 +553,23 @@ export default function AioBidDetailView() {
     setNewModelInput("");
   };
 
+  // A model was found, but the analyser may still create a new one by hand
+  // (same manual path as when no model matches).
+  const startManualModel = () => {
+    setModelMatches([]);
+    setShowModelResult(false);
+    setNoMatchFound(true);
+    setManualModelChosen(true);
+    setModelInputValue("");
+  };
+
   const handleCreateNewModel = async () => {
     const trimmed = modelInputValue.trim();
     if (!trimmed) {
       alert("Please enter a model number.");
       return;
     }
-    const saved = await saveModelNumberToDB(trimmed);
+    const saved = await saveModelNumberToDB(trimmed, true);
     if (!saved) return;
     setShowModelResult(false);
     setNoMatchFound(false);
@@ -653,6 +692,8 @@ export default function AioBidDetailView() {
   const isAnalyzed = form.status === "analyzed";
   const isApproved = form.status === "approved";
   const isPending = !isReAnalyze && !isAnalyzed && !isApproved;
+  if (openedAsPending === null) setOpenedAsPending(isPending);
+  const layoutPending = openedAsPending ?? isPending;
   const hasExistingModel = !!form?.model_number && form.model_number.trim() !== "";
 
   const inputCls = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm disabled:bg-gray-100 focus:outline-none focus:border-blue-500 bg-white";
@@ -704,7 +745,7 @@ export default function AioBidDetailView() {
       )}
 
       <div
-        className={`${isPending
+        className={`${layoutPending
           ? "[&_label]:!font-semibold [&_label]:!text-slate-800 [&_input]:!border-blue-300 [&_input]:!text-slate-900 [&_input]:placeholder:!text-slate-500 [&_select]:!border-blue-300 [&_select]:!text-slate-900 [&_textarea]:!border-blue-300 [&_textarea]:!text-slate-900 [&_textarea]:placeholder:!text-slate-500"
           : ""} ${readOnly && isApproved ? "[&_select]:!appearance-none" : ""}`}
       >
@@ -881,9 +922,8 @@ export default function AioBidDetailView() {
           </div>
         </VerifiedInputWrapper>
 
-        {/* Same to same as Desktop's BidDetailView: Total Approved Price only
-            shows when opened from the "Transfer Catalogue to GeM" tab. */}
-        {showGemUpload && readOnly && isApproved && (
+        {/* Every approved bid shows its Total Approved Price. */}
+        {readOnly && isApproved && (
           <div className="md:col-span-2 lg:col-span-3 rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label className="block text-sm font-semibold text-slate-800">Total Approved Price</label>
@@ -893,12 +933,12 @@ export default function AioBidDetailView() {
                   type="text"
                   value={
                     Number(form?.total_price) > 0
-                      ? Number(form.total_price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      ? Number(form.total_price).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
                       : ""
                   }
                   readOnly
                   disabled
-                  placeholder="0.00"
+                  placeholder="0"
                   className="w-48 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-right text-lg font-semibold text-slate-800"
                 />
               </div>
@@ -906,7 +946,7 @@ export default function AioBidDetailView() {
           </div>
         )}
 
-        {readOnly && isApproved && (
+        {showGemUpload && readOnly && isApproved && (
           <div className="md:col-span-2 lg:col-span-3 border border-indigo-200 bg-indigo-50 p-4 rounded-lg">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex-1">
@@ -929,11 +969,11 @@ export default function AioBidDetailView() {
           (readOnly just disables the input and hides Find Model) — it was
           previously wrapped in `!readOnly &&`, which hid the Assigned Model
           box entirely on the read-only "Transfer Catalogue to GeM" view. */}
-      <div className={isPending ? "min-w-0" : "min-w-0 md:col-start-2 md:row-start-3 lg:col-start-3 lg:row-start-2"}>
-          <div className={`relative flex w-full min-w-0 flex-col gap-2 rounded-lg border p-2 ${isPending ? "border-blue-300 bg-blue-50/60 shadow-sm" : "border-gray-300 bg-gray-50"}`}>
+      <div className={layoutPending ? "min-w-0" : "min-w-0 md:col-start-2 md:row-start-3 lg:col-start-3 lg:row-start-2"}>
+          <div className={`relative flex w-full min-w-0 flex-col gap-2 rounded-lg border p-2 ${layoutPending ? "border-blue-300 bg-blue-50/60 shadow-sm" : "border-gray-300 bg-gray-50"}`}>
             <div className="flex min-w-0 flex-wrap items-center gap-2">
             <div className="flex min-w-0 flex-1 flex-col">
-              <label className={`mb-1 text-sm font-bold ${isPending ? "text-blue-900" : "text-gray-700"}`}>Assigned Model</label>
+              <label className={`mb-1 text-sm font-bold ${layoutPending ? "text-blue-900" : "text-gray-700"}`}>Assigned Model</label>
               <input
                 type="text"
                 name="model_number"
@@ -941,7 +981,7 @@ export default function AioBidDetailView() {
                 onChange={handleModelInputChange}
                 placeholder={readOnly ? "No model assigned" : noMatchFound ? "Enter model number manually..." : "Search model..."}
                 disabled={readOnly || modelSearching || showModelResult}
-                className={`rounded border px-3 py-1.5 text-sm outline-none w-full min-w-0 font-semibold focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${isPending ? "border-blue-300 bg-white text-slate-900 placeholder:text-slate-500" : "border-gray-300 text-gray-800"}`}
+                className={`rounded border px-3 py-1.5 text-sm outline-none w-full min-w-0 font-semibold focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${layoutPending ? "border-blue-300 bg-white text-slate-900 placeholder:text-slate-500" : "border-gray-300 text-gray-800"}`}
               />
             </div>
 
@@ -967,7 +1007,7 @@ export default function AioBidDetailView() {
 
             {noMatchFound && !readOnly && !showModelResult && (
               <div role="status" className="w-full min-w-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-4 text-amber-800">
-                <span className="font-bold">No matching model found.</span>{" "}
+                <span className="font-bold">{manualModelChosen ? "Create a new model." : "No matching model found."}</span>{" "}
                 Please create a new model number.
               </div>
             )}
@@ -1014,7 +1054,11 @@ export default function AioBidDetailView() {
                         <div className="text-lg font-extrabold text-blue-700 mt-1">{modelMatches[0].modelNo}</div>
                       </div>
                     </div>
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                      <button type="button" onClick={startManualModel} disabled={modelSaving}
+                        className="text-xs border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-700 px-4 py-2 rounded font-semibold transition">
+                        Create New Model
+                      </button>
                       <button type="button" onClick={() => selectModelNumber(modelMatches[0].modelNo)} disabled={modelSaving}
                         className="text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded font-semibold transition">
                         {modelSaving ? "Saving..." : "Use This Model"}

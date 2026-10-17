@@ -8,10 +8,15 @@ const copySyncStatus = document.getElementById("copy-sync-status");
 const opportunityButton = document.getElementById("sync-opportunities");
 const pauseOpportunityButton = document.getElementById("pause-opportunities");
 const copyOpportunityStatus = document.getElementById("copy-opportunity-status");
+const retryOpportunityButton = document.getElementById("retry-opportunities");
 const opportunityState = document.getElementById("opportunity-state");
 const TERMINAL_STATUS_TTL_MS = 15_000;
 const TERMINAL_STATUSES = new Set(["failed", "stopped", "authentication_required"]);
 const ACTIVE_SCAN_STATUSES = new Set(["running", "starting", "paused", "recovering"]);
+// Retry Scan is always shown. On a scan that is still running (or stuck) it
+// reloads the GeM tab and continues at the saved page; on a failed or stopped
+// scan it restarts from that page.
+let opportunityRunning = false;
 const clearingStateKeys = new Set();
 let acxxelConnected = false;
 let lastSyncState = null;
@@ -19,8 +24,9 @@ document.getElementById("version").textContent = `v${chrome.runtime.getManifest(
 
 function visibleSyncState(sync, storageKey) {
   const updatedAt = Number(sync?.updatedAt || 0);
-  // Keep incomplete disqualified scans and their bid-level reasons visible.
-  if (storageKey === "gemBidSync") return sync;
+  // Keep incomplete disqualified scans and their bid-level reasons visible,
+  // and a Bid To Be Participated scan that Retry Scan can still continue.
+  if (storageKey === "gemBidSync" || sync?.retry) return sync;
   const expired = TERMINAL_STATUSES.has(sync?.status)
     && updatedAt > 0
     && Date.now() - updatedAt >= TERMINAL_STATUS_TTL_MS;
@@ -95,12 +101,22 @@ function showOpportunityState(sync) {
   pauseOpportunityButton.hidden = false;
   pauseOpportunityButton.disabled = !active || ["starting", "recovering"].includes(sync?.status);
   pauseOpportunityButton.textContent = paused ? "Resume Scan" : "Pause Scan";
+
+  opportunityRunning = active;
+  retryOpportunityButton.hidden = false;
+  retryOpportunityButton.disabled = !acxxelConnected || !sync?.retry?.page || sync?.status === "complete";
+  retryOpportunityButton.title = retryOpportunityButton.disabled
+    ? "No unfinished scan to retry."
+    : `Continue the scan at page ${sync.retry.page}.`;
 }
 
 function preventConcurrentScans(bidSync, opportunitySync) {
   const bidActive = ACTIVE_SCAN_STATUSES.has(bidSync?.status);
   const opportunityActive = ACTIVE_SCAN_STATUSES.has(opportunitySync?.status);
-  if (bidActive) opportunityButton.disabled = true;
+  if (bidActive) {
+    opportunityButton.disabled = true;
+    retryOpportunityButton.disabled = true;
+  }
   if (opportunityActive) {
     syncButton.disabled = true;
     retrySyncButton.disabled = true;
@@ -191,6 +207,24 @@ retrySyncButton.addEventListener("click", () => {
       retrySyncButton.disabled = false;
       syncState.className = "sync-state failed";
       syncState.textContent = chrome.runtime.lastError?.message || response?.error || "Unable to retry sync.";
+      return;
+    }
+    window.setTimeout(refreshSyncState, 300);
+  });
+});
+
+retryOpportunityButton.addEventListener("click", () => {
+  retryOpportunityButton.disabled = true;
+  retryOpportunityButton.textContent = "Retrying...";
+  opportunityState.textContent = "Retrying Bid To Be Participated scan from the saved page...";
+  // A running (or stuck) scan is restarted by reloading its tab.
+  const type = opportunityRunning ? "FORCE_RETRY_GEM_OPPORTUNITY_SYNC" : "START_GEM_OPPORTUNITY_SYNC";
+  chrome.runtime.sendMessage({ type, resume: true }, (response) => {
+    retryOpportunityButton.textContent = "Retry Scan";
+    if (chrome.runtime.lastError || !response?.ok) {
+      retryOpportunityButton.disabled = false;
+      opportunityState.className = "sync-state failed";
+      opportunityState.textContent = chrome.runtime.lastError?.message || response?.error || "Unable to retry scan.";
       return;
     }
     window.setTimeout(refreshSyncState, 300);

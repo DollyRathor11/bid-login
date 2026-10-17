@@ -1,3 +1,4 @@
+import { TonerModels, TonerBrands, CompatiblePrinterModels } from "../ReviewFields";
 import { useEffect, useState } from "react";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import SpecialDocEditor from "../../../components/analyser/SpecialDocEditor";
@@ -5,7 +6,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 // Toner-native dropdown vocabulary — same source used at the User config
 // step (TonerConfig.jsx), so the Analyser sees the exact same option text.
 import {
-  BRANDS, CARTRIDGE_TYPES, PRODUCT_CLASSES, COLOURS, TECHNOLOGIES,
+  CARTRIDGE_TYPES, COLOURS, TECHNOLOGIES,
   PAGE_YIELDS, YIELD_STANDARDS, CHIPS, PRINT_COVERAGES, WARRANTIES,
   WARRANTY_TYPES, QTY_PER_PACKS, COMPLIANCES, REPLACEMENT_POLICIES, YES_NO,
 } from "../User/TonerConfig";
@@ -55,7 +56,7 @@ const YIELD_STANDARD_DOCS = YIELD_STANDARDS.map((label) => ({
 // bidder now sends certificates instead of picking one from a list.
 const REQUIRED_FIELDS = [
   "bid_no", "dept_name", "organization", "qty", "pincode", "address", "atc",
-  "brand", "cartridge_type", "product_class", "colour", "compatibility", "technology",
+  "brand", "cartridge_type", "colour", "compatibility", "technology",
   "page_yield", "chip", "warranty", "warranty_type",
   "refillable", "qty_per_pack", "hsn_code", "replacement_policy", "date",
 ];
@@ -381,6 +382,9 @@ export default function TonerBidDetailView() {
   const showGemUpload = state?.showGemUpload === true;
 
   const [form, setForm] = useState(null);
+  // Layout follows the bid's status when the page opened; saving a model
+  // changes the status and must not move the Assigned Model box.
+  const [openedAsPending, setOpenedAsPending] = useState(null);
   const [gemStarting, setGemStarting] = useState(false);
   const [gemJob, setGemJob] = useState(null);
   const [loadingBid, setLoadingBid] = useState(true);
@@ -562,6 +566,8 @@ export default function TonerBidDetailView() {
   const isAnalyzed = form.status === "analyzed";
   const isApproved = form.status === "approved";
   const isPending = !isReAnalyze && !isAnalyzed && !isApproved;
+  if (openedAsPending === null) setOpenedAsPending(isPending);
+  const layoutPending = openedAsPending ?? isPending;
 
   const inputCls = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm disabled:bg-gray-100 focus:outline-none focus:border-blue-500 bg-white";
   const textareaCls = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:bg-gray-100 bg-white";
@@ -604,7 +610,7 @@ export default function TonerBidDetailView() {
       )}
 
       <div
-        className={`${isPending
+        className={`${layoutPending
           ? "[&_label]:!font-semibold [&_label]:!text-slate-800 [&_input]:!border-blue-300 [&_input]:!text-slate-900 [&_input]:placeholder:!text-slate-500 [&_select]:!border-blue-300 [&_select]:!text-slate-900 [&_textarea]:!border-blue-300 [&_textarea]:!text-slate-900 [&_textarea]:placeholder:!text-slate-500"
           : ""} ${readOnly && isApproved ? "[&_select]:!appearance-none" : ""}`}
       >
@@ -622,7 +628,7 @@ export default function TonerBidDetailView() {
         </VerifiedInputWrapper>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="qty" label="Quantity">
-          <input type="number" name="qty" value={form.qty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+          <input type="number" name="qty" value={form.qty || ""} onChange={handleChange} disabled={readOnly} className={`${inputCls} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`} />
         </VerifiedInputWrapper>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="pincode" label="Buyer Pincode">
@@ -666,22 +672,11 @@ export default function TonerBidDetailView() {
         </div>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="brand" label="Brand">
-          <Select name="brand" options={BRANDS} />
+          <TonerBrands value={form.brand} disabled={readOnly} onChange={(brand) => setForm((prev) => ({ ...prev, brand }))} />
         </VerifiedInputWrapper>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="cartridge_type" label="Type of Cartridge">
           <Select name="cartridge_type" options={CARTRIDGE_TYPES} />
-        </VerifiedInputWrapper>
-
-        <div className="md:col-span-2 lg:col-span-3">
-          <Label>Toner Models</Label>
-          <div className="border border-gray-300 rounded-md px-3 py-2 text-sm">
-            {parseList(form.toner_models).map((toner) => `${toner.brand} ${toner.tonerModel}`).join(", ") || "Not selected"}
-          </div>
-        </div>
-
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="product_class" label="Product Class of Cartridge">
-          <Select name="product_class" options={PRODUCT_CLASSES} />
         </VerifiedInputWrapper>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="colour" label="Colour of Ink">
@@ -689,8 +684,15 @@ export default function TonerBidDetailView() {
         </VerifiedInputWrapper>
 
         <div className="md:col-span-2 lg:col-span-3">
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="compatibility" label="Compatibility">
-            <textarea name="compatibility" value={form.compatibility || ""} onChange={handleChange} disabled={readOnly} rows={2} className={textareaCls} />
+          <Label>Toner Model Number</Label>
+          <TonerModels value={form.toner_models} />
+        </div>
+
+
+
+        <div className="md:col-span-2 lg:col-span-3">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="compatibility" label="Compatible Printer Models">
+            <CompatiblePrinterModels value={form.compatibility} disabled={readOnly} onChange={(compatibility) => setForm((prev) => ({ ...prev, compatibility }))} />
           </VerifiedInputWrapper>
         </div>
 
@@ -745,9 +747,8 @@ export default function TonerBidDetailView() {
           <input type="date" name="date" value={form.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        {/* Same to same as AIO's BidDetailView: Total Approved Price only
-            shows when opened from the "Transfer Catalogue to GeM" tab. */}
-        {showGemUpload && readOnly && isApproved && (
+        {/* Every approved bid shows its Total Approved Price. */}
+        {readOnly && isApproved && (
           <div className="md:col-span-2 lg:col-span-3 rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <label className="block text-sm font-semibold text-slate-800">Total Approved Price</label>
@@ -757,12 +758,12 @@ export default function TonerBidDetailView() {
                   type="text"
                   value={
                     Number(form?.total_price) > 0
-                      ? Number(form.total_price).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      ? Number(form.total_price).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })
                       : ""
                   }
                   readOnly
                   disabled
-                  placeholder="0.00"
+                  placeholder="0"
                   className="w-48 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-right text-lg font-semibold text-slate-800"
                 />
               </div>
@@ -770,7 +771,7 @@ export default function TonerBidDetailView() {
           </div>
         )}
 
-        {readOnly && isApproved && (
+        {showGemUpload && readOnly && isApproved && (
           <div className="md:col-span-2 lg:col-span-3 border border-indigo-200 bg-indigo-50 p-4 rounded-lg">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div className="flex-1">

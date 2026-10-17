@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAnalyserTab } from "../../../utils/analyserTab";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import { startGemUpload } from "../../../utils/gemUpload";
 import { useNavigate } from "react-router-dom";
@@ -10,10 +11,7 @@ const ITEMS_PER_PAGE = 8;
 const VISIBLE_PAGES = 5;
 
 export default function WorkstationAnalyserDashboard() {
-  const [activeTab, setActiveTab] = useState(() => {
-    const status = new URLSearchParams(window.location.search).get("status");
-    return ["pending", "approved", "re-analyze"].includes(status) ? status : "pending";
-  });
+  const [activeTab, setActiveTab] = useAnalyserTab("workstation");
   const [bids, setBids] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -303,7 +301,7 @@ export default function WorkstationAnalyserDashboard() {
                       {(safePage - 1) * ITEMS_PER_PAGE + i + 1}
                     </td>
                     <td className="px-5 py-4 border-b border-gray-100">
-                      <span className="text-sm font-bold text-blue-600">{bid.bid_no}</span>
+                      <span className="block break-all text-sm font-bold text-blue-600">{bid.bid_no}</span>
                     </td>
                     <td className="px-5 py-4 border-b border-gray-100">
                       <span className="text-sm font-bold text-gray-800 truncate max-w-[160px] block">{bid.dept_name || "-"}</span>
@@ -370,8 +368,8 @@ export default function WorkstationAnalyserDashboard() {
                         <button type="button" onClick={() => navigate(`/analyser-dashboard/workstation/bid/${bid.id}/approved-details`, { state: { bid } })} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-[11px] font-bold uppercase tracking-widest shadow-sm whitespace-nowrap">
                           Download<span className="hidden">
                           ₹{Number(bid.final_amount || bid.total_price || 0).toLocaleString("en-IN", {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
                           })}
                           </span>
                         </button>

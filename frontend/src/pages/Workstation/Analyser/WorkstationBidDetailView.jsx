@@ -324,6 +324,9 @@ export default function WorkstationBidDetailView() {
   const verificationBidId = id || location.state?.bid?.id || location.state?.id || location.state?.bid_id || "unknown";
   const verificationStorageKey = `workstation_bid_verified_fields_${verificationBidId}`;
   const [form, setForm] = useState(location.state?.bid || {});
+  // Layout follows the bid's status when the page opened; saving a model
+  // changes the status and must not move the Assigned Model box.
+  const [openedAsPending, setOpenedAsPending] = useState(null);
   const [readOnly] = useState(!!location.state?.readOnly);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
@@ -332,6 +335,7 @@ export default function WorkstationBidDetailView() {
   const [modelMatches, setModelMatches] = useState([]);
   const [showModelResult, setShowModelResult] = useState(false);
   const [noMatchFound, setNoMatchFound] = useState(false);
+  const [manualModelChosen, setManualModelChosen] = useState(false);
   const [newModelInput, setNewModelInput] = useState("");
   const [modelInputValue, setModelInputValue] = useState(location.state?.bid?.model_number || "");
   const [verifiedFields, setVerifiedFields] = useState(() => {
@@ -430,7 +434,19 @@ export default function WorkstationBidDetailView() {
     requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
   };
 
-  const saveModelNumberToDB = async (modelNo) => {
+  // Saving / finding a model re-renders the whole form; keep the page
+  // where it was instead of jumping (same as toggleVerification).
+  const saveModelNumberToDB = async (modelNo, createNew = false) => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    try {
+      return await saveModelNumberToDBInner(modelNo, createNew);
+    } finally {
+      requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
+    }
+  };
+
+  const saveModelNumberToDBInner = async (modelNo, createNew = false) => {
     const trimmedModelNo = String(modelNo || "").trim();
     if (!trimmedModelNo) {
       alert("Please save a Model Number before proceeding.");
@@ -443,7 +459,7 @@ export default function WorkstationBidDetailView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
-          model_number: trimmedModelNo,
+          model_number: trimmedModelNo, create_new_model: createNew,
           model: trimmedModelNo,
           model_no: trimmedModelNo,
           modelNo: trimmedModelNo,
@@ -470,7 +486,19 @@ export default function WorkstationBidDetailView() {
     }
   };
 
+  // Saving / finding a model re-renders the whole form; keep the page
+  // where it was instead of jumping (same as toggleVerification).
   const handleFindModel = async () => {
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
+    try {
+      return await handleFindModelInner();
+    } finally {
+      requestAnimationFrame(() => window.scrollTo(scrollX, scrollY));
+    }
+  };
+
+  const handleFindModelInner = async () => {
     setModelSearching(true);
     setModelMatches([]);
     setShowModelResult(false);
@@ -497,6 +525,7 @@ export default function WorkstationBidDetailView() {
       if (!item?.model_no) {
         setModelMatches([]);
         setNoMatchFound(true);
+        setManualModelChosen(false);
         setShowModelResult(false);
         if (data.best_failed_match) console.log("Best failed workstation match:", data.best_failed_match);
         return;
@@ -518,13 +547,23 @@ export default function WorkstationBidDetailView() {
     setNewModelInput("");
   };
 
+  // A model was found, but the analyser may still create a new one by hand
+  // (same manual path as when no model matches).
+  const startManualModel = () => {
+    setModelMatches([]);
+    setShowModelResult(false);
+    setNoMatchFound(true);
+    setManualModelChosen(true);
+    setModelInputValue("");
+  };
+
   const handleCreateNewModel = async () => {
     const trimmed = modelInputValue.trim();
     if (!trimmed) {
       alert("Please enter a model number.");
       return;
     }
-    const updatedData = await saveModelNumberToDB(trimmed);
+    const updatedData = await saveModelNumberToDB(trimmed, true);
     if (!updatedData) return;
     setShowModelResult(false);
     setNoMatchFound(false);
@@ -653,6 +692,8 @@ export default function WorkstationBidDetailView() {
   const isReviewed = form?.status === "reviewed" || form?.review_status === "reviewed";
   const isApproved = form?.status === "approved" || form?.review_status === "approved";
   const isPending = !isReAnalyze && !isReviewed && !isApproved;
+  if (openedAsPending === null) setOpenedAsPending(isPending);
+  const layoutPending = openedAsPending ?? isPending;
   const conditionalRequired = CONDITIONAL_FIELDS.filter((name) => String(form?.[name] || "").trim());
   const activeRequiredFields = [...REQUIRED_FIELDS, ...conditionalRequired];
   const verifiedCount = activeRequiredFields.filter((name) => verifiedFields[name]).length;
@@ -694,7 +735,7 @@ export default function WorkstationBidDetailView() {
 
       {msg && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 text-sm font-medium border border-red-200">{msg}</div>}
 
-      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 ${isPending ? "[&_label]:!font-semibold [&_label]:!text-slate-800 [&_input]:!border-blue-300 [&_input]:!text-slate-900 [&_input]:placeholder:!text-slate-500 [&_select]:!border-blue-300 [&_select]:!text-slate-900 [&_textarea]:!border-blue-300 [&_textarea]:!text-slate-900" : ""} ${readOnly && isApproved ? "[&_select]:!appearance-none" : ""}`}>
+      <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 ${layoutPending ? "[&_label]:!font-semibold [&_label]:!text-slate-800 [&_input]:!border-blue-300 [&_input]:!text-slate-900 [&_input]:placeholder:!text-slate-500 [&_select]:!border-blue-300 [&_select]:!text-slate-900 [&_textarea]:!border-blue-300 [&_textarea]:!text-slate-900" : ""} ${readOnly && isApproved ? "[&_select]:!appearance-none" : ""}`}>
         {TOP_FIELDS.map(([name, label, type]) => (
           <VerifiedField key={name} name={name} label={label} required verifiedFields={verifiedFields} readOnly={readOnly} onToggle={toggleVerification}>
             <input
@@ -848,7 +889,7 @@ export default function WorkstationBidDetailView() {
               <label className="text-sm font-semibold text-slate-800">Total Approved Price</label>
               <div className="flex items-center gap-2">
                 <span className="font-semibold text-slate-700">₹</span>
-                <input readOnly disabled value={Number(form?.final_amount || form?.total_price || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                <input readOnly disabled value={Number(form?.final_amount || form?.total_price || 0).toLocaleString("en-IN", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   className="w-48 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-right text-lg font-semibold text-slate-800" />
               </div>
             </div>
@@ -873,9 +914,9 @@ export default function WorkstationBidDetailView() {
           </div>
         )}
       <div className="min-w-0">
-        <div className={`relative flex items-center gap-2 rounded-lg border p-2 ${isPending ? "w-fit border-blue-300 bg-blue-50/60 shadow-sm" : "h-full border-gray-300 bg-gray-50"}`}>
+        <div className={`relative flex items-center gap-2 rounded-lg border p-2 ${layoutPending ? "w-fit border-blue-300 bg-blue-50/60 shadow-sm" : "h-full border-gray-300 bg-gray-50"}`}>
           <div className="flex flex-col">
-            <label className={`mb-1 text-sm font-bold ${isPending ? "text-blue-900" : "text-gray-700"}`}>Assigned Model</label>
+            <label className={`mb-1 text-sm font-bold ${layoutPending ? "text-blue-900" : "text-gray-700"}`}>Assigned Model</label>
             <input
               type="text"
               name="model_number"
@@ -908,7 +949,7 @@ export default function WorkstationBidDetailView() {
 
           {noMatchFound && !readOnly && !showModelResult && (
             <div className="ml-1 w-52 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs leading-4 text-amber-800">
-              <span className="font-bold">No matching model found.</span>{" "}Please create a new model number.
+              <span className="font-bold">{manualModelChosen ? "Create a new model." : "No matching model found."}</span>{" "}Please create a new model number.
             </div>
           )}
 
@@ -953,7 +994,11 @@ export default function WorkstationBidDetailView() {
                       {modelMatches[0].category && <div className="text-xs text-gray-500 mt-1">{modelMatches[0].category}</div>}
                     </div>
                   </div>
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-2">
+                    <button type="button" onClick={startManualModel} disabled={modelSaving}
+                      className="text-xs border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-50 text-gray-700 px-4 py-2 rounded font-semibold transition">
+                      Create New Model
+                    </button>
                     <button type="button" onClick={() => selectModelNumber(modelMatches[0].modelNo)} disabled={modelSaving}
                       className="text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded font-semibold transition">
                       {modelSaving ? "Saving..." : "Use This Model"}

@@ -1265,6 +1265,10 @@ def generate_certificates(request, bid_id):
         return _catalogue_spec(*labels)
 
     def _form_specs():
+        # Processor "None" -> the processor written in Processor Description.
+        processor = _bid_value("processor")
+        if processor.lower() in ("", "none"):
+            processor = _bid_value("pro_descp")
         hdd = _bid_value("hdd")
         ssd1 = _bid_value("ssd1", "ssd")
         ssd2 = _bid_value("ssd2")
@@ -1280,7 +1284,7 @@ def generate_certificates(request, bid_id):
             "model_number": _format_model_number(model_number),
             "brand": "acxxel",
             "computer_type": _catalogue_spec("Computer Type", default="Desktop Computer"),
-            "processor": _prefer_catalogue(_bid_value("processor"), "Processor Number"),
+            "processor": _prefer_catalogue(processor, "Processor Number"),
             "motherboard": _motherboard_chipset(motherboard),
             "pcie_x1": _prefer_catalogue(_motherboard_feature_value(mb_features, "pcie_x1", ""), "Expansion Slots (PCIe x 1)"),
             "pcie_x4": _prefer_catalogue(_motherboard_feature_value(mb_features, "pcie_x4", ""), "Expansion Slots (PCIe x 4)"),
@@ -6584,8 +6588,9 @@ def _desktop_duplicate_model_block(data, bid, model_number):
     """Error response when a new model number would duplicate a Desktop
     configuration Find Model already matches (same rule as Find Model, but
     only Desktop catalogue entries count), else None."""
+    from .model_duplicates import create_new_requested
     model_number = str(model_number or "").strip().upper()
-    if not model_number or CatalogueProduct.objects.filter(model_no__iexact=model_number).exists():
+    if not model_number or create_new_requested(data) or CatalogueProduct.objects.filter(model_no__iexact=model_number).exists():
         return None
     body = data if isinstance(data, dict) else {}
     existing = next(

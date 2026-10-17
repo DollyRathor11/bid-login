@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAnalyserTab } from "../../../utils/analyserTab";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import { startGemUpload } from "../../../utils/gemUpload";
 import { useNavigate } from "react-router-dom";
@@ -13,10 +14,7 @@ const VISIBLE_PAGES = 5;
 
 export default function AnalyserDashboard({ product = "desktop" }) {
 
-    const [activeTab, setActiveTab] = useState(() => {
-        const status = new URLSearchParams(window.location.search).get("status");
-        return ["pending", "approved", "re-analyze"].includes(status) ? status : "pending";
-    });
+    const [activeTab, setActiveTab] = useAnalyserTab(product);
     const [bids, setBids] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
@@ -418,7 +416,7 @@ export default function AnalyserDashboard({ product = "desktop" }) {
 
                                     <td className="overflow-hidden px-5 py-4 border-b border-gray-100">
                                         <span
-                                            className="block truncate whitespace-nowrap text-sm font-bold text-blue-600"
+                                            className="block break-all text-sm font-bold text-blue-600"
                                             title={bid.bid_no}
                                         >
                                             {bid.bid_no}
@@ -540,8 +538,8 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                                         </button>
                                         <span className="hidden">
                                             ₹{Number(bid.total_price || 0).toLocaleString("en-IN", {
-                                                minimumFractionDigits: 2,
-                                                maximumFractionDigits: 2,
+                                                minimumFractionDigits: 0,
+                                                maximumFractionDigits: 0,
                                             })}
                                         </span>
                                     </td>

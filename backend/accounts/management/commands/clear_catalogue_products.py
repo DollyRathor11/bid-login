@@ -34,11 +34,15 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("--confirm", action="store_true", help="Actually delete (otherwise only counts are shown).")
+        parser.add_argument("--only", nargs="+", metavar="CATEGORY",
+                            help="Delete only these categories, e.g. --only aio toner (case does not matter).")
 
     def handle(self, *args, **options):
         products = list(CatalogueProduct.objects.all())
-        kept = [p for p in products if is_kept(p)]
-        removed = [p for p in products if not is_kept(p)]
+        only = {c.strip().lower() for c in options["only"] or []}
+        keep = (lambda p: (p.category or "desktop").strip().lower() not in only) if only else is_kept
+        kept = [p for p in products if keep(p)]
+        removed = [p for p in products if not keep(p)]
         by_category = Counter((p.category or "Desktop") for p in removed)
         self.stdout.write(f"Total {len(products)}: delete {len(removed)} {dict(by_category)}, keep {len(kept)} "
                           f"{dict(Counter((p.category or 'Desktop') for p in kept))}")
@@ -74,6 +78,24 @@ class Command(BaseCommand):
                 marker.write(datetime.now().isoformat())
             desktop_excel._remember_mtime(excel)
 
+        if "workstation" in only:
+            self._clear_workstation_sheet(backup_dir, stamp)
+
         self.stdout.write(self.style.SUCCESS(
             f"Deleted {len(removed)} products. Backup: {json_path} (restore: python manage.py loaddata <file>)."
         ))
+
+    def _clear_workstation_sheet(self, backup_dir, stamp):
+        """The Workstation tab also lists worksation.xlsx rows; keep only its
+        header so GeM's Workstation products (Product Scan) replace them."""
+        path = os.path.join(settings.BASE_DIR, "worksation.xlsx")
+        if not os.path.exists(path):
+            return
+        shutil.copy2(path, os.path.join(backup_dir, f"worksation_{stamp}.xlsx"))
+        workbook = openpyxl.load_workbook(path)
+        sheet = workbook.active
+        rows = sheet.max_row - 1
+        if rows > 0:
+            sheet.delete_rows(2, rows)
+        workbook.save(path)
+        self.stdout.write(f"worksation.xlsx: {max(rows, 0)} rows removed (backup worksation_{stamp}.xlsx).")

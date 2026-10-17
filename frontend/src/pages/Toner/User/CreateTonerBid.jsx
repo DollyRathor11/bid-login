@@ -8,7 +8,7 @@ const DATA_KEY = "toner_bid_data";
 const STEP_KEY = "toner_bid_step";
 
 const Label = ({ children }) => <label className="block text-sm font-normal text-gray-800 mb-1">{children}</label>;
-const Input = (props) => <input {...props} className="w-full bg-white border border-gray-400 text-gray-900 rounded px-3 py-[6px] text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500" />;
+const Input = (props) => <input {...props} className="w-full bg-white border border-gray-400 text-gray-900 rounded px-3 py-[6px] text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 [&[type=number]]:[appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none" />;
 
 // Same reasoning as Aio's CreateAioBid.jsx: clear storage only when the flow
 // actually starts fresh (not at the end), so a half-filled bid never silently
@@ -65,7 +65,7 @@ function Basic({ saved, onNext }) {
   const [form, setForm] = useState({ bid_no: saved.bid_no || "", dept_name: saved.dept_name || "", organization: saved.organization || "", address: saved.address || "", qty: saved.qty || "", pincode: saved.pincode || "", atc: saved.atc || "" });
   const [loading, setLoading] = useState(false); const [error, setError] = useState("");
   const change = (key, value) => setForm((old) => ({ ...old, [key]: value }));
-  const submit = async (event) => { event.preventDefault(); setLoading(true); setError(""); try { const body = new FormData(); Object.entries(form).forEach(([key, value]) => body.append(key, value)); body.append("user_id", localStorage.getItem("bid_user_id") || localStorage.getItem("user_id") || ""); body.append("username", localStorage.getItem("user_username") || localStorage.getItem("username") || ""); const response = await fetch(`${API_BASE}/toner-bids/create/`, { method: "POST", body }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Bid create nahi hua"); onNext({ ...form, bid_id: result.bid_id }); } catch (err) { setError(err.message); } finally { setLoading(false); } };
+  const submit = async (event) => { event.preventDefault(); setLoading(true); setError(""); try { const body = new FormData(); Object.entries(form).forEach(([key, value]) => body.append(key, value)); body.append("user_id", sessionStorage.getItem("user_id") || localStorage.getItem("bid_user_id") || localStorage.getItem("user_id") || ""); body.append("username", sessionStorage.getItem("user_username") || sessionStorage.getItem("username") || localStorage.getItem("user_username") || localStorage.getItem("username") || ""); const response = await fetch(`${API_BASE}/toner-bids/create/`, { method: "POST", body }); const result = await response.json(); if (!response.ok) throw new Error(result.error || "Bid create nahi hua"); onNext({ ...form, bid_id: result.bid_id }); } catch (err) { setError(err.message); } finally { setLoading(false); } };
   return <div className="w-full max-w-[600px] bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
     <h5 className="text-lg font-semibold text-gray-800 mb-5">Create Toner Bid</h5>
     {error && <div className="mb-3 bg-red-50 border border-red-300 text-red-700 text-sm px-3 py-2 rounded">{error}</div>}

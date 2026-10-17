@@ -604,7 +604,6 @@ export default function PrinterConfig({ bidData, onNext, onBack, productMode = "
                 label="Feeder Capacity (Number of Sheets)"
                 name="feeder_capacity"
                 options={FEEDER_CAPACITY}
-                suppressNA
                 required
               />
             </>

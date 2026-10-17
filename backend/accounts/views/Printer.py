@@ -268,6 +268,14 @@ def _printer_bid_is_unspecified(value):
 
 
 def _printer_catalogue_match_value(bid_value, catalogue_value, field=""):
+    if field == "main_paper_tray_count":
+        # "2 Additional Tray Can be Added" (OM240, OM249): the model ships with
+        # one main tray and takes up to that many, so a bid asking for any
+        # count from 1 to 2 matches.
+        expandable = re.search(r"(\d+)\s*additional\s+tray", str(catalogue_value or ""), re.IGNORECASE)
+        wanted = re.search(r"\d+", str(bid_value or ""))
+        if expandable and wanted and 1 <= int(wanted.group()) <= int(expandable.group(1)):
+            return True, 100
     bid_semantic = _printer_semantic_value(field, bid_value)
     catalogue_semantic = _printer_semantic_value(field, catalogue_value)
     if bid_semantic and bid_semantic == catalogue_semantic:
@@ -1504,6 +1512,10 @@ def match_printer_catalogue_models(request, bid_id):
         for bid_key, product_key in printer_field_map.items():
             bid_value = bid_specs.get(bid_key, "")
             if _printer_bid_is_unspecified(bid_value):
+                continue
+            # A bid with Feeder Capacity "NA" sets no capacity requirement, so
+            # any model's feeder capacity is acceptable.
+            if bid_key == "feeder_capacity" and _printer_semantic_value(bid_key, bid_value) == "na":
                 continue
             catalogue_value = product.get(product_key, "")
             if not str(catalogue_value or "").strip() and _printer_semantic_value(bid_key, bid_value) == "na":

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { priceInputValue } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 const TABS = [
@@ -39,7 +40,7 @@ const PRINTER_FIELDS = [
     ["connectivity", "Connectivity"], ["duty_cycle", "Duty Cycle (Prints/Month)"],
     ["onsite_warranty", "On Site Warranty (In Year)"], ["extended_warranty", "Extended Warranty (in Years) over and above standard warranty"],
     ["epbg", "EPBG (%)"], ["freightInstallation", "Freight and Installation"],
-    ["final_amount", "Final Price *", "number"], ["extra_requirements", "Extra Requirements", "textarea"],
+    ["final_amount", "Bid Approved Price *", "number"], ["extra_requirements", "Extra Requirements", "textarea"],
 ];
 
 const MULTIFUNCTION_ONLY_FIELDS = new Set([
@@ -74,9 +75,10 @@ const Field = ({ item, form, onChange, compact = false }) => {
             name={name}
             type={type}
             min="0"
-            step="0.01"
-            value={form[name] ?? ""}
-            onChange={onChange}
+            step="1"
+            value={priceInputValue(form[name] ?? "")}
+            // Whole rupees only, same as every product's approved price.
+            onChange={(e) => onChange({ target: { name, value: e.target.value.replace(/\D/g, "") } })}
             className="w-full rounded-md border-2 border-emerald-500 bg-white py-2.5 pl-11 pr-3 text-base font-bold text-emerald-900 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-200"
           />
         </div>

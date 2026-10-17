@@ -72,6 +72,11 @@ class AioGemAuditLog(models.Model):
 
 FIELDS=["bid_no","dept_name","organization","model_no","model","qty","date","start_date","atc","address","pincode","processor","processor_price","ram","ram_price","hdd","hdd_price","ssd","ssd_price","os","os_price","motherboard","motherboard_price","screen_size","screen_price","wifi","wifi_price","keyboard","keyboard_price","dvd","dvd_price","warranty","warranty_price","pro_descp","software1","gp","motherboard_descp","freightInstallation","freightInstallation_price","hddreturnable","hddreturnable_price","epbg","epbg_price","local_content"]
 PRICES={x for x in FIELDS if x.endswith("_price")}
+def _doc_processor(b):
+    # Processor "None" -> the processor written in Processor Description.
+    p=str(b.processor or "").strip()
+    return p if p and p.lower()!="none" else str(b.pro_descp or "").strip()
+
 def _ensure_model_table(model):
     table=model._meta.db_table
     if table not in connection.introspection.table_names():
@@ -130,7 +135,7 @@ def _json(b,r=None):
     # the Analyser's "Transfer Catalogue to GeM" tab surfaces exactly these.
     is_new_product=False
     if model_number:
-        cp=CatalogueProduct.objects.filter(model_no__iexact=model_number,category="aio").first()
+        cp=CatalogueProduct.objects.filter(model_no__iexact=model_number,category__iexact="aio").first()
         if cp:is_new_product=_catalogue_extra_specs(cp).get("_source")=="aio_bid"
     submitted_by=b.username or (b.user.username if b.user else "")
     out.update(model_number=model_number,submitted_by=submitted_by,user_name=submitted_by,is_new_product=is_new_product)
@@ -448,7 +453,7 @@ def match_aio_catalogue_models(r,bid_id):
     own_model_no=f"{b.model_no}{b.model}".strip()
 
     results=[]
-    for product in CatalogueProduct.objects.filter(category="aio"):
+    for product in CatalogueProduct.objects.filter(category__iexact="aio"):
         if own_model_no and (product.model_no or "").strip().lower()==own_model_no.lower():continue
         matched_count,checked_count,total_score=_score_fields(
             bid_specs,lambda k,v,p=product:_best_catalogue_match_aio(k,v,p,AIO_CATALOGUE_FIELD_MAP[k])
@@ -536,14 +541,14 @@ def save_aio_model_number(r,bid_id):
             if cp is None:
                 try:
                     with transaction.atomic():
-                        CatalogueProduct.objects.create(model_no=model_number,processor=processor,ram=ram,storage=storage,os=os_value,category="aio",description=pro_descp or "All in One PC",extra_specs=extra_specs)
+                        CatalogueProduct.objects.create(model_no=model_number,processor=processor,ram=ram,storage=storage,os=os_value,category="AIO",description=pro_descp or "All in One PC",extra_specs=extra_specs)
                 except IntegrityError:
                     pass
             else:
                 existing=_catalogue_extra_specs(cp)
                 if existing.get("_source")=="aio_bid":
                     existing.update(extra_specs)
-                    cp.processor=processor;cp.ram=ram;cp.storage=storage;cp.os=os_value;cp.category="aio";cp.extra_specs=existing
+                    cp.processor=processor;cp.ram=ram;cp.storage=storage;cp.os=os_value;cp.category="AIO";cp.extra_specs=existing
                     cp.save(update_fields=["processor","ram","storage","os","category","extra_specs","updated_at"])
     except Exception:
         pass
@@ -2124,7 +2129,7 @@ def _fill_aio_technical_compliance_page1(page,fitz,bid_no,b):
     if model_number and model_number not in description:description=f"{description} Model: {model_number}".strip()
     rows=[
         (190,280,"Description of Store","All in One PC with Integrated Monitor, Compatible Chipset as per Processor make with Minimum 4 USB Port",description,8.0),
-        (280,410,"Processor Number",_TC_PROCESSOR_ALLOWED,b.processor,7.2),
+        (280,410,"Processor Number",_TC_PROCESSOR_ALLOWED,_doc_processor(b),7.2),
         (410,458,"Mouse Connectivity","Wired | Wireless Or higher",_tc_keyboard_connectivity(b.keyboard),8.5),
         (458,506,"Keyboard Connectivity","Wired | Wireless Or higher",_tc_keyboard_connectivity(b.keyboard),8.5),
         (506,550,"Graphics Type","Integrated",_tc_graphics_type(b.gp),8.5),
@@ -2171,7 +2176,7 @@ def _fill_aio_data_sheet_page(page,fitz,page_index,b):
     if page_index==0:
         sections=[
             ("PRODUCT DETAILS",[("Model Number",model_number),("Brand","acxxel"),("Product Type","All in One PC")]),
-            ("PROCESSOR",[("Processor Number",b.processor)]),
+            ("PROCESSOR",[("Processor Number",_doc_processor(b))]),
             ("OPERATING SYSTEM & MEMORY",[("Factory Pre-loaded Operating System",b.os),("Type of RAM",_tc_ram_type(b.ram)),("RAM Size",(_tc_ram_size(b.ram)+" GB") if _tc_ram_size(b.ram)!=str(b.ram or "") else b.ram)]),
             ("MONITOR",[("Integrated Screen Size",b.screen_size)]),
             ("CONNECTIVITY & PORTS",[("WiFi / Bluetooth",b.wifi),("Ports",b.motherboard)]),

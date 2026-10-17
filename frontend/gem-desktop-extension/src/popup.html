@@ -15,11 +15,12 @@
   </section>
   <section class="sync-section">
     <strong>Bid To Be Participated</strong>
-    <p class="hint">Select one approved GeM category. The scan uses Bid Start Date: Latest First and stops automatically at the first bid older than the current three-day window. Repeat for each category.</p>
+    <p class="hint">Select approved GeM categories. The scan uses Bid Start Date: Latest First, skips bids it has already read, continues an unfinished earlier scan from the page where it stopped, and stops once it reaches bids a complete scan already read.</p>
     <div class="button-row">
       <button id="sync-opportunities" type="button">Scan Bid To Be Participated</button>
       <button id="pause-opportunities" type="button" class="secondary" disabled>Pause Scan</button>
       <button id="copy-opportunity-status" type="button" class="secondary">Copy status</button>
+      <button id="retry-opportunities" type="button" class="secondary" disabled>Retry Scan</button>
     </div>
     <p id="opportunity-state" class="sync-state"></p>
   </section>

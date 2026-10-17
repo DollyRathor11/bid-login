@@ -27,6 +27,17 @@ const PRICE_FIELDS = [
 ];
 const toPrice = (value) => Number(String(value ?? "").replace(/,/g, "").trim()) || 0;
 const calculateTotalPrice = (values) => PRICE_FIELDS.reduce((sum, name) => sum + toPrice(values?.[name]), 0);
+// Bid Approved Price = Total Value + the admin's margin (whole ₹), once a margin
+// is entered; the admin can still overwrite the approved price by hand.
+// Margin and approved price are whole rupees: no decimal point.
+const wholeRupees = (value) => String(value ?? "").replace(/\D/g, "");
+
+const applyMargin = (values) => {
+  if (values?.margin === undefined || String(values.margin).trim() === "") return values;
+  const total = toPrice(values.component_total_price ?? calculateTotalPrice(values));
+  return { ...values, total_price: String(Math.round(total + toPrice(values.margin))) };
+};
+
 const PROCESSORS = [...INTEL_PROCESSORS, ...INTEL_XEON_PROCESSORS, ...AMD_THREADRIPPER_PROCESSORS];
 const optionsFor = (name, form) => ({
   processor: PROCESSORS, ram: getFilteredRams(form?.processor), hdd: HDDS, ssd1: SSD1_OPTIONS, ssd2: SSD1_OPTIONS,
@@ -489,6 +500,14 @@ export default function WorkstationBidApproval() {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => {
+      if (name === "margin") {
+        const margin = wholeRupees(value);
+        // Clearing the margin clears the price it filled; the admin may type the
+        // approved price by hand (it is only filled automatically from a margin).
+        if (!margin) return { ...prev, margin: "", total_price: "" };
+        return applyMargin({ ...prev, margin });
+      }
+      if (name === "total_price") return { ...prev, total_price: wholeRupees(value) };
       const next = { ...prev, [name]: value };
       const options = optionsFor(name, next);
       if (options.length) next[`${name}_price`] = value === "None" ? 0 : getPriceFromLocalData(options, value);
@@ -502,7 +521,7 @@ export default function WorkstationBidApproval() {
       if (name === "hddreturnable" && value === "No") next.hddreturnable_price = 0;
       if (PRICE_FIELDS.includes(name) || options.length) next.component_total_price = calculateTotalPrice(next);
       if (name === "freightInstallation" || name === "hddreturnable") next.component_total_price = calculateTotalPrice(next);
-      return next;
+      return applyMargin(next);
     });
   };
 
@@ -897,13 +916,23 @@ export default function WorkstationBidApproval() {
                 </div>
               </div>
 
-              <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
+              <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 gap-4 lg:grid-cols-3">
                 <div className="rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm">
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <label className="block text-sm font-semibold text-slate-800">Total Value of Components</label>
+                    <label className="block text-sm font-semibold text-slate-800">Total Value</label>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-slate-700">₹</span>
-                      <input type="number" readOnly value={form.component_total_price ?? calculateTotalPrice(form)} className="w-48 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-right text-lg font-semibold text-slate-700 outline-none" />
+                      <input type="number" readOnly value={Math.round(toPrice(form.component_total_price ?? calculateTotalPrice(form)))} className="w-48 rounded-md border border-slate-300 bg-slate-100 px-3 py-2 text-right text-lg font-semibold text-slate-700 outline-none" />
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-amber-300 bg-amber-50 p-4 shadow-sm">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <label className="block text-sm font-semibold text-amber-900">Margin</label>
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-amber-800">₹</span>
+                      <input type="number" min="0" step="1" name="margin" value={form?.margin ?? ""} onChange={handleChange} placeholder="Margin" readOnly={selected.status === "approved" || selected.review_status === "approved"} disabled={selected.status === "approved" || selected.review_status === "approved"}
+                        className="w-40 rounded-md border border-amber-300 bg-white px-3 py-2 text-right text-lg font-semibold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                     </div>
                   </div>
                 </div>
@@ -912,7 +941,7 @@ export default function WorkstationBidApproval() {
                     <label className="block text-sm font-semibold text-emerald-900">Bid Approved Price <span className="text-red-600">*</span></label>
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-emerald-800">₹</span>
-                      <input type="number" min="0" step="0.01" required name="total_price" value={priceInputValue(form.total_price ?? "")} onChange={handleChange} readOnly={selected.status === "approved" || selected.review_status === "approved"} disabled={selected.status === "approved" || selected.review_status === "approved"} placeholder="Enter approved price" className="w-48 rounded-md border border-emerald-300 bg-white px-3 py-2 text-right text-lg font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                      <input type="number" min="0" step="1" required name="total_price" value={priceInputValue(form.total_price ?? "")} onChange={handleChange} readOnly={selected.status === "approved" || selected.review_status === "approved" || Boolean(form?.margin)} disabled={selected.status === "approved" || selected.review_status === "approved"} placeholder="Enter approved price" className="w-48 rounded-md border border-emerald-300 bg-white px-3 py-2 text-right text-lg font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 read-only:cursor-not-allowed read-only:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                     </div>
                   </div>
                 </div>

@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import img1 from "../../../assets/img1.png";
 import img2 from "../../../assets/img2.png";
 import img3 from "../../../assets/img3.png";
+import aioWiredImage from "../../../assets/aio-wired.jpg";
+import aioWirelessImage from "../../../assets/aio-wireless.jpg";
 import printerOm052 from "../../../assets/OMO52.png";
 import printerOm271 from "../../../assets/OM271.png";
 import printerOm050 from "../../../assets/OMO50.png";
@@ -889,8 +891,18 @@ function getImage(product, index = 0) {
     return PRINTER_MODEL_IMAGES[normalizedModel] || product?.image || getFallbackImage(index);
   }
 
+  // The GeM picture saved by Product Scan, else a sample picture.
   if (isDesktopOrWorkstationProduct(product)) {
-    return getFallbackImage(index);
+    return product?.image || getFallbackImage(index);
+  }
+
+  // AIO: the picture follows the keyboard, whatever GeM shows (some
+  // wireless GeM listings carry the wired picture).
+  if (isAioProduct(product)) {
+    const specs = product?.extra_specs || {};
+    const keyboard = [product?.keyboard, specs["Keyboard Connectivity"], specs["Mouse Connectivity"]].join(" ");
+    if (/wireless/i.test(keyboard)) return aioWirelessImage;
+    if (/wired|usb/i.test(keyboard)) return aioWiredImage;
   }
 
   return product?.image || getFallbackImage(index);
@@ -1429,8 +1441,12 @@ export default function CatalogueProducts() {
   const [showAdd, setShowAdd] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const productHistoryPushed = useRef(false);
+  // Only the latest request may fill the list: a slow "All" load that
+  // finishes after the user picked AIO must not overwrite the AIO list.
+  const latestFetch = useRef(0);
 
   const fetchProducts = async () => {
+    const fetchId = ++latestFetch.current;
     setLoading(true);
     setLoadError("");
 
@@ -1519,16 +1535,18 @@ export default function CatalogueProducts() {
       }
 
       const responses = await Promise.all(requests);
+      if (fetchId !== latestFetch.current) return;
       const mergedProducts = responses
         .flat()
         .map((product, index) => ({ ...product, __imageIndex: index }));
 
       setProducts(mergedProducts);
     } catch (err) {
+      if (fetchId !== latestFetch.current) return;
       setLoadError(err.message);
       setProducts([]);
     } finally {
-      setLoading(false);
+      if (fetchId === latestFetch.current) setLoading(false);
     }
   };
 
@@ -1571,7 +1589,7 @@ export default function CatalogueProducts() {
   };
 
   const addProductToList = (product) => {
-    if (categoryFilter !== "All" && product.category !== categoryFilter) {
+    if (categoryFilter !== "All" && String(product.category || "").toLowerCase() !== categoryFilter.toLowerCase()) {
       return;
     }
 
@@ -1580,7 +1598,7 @@ export default function CatalogueProducts() {
 
   const updateProductInList = (updated) => {
     setProducts((prev) => {
-      if (categoryFilter !== "All" && updated.category !== categoryFilter) {
+      if (categoryFilter !== "All" && String(updated.category || "").toLowerCase() !== categoryFilter.toLowerCase()) {
         return prev.filter((p) => p.id !== updated.id);
       }
 
