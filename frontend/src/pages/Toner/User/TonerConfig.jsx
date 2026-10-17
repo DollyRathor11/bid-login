@@ -5,7 +5,7 @@ const API_BASE = import.meta.env.VITE_API_URL;
 
 // Straight off Toner_Main_Specifications.pdf — Model Number and Country of
 // Origin deliberately left out per that sheet's own note.
-export const BRANDS = ["HP", "Canon", "Brother", "Epson", "Samsung", "Xerox", "Ricoh", "Kyocera", "Acxxel", "Nargle"];
+export const BRANDS = ["HP", "Canon", "Brother", "Epson", "Samsung", "Xerox", "Ricoh", "Kyocera", "Acxxel"];
 export const CARTRIDGE_TYPES = ["Toner Cartridge", "Laser Toner", "Colour Toner"];
 export const PRODUCT_CLASSES = ["OEM", "Compatible"];
 export const COLOURS = ["Black", "Cyan", "Magenta", "Yellow", "All Colour"];
@@ -47,7 +47,6 @@ const brandColor = (brand) => {
   for (let i = 0; i < (brand || "").length; i++) hash = (hash * 31 + brand.charCodeAt(i)) >>> 0;
   return BRAND_COLOR_PALETTE[hash % BRAND_COLOR_PALETTE.length];
 };
-const INK_COLOR_DOT = { Black: "bg-gray-900", Cyan: "bg-cyan-500", Magenta: "bg-pink-500", Yellow: "bg-yellow-400" };
 
 const INITIAL_FORM = {
   brand: "", cartridge_type: "", product_class: "", colour: "", compatibility: "", technology: "",
@@ -104,7 +103,7 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
       })
       .then((data) => {
         if (!cancelled && Array.isArray(data.brands)) {
-          setCatalogueBrands([...new Set([...BRANDS, ...data.brands])]);
+          setCatalogueBrands([...new Set([...BRANDS, ...data.brands])].filter((brand) => !["nargle", "nargel"].includes(brand.trim().toLowerCase())));
         }
       })
       .catch((error) => console.warn("Unable to load toner catalogue brands", error));
@@ -113,6 +112,9 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
   const brandRef = useRef(null);
   const [tonerModelOpen, setTonerModelOpen] = useState(false);
   const [tonerModelSearch, setTonerModelSearch] = useState("");
+  const [manualModelBrand, setManualModelBrand] = useState("");
+  const [manualModelSaving, setManualModelSaving] = useState(false);
+  const [manualModelError, setManualModelError] = useState("");
   const tonerModelRef = useRef(null);
 
   useEffect(() => {
@@ -166,7 +168,6 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
   const [tonerModels, setTonerModels] = useState([]);
   const [tonerModelsLoading, setTonerModelsLoading] = useState(false);
   const [tonerModelsError, setTonerModelsError] = useState("");
-  const [tonerPrinters, setTonerPrinters] = useState({}); // tonerKey -> printers[]
   const [unionPrinters, setUnionPrinters] = useState([]);
   const [printersLoading, setPrintersLoading] = useState(false);
   const [printersError, setPrintersError] = useState("");
@@ -214,10 +215,9 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
   }, [form.brand]);
 
   useEffect(() => {
-    if (form.toner_models.length === 0) {
-      setTonerPrinters({});
-      setUnionPrinters([]);
+    if (form.toner_models.length === 0) {      setUnionPrinters([]);
       setPrintersError("");
+      setPrintersLoading(false);
       return;
     }
     let cancelled = false;
@@ -234,15 +234,10 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
       })
       .then((data) => {
         if (cancelled) return;
-        const map = {};
-        (data.results || []).forEach((r) => { map[tonerKey(r)] = r.printers || []; });
-        setTonerPrinters(map);
         setUnionPrinters(data.printers || []);
       })
       .catch(() => {
-        if (!cancelled) {
-          setTonerPrinters({});
-          setUnionPrinters([]);
+        if (!cancelled) {          setUnionPrinters([]);
           setPrintersError("Unable to load compatible printers. Please try again.");
         }
       })
@@ -316,10 +311,39 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.toner_models, form.colour, tonerModels]);
 
+  const manualBrand = selectedBrands.includes(manualModelBrand) ? manualModelBrand : selectedBrands[0] || "";
+  const addManualToner = async () => {
+    const model = tonerModelSearch.trim();
+    if (!model || !manualBrand || manualModelSaving) return;
+    setManualModelSaving(true);
+    setManualModelError("");
+    try {
+      const response = await fetch(`${API_BASE}/toner-catalog/toners/`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brand: manualBrand, tonerModel: model }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok || !data.toner) throw new Error(data.error || "Unable to save toner model. Please try again.");
+      setTonerModels((prev) => prev.some((toner) => tonerKey(toner) === tonerKey(data.toner)) ? prev : [...prev, data.toner]);
+    const selection = { brand: data.toner.brand, tonerModel: data.toner.tonerModel };
+    setForm((prev) => prev.toner_models.some((toner) => tonerKey(toner) === tonerKey(selection))
+      ? prev : { ...prev, toner_models: [...prev.toner_models, selection] });
+    setTonerModelSearch("");
+    setTonerModelOpen(false);
+    } catch (error) {
+      setManualModelError(error.message || "Unable to save toner model.");
+    } finally {
+      setManualModelSaving(false);
+    }
+  };
+  const availableTonerModels = [...tonerModels, ...form.toner_models.filter((toner) =>
+    !tonerModels.some((entry) => tonerKey(entry) === tonerKey(toner))
+  )];
   const tonerSearchLower = tonerModelSearch.trim().toLowerCase();
   const groupedTonerModels = selectedBrands.map((brand) => ({
     brand,
-    items: tonerModels.filter(
+    items: availableTonerModels.filter(
       (t) => t.brand === brand &&
         (!tonerSearchLower ||
           t.tonerModel.toLowerCase().includes(tonerSearchLower) ||
@@ -473,12 +497,13 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
           <div className="col-span-1 relative" ref={tonerModelRef}>
             <div className="flex items-center gap-2 mb-1">
               <label className="block text-sm font-medium text-gray-700">Toner Model</label>
-              <span className="text-red-500 text-[11px] font-normal">*Optional</span>
             </div>
             <button
               type="button"
               onClick={() => selectedBrands.length > 0 && !tonerModelsLoading && setTonerModelOpen((prev) => !prev)}
               disabled={selectedBrands.length === 0 || tonerModelsLoading}
+              aria-expanded={tonerModelOpen}
+              aria-controls="toner-model-picker"
               className="w-full min-h-[38px] border border-gray-300 rounded-md px-3 py-1.5 text-sm text-left focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700 disabled:bg-gray-100 disabled:text-gray-400 flex items-center justify-between gap-2"
             >
               {form.toner_models.length > 0 ? (
@@ -492,29 +517,43 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
             </button>
 
             {tonerModelOpen && selectedBrands.length > 0 && (
-              <div className="absolute z-20 mt-1 w-full rounded-md border border-gray-300 bg-white shadow-lg">
-                <div className="p-2 border-b border-gray-100 flex items-center gap-2">
+              <div id="toner-model-picker" className="absolute z-30 mt-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl shadow-slate-900/10">
+                <div className="flex items-center justify-between gap-2 bg-slate-50 px-4 py-3 border-b border-slate-100">
+                  <span className="text-xs font-semibold text-slate-700">Choose toner models</span>
+                  <span className="rounded-full border border-blue-100 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">{form.toner_models.length} selected</span>
+                </div>
+                <div className="p-3 flex items-center gap-2">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 focus-within:border-blue-400 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-100">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0 text-slate-400" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" /><path d="m16 16 4 4" /></svg>
                   <input
                     type="text"
                     autoFocus
                     value={tonerModelSearch}
                     onChange={(e) => setTonerModelSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addManualToner();
+                      }
+                    }}
                     placeholder="Search toner model..."
-                    className="flex-1 border border-gray-200 rounded px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    aria-label="Search toner models or enter a new model"
+                    className="w-full min-w-0 bg-transparent text-sm text-slate-800 outline-none placeholder:text-slate-400"
                   />
+                  </div>
                   {form.toner_models.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setForm((prev) => ({ ...prev, toner_models: [] }))}
-                      className="shrink-0 text-xs text-gray-500 hover:text-red-600"
+                      className="shrink-0 rounded-md px-2 py-1 text-xs text-slate-500 hover:bg-red-50 hover:text-red-600"
                     >
                       Clear all
                     </button>
                   )}
                 </div>
-                <div className="max-h-64 overflow-y-auto py-1">
+                <div className="max-h-56 overflow-y-auto px-2 pb-2">
                   {groupedTonerModels.length === 0 && (
-                    <div className="px-3 py-4 text-sm text-gray-400 text-center">
+                    <div className="rounded-lg bg-slate-50 px-3 py-5 text-xs text-slate-500 text-center">
                       {tonerModelsError || "No toner models found."}
                     </div>
                   )}
@@ -530,7 +569,7 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
                         return (
                           <label
                             key={tonerKey(t)}
-                            className={`flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-blue-50 ${isSelected ? "bg-blue-50" : ""}`}
+                            className={`my-1 flex items-center gap-3 rounded-lg border px-3 py-2.5 text-sm cursor-pointer transition-colors ${isSelected ? "border-blue-200 bg-blue-50" : "border-transparent hover:border-slate-200 hover:bg-slate-50"}`}
                           >
                             <input
                               type="checkbox"
@@ -538,14 +577,35 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
                               onChange={() => handleToggleToner(t)}
                               className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                             />
-                            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${brandColor(t.brand).dot}`} />
-                            <span className={`flex-1 truncate ${isSelected ? "font-semibold text-blue-700" : "text-gray-700"}`}>{t.tonerModel}</span>
-                            <span className="shrink-0 text-[10px] text-gray-400">{t.cartridgeType}</span>
+                            <span className="min-w-0 flex-1">
+                              <span className={`block truncate font-medium ${isSelected ? "text-blue-800" : "text-slate-800"}`}>{t.tonerModel}</span>
+                              {t.cartridgeType && <span className="block text-[11px] text-slate-400">{t.cartridgeType}</span>}
+                            </span>
+                            <span className={`shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium ${brandColor(t.brand).bg} ${brandColor(t.brand).text}`}>{t.brand}</span>
                           </label>
                         );
                       })}
                     </div>
                   ))}
+                </div>
+                <div className="border-t border-slate-100 bg-slate-50/80 p-4 space-y-2.5">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800">Add a new model</p>
+                    <p className="mt-1 text-[11px] leading-4 text-slate-500">Can't find your model? Enter its number in the search above.</p>
+                  </div>
+                  {selectedBrands.length > 1 && (
+                    <select aria-label="Brand for manual toner model" value={manualBrand}
+                      onChange={(e) => setManualModelBrand(e.target.value)}
+                      className="w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm">
+                      {selectedBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+                    </select>
+                  )}
+                  <button type="button" onClick={addManualToner} disabled={!tonerModelSearch.trim() || manualModelSaving}
+                    className="w-full rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none break-words">
+                    {manualModelSaving ? "Saving model..." : tonerModelSearch.trim() ? `Add ${tonerModelSearch.trim()} for ${manualBrand}` : "Add model manually"}
+                  </button>
+                  {manualModelError && <p role="alert" className="text-xs text-red-600">{manualModelError}</p>}
+                  <p className="text-[11px] leading-4 text-slate-500">Saved models stay available for this brand. Add printers under Compatible Printer Models.</p>
                 </div>
               </div>
             )}
@@ -582,93 +642,64 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
           <SelectField label="Type of Cartridge" name="cartridge_type" options={CARTRIDGE_TYPES} required />
           <SelectField label="Colour of Ink" name="colour" options={colourOptions} required />
 
-          {form.toner_models.length > 0 && (
-            <div className="col-span-1 md:col-span-3 space-y-4">
-              {form.toner_models.map((t) => {
-                const entry = getTonerEntry(t);
-                const printers = tonerPrinters[tonerKey(t)] || [];
-                return (
-                  <div key={tonerKey(t)} className="border border-gray-200 rounded-md bg-gray-50 p-3">
-                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                      <label className="text-sm font-medium text-gray-700 underline">
-                        {t.tonerModel}
-                        <span className="ml-2 text-[11px] text-gray-500 font-normal no-underline">
-                          {t.brand}
-                          {entry?.cartridgeType ? ` • ${entry.cartridgeType}` : ""}
-                        </span>
-                      </label>
-                      <div className="flex items-center gap-3">
-                        {!printersLoading && !printersError && (
-                          <span className="text-[11px] text-gray-500">
-                            {printers.length} Compatible Printer{printers.length !== 1 ? "s" : ""}
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleToggleToner(t)}
-                          aria-label={`Remove ${t.tonerModel}`}
-                          className="text-xs text-gray-400 hover:text-red-600"
-                        >
-                          ✕ Remove
-                        </button>
-                      </div>
-                    </div>
-
-                    {entry?.partNumbers?.length > 0 && (
-                      <div className="flex flex-wrap gap-2">
-                        {entry.partNumbers.map((p) => (
-                          <span
-                            key={`${p.color}-${p.partNo}`}
-                            className="inline-flex items-center gap-1.5 rounded border border-gray-200 bg-white px-2 py-1 text-xs text-gray-700"
-                          >
-                            {p.color && <span className={`h-2 w-2 rounded-full ${INK_COLOR_DOT[p.color] || "bg-gray-400"}`} />}
-                            <span className="font-medium">{p.color || "Part"}</span>
-                            <span className="text-gray-300">·</span>
-                            <span>{p.partNo}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {printersLoading && <div className="text-xs text-gray-400 mt-2">Loading compatible printers...</div>}
-                    {printersError && <div className="text-xs text-red-600 mt-2">{printersError}</div>}
-                  </div>
-                );
-              })}
+          <div className="col-span-1 md:col-span-3 min-w-0 rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50/70 px-5 py-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg border border-blue-100 bg-blue-50 text-blue-600">
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6zM18 12h.01" />
+                  </svg>
+                </span>
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Compatible Printer Models</div>
+                  <p className="mt-0.5 text-xs text-slate-500">Printer models supported by your selected toner</p>
+                </div>
+              </div>
+              <span className="rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700" aria-live="polite">
+                {compatibilityItems.length} {compatibilityItems.length === 1 ? "model" : "models"}
+              </span>
             </div>
-          )}
-
-          <div className="col-span-1 md:col-span-3">
-            <div className="flex items-center gap-2 mb-1">
-              <label className="block text-sm font-medium text-gray-700">Compatibility</label>
-            </div>
-            <div className="w-full border border-gray-300 rounded-md px-2 py-2 text-sm focus-within:ring-2 focus-within:ring-blue-500 flex flex-wrap gap-1.5">
+            <div className="p-4 sm:p-5">
+            {printersLoading && <div className="text-xs text-gray-400 mb-2">Loading compatible printers...</div>}
+            {printersError && <div className="text-xs text-red-600 mb-2">{printersError}</div>}
+            <div className="flex flex-wrap gap-2">
               {compatibilityItems.map((item) => (
                 <span
                   key={item}
-                  className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs text-gray-700"
+                  className="inline-flex max-w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-3 pr-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-blue-200 hover:bg-blue-50"
                 >
-                  {item}
+                  <span className="break-words">{item}</span>
                   <button
                     type="button"
                     onClick={() => removeCompatibilityItem(item)}
                     aria-label={`Remove ${item}`}
-                    className="text-gray-400 hover:text-red-600"
+                    className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-slate-400 hover:bg-red-50 hover:text-red-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
-                    ✕
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" /></svg>
                   </button>
                 </span>
               ))}
+            </div>
+            {compatibilityItems.length === 0 && !printersLoading && <p className="text-xs text-slate-400">No printer models added.</p>}
+            <div className="mt-4 flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 focus-within:border-blue-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-blue-50 transition-colors">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="shrink-0 text-slate-400" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>
               <input
+                id="toner-compatibility-input"
                 type="text"
                 value={compatibilityInput}
                 onChange={(e) => setCompatibilityInput(e.target.value)}
                 onKeyDown={handleCompatibilityInputKeyDown}
                 onBlur={() => addCompatibilityItem(compatibilityInput)}
-                placeholder={compatibilityItems.length === 0 ? "Compatible Printer / MFP Models or Series" : "Add another..."}
-                className="flex-1 min-w-[140px] border-none outline-none text-sm py-1"
+                aria-label="Add compatible printer model"
+                placeholder="Add a printer model or series..."
+                className="w-full min-w-0 border-none bg-transparent outline-none text-sm text-slate-700 placeholder:text-slate-400"
               />
+            <button type="button" onClick={() => addCompatibilityItem(compatibilityInput)} disabled={!compatibilityInput.trim()}
+              className="shrink-0 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-blue-700 disabled:bg-slate-100 disabled:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+              Add
+            </button>
             </div>
+          </div>
           </div>
 
           <SelectField label="Technology" name="technology" options={TECHNOLOGIES} required />

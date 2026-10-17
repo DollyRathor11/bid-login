@@ -1,6 +1,7 @@
-import json, logging, os, re, threading
+import hashlib, json, logging, os, re, threading
 import openpyxl
 from django.conf import settings
+from django.db import connection, models
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -13,6 +14,31 @@ DEFAULT_XLSX_PATH = os.path.join(settings.BASE_DIR, "data", "HP_Toner_Printer_Co
 _lock = threading.Lock()
 _cache = None  # {"toners_by_brand": {...}, "printers_by_key": {...}} once loaded
 _cache_signature = None
+
+
+class TonerManualModel(models.Model):
+    brand = models.CharField(max_length=100)
+    toner_model = models.CharField(max_length=150)
+    identity = models.CharField(max_length=64, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = "accounts"
+        db_table = "accounts_tonermanualmodel"
+
+
+def _manual_models():
+    # Toner models follow this module's existing lazy table lifecycle.
+    with _lock:
+        if TonerManualModel._meta.db_table not in connection.introspection.table_names():
+            with connection.schema_editor() as editor:
+                editor.create_model(TonerManualModel)
+    return TonerManualModel.objects.all()
+
+
+def _manual_model_json(model):
+    return {"brand": model.brand, "tonerModel": model.toner_model,
+            "cartridgeType": "", "partNumbers": []}
 
 
 def _xlsx_path():
@@ -144,6 +170,12 @@ def get_toners_for_brands(brands):
     out = []
     for brand in brands:
         out.extend(cache["toners_by_brand"].get(brand, []))
+    seen = {(item["brand"].casefold(), item["tonerModel"].casefold()) for item in out}
+    for model in _manual_models().filter(brand__in=brands).order_by("created_at"):
+        key = (model.brand.casefold(), model.toner_model.casefold())
+        if key not in seen:
+            out.append(_manual_model_json(model))
+            seen.add(key)
     return out
 
 
@@ -167,7 +199,31 @@ def get_printers_for_toners(toners):
     return results, union_list
 
 
+@csrf_exempt
 def toner_catalog_toners(r):
+    if r.method == "POST":
+        try:
+            payload = json.loads(r.body or "{}")
+        except (ValueError, TypeError):
+            return JsonResponse({"error": "Invalid JSON body"}, status=400)
+        if not isinstance(payload, dict):
+            return JsonResponse({"error": "Expected a toner model object"}, status=400)
+        brand, model = payload.get("brand"), payload.get("tonerModel")
+        if not isinstance(brand, str) or not isinstance(model, str):
+            return JsonResponse({"error": "Brand and toner model are required"}, status=400)
+        brand, model = brand.strip(), model.strip()
+        if not brand or not model or len(brand) > 100 or len(model) > 150:
+            return JsonResponse({"error": "Enter a valid brand and toner model (up to 150 characters)"}, status=400)
+        for item in get_toners_for_brands([brand]):
+            if item["tonerModel"].casefold() == model.casefold():
+                return JsonResponse({"toner": item, "created": False})
+        identity = hashlib.sha256(json.dumps([brand.casefold(), model.casefold()]).encode()).hexdigest()
+        saved, created = TonerManualModel.objects.get_or_create(
+            identity=identity, defaults={"brand": brand, "toner_model": model},
+        )
+        return JsonResponse({"toner": _manual_model_json(saved), "created": created}, status=201 if created else 200)
+    if r.method != "GET":
+        return JsonResponse({"error": "GET or POST required"}, status=405)
     brands_param = (r.GET.get("brands") or r.GET.get("brand") or "").strip()
     brands = [b.strip() for b in brands_param.split(",") if b.strip()]
     if not brands:
@@ -183,7 +239,10 @@ def toner_catalog_toners(r):
     except Exception:
         logger.exception("Failed to read toner compatibility workbook")
         return JsonResponse({"error": "Toner/printer compatibility data is unavailable"}, status=503)
-    return JsonResponse({"toners": toners, "brands": list(_get_cache()["toners_by_brand"])})
+    brands_available = list(dict.fromkeys([
+        *_get_cache()["toners_by_brand"], *_manual_models().values_list("brand", flat=True),
+    ]))
+    return JsonResponse({"toners": toners, "brands": brands_available})
 
 
 def toner_catalog_printers(r):
