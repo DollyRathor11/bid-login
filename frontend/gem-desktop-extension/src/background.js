@@ -213,7 +213,7 @@ function interruptedSyncState(state, scanType, hasLiveRunner, now = Date.now()) 
     ...state,
     status: "failed",
     message: `${label} was interrupted when the GeM page refreshed or closed. `
-      + "Already saved bids are retained; click Retry Sync to continue from the saved page.",
+      + `Already saved bids are retained; click ${scanType === "opportunity" ? "Retry Scan" : "Retry Sync"} to continue from the saved page.`,
     updatedAt: now,
     extensionVersion: chrome.runtime.getManifest().version,
   };
@@ -625,11 +625,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const retryPage = retryState
         ? Math.min(Number(retryState.page), ...(pendingPages.length ? pendingPages : [Number(retryState.page)]))
         : 0;
+      // Bid To Be Participated keeps its own resume point (page, category,
+      // counts) in the progress it reports; Retry Scan continues from there.
+      const opportunityRetry = opportunityScan && message.resume ? syncStates.gemOpportunitySync?.retry : null;
       const resume = retryState ? {
         page: retryPage, saved: Number(retryState.saved || 0),
         rejected: Number(retryState.rejected || 0), checked: Number(retryState.checked || 0),
         pending: Array.isArray(retryState.pending) ? retryState.pending : [],
-      } : null;
+      } : opportunityRetry ? { ...opportunityRetry, serverRecoveryAttempts: 0 } : null;
       const alreadyRunning = [syncStates.gemBidSync, syncStates.gemOpportunitySync]
         .some((state) => state && ACTIVE_SYNC_STATUSES.has(state.status));
       if (alreadyRunning) {
@@ -687,12 +690,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       await chrome.storage.local.set({ [stateKey]: {
         status: "starting",
-        message: opportunityScan ? "Starting Bid To Be Participated scan..."
+        message: opportunityScan
+          ? resume ? `Resuming Bid To Be Participated scan from page ${resume.page}...` : "Starting Bid To Be Participated scan..."
           : resume ? `Resuming disqualified bid sync from page ${resume.page}...` : "Starting disqualified bid sync...",
         page: resume?.page || 0,
         saved: resume?.saved || 0,
         checked: resume?.checked || 0,
         pending: resume?.pending || [],
+        ...(opportunityRetry ? { retry: opportunityRetry } : {}),
         updatedAt: Date.now(),
       } });
       let response;
@@ -728,6 +733,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             saved: resume?.saved || 0,
             checked: resume?.checked || 0,
             pending: resume?.pending || [],
+            ...(opportunityRetry ? { retry: opportunityRetry } : {}),
             updatedAt: Date.now(),
             extensionVersion: chrome.runtime.getManifest().version,
           },
@@ -744,6 +750,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           saved: resume?.saved || 0,
           checked: resume?.checked || 0,
           pending: resume?.pending || [],
+          ...(opportunityRetry ? { retry: opportunityRetry } : {}),
           updatedAt: Date.now(),
           extensionVersion: chrome.runtime.getManifest().version,
         },
@@ -893,6 +900,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         rejected: message.rejected || 0,
         checked: message.checked || 0,
         pending: Array.isArray(message.pending) ? message.pending : [],
+        ...(message.retry ? { retry: message.retry } : {}),
         updatedAt: Date.now(),
         extensionVersion: chrome.runtime.getManifest().version,
       };

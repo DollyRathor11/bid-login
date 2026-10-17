@@ -519,9 +519,10 @@ test('a successful restored page resets the automatic GeM recovery budget', () =
 });
 
 test('saved-page recovery fast-forwards with real pagination when GeM ignores the direct hash route', () => {
-  const start = source.indexOf('async function scanAllPages(resume = null)');
-  const end = source.indexOf('\n  const OPPORTUNITY_PRODUCTS', start);
+  const start = source.indexOf('async function restoreSavedPage(');
+  const end = source.indexOf('async function reloadAndResumeDisqualifiedScan', start);
   const scan = source.slice(start, end);
+  assert.match(source, /await restoreSavedPage\(page, firstPageSignature/);
   assert.match(scan, /const jump = await jumpToSavedPage\(page, firstPageSignature/);
   assert.match(scan, /restored = await waitForPageChange\(jumpSignature, 20000\)/);
   assert.match(scan, /let cursorPage = jumpPage;/);
@@ -536,8 +537,19 @@ test('intentional reload recovery has a distinct progress state', () => {
   assert.match(source.slice(start, end), /progress\("recovering"/);
 });
 
-test('manual Retry Sync passes its saved-page payload into scanAllPages', () => {
-  assert.match(source, /runner\(message\.type === "START_GEM_BID_SYNC" \? message\.resume \|\| null : null\)/);
+test('manual Retry Sync / Retry Scan passes its saved-page payload into the scanner', () => {
+  assert.match(source, /runner\(message\.resume \|\| null\)/);
+});
+
+test('Bid To Be Participated scan recovers from GeM errors like the disqualified scan', () => {
+  const start = source.indexOf('async function scanOpportunityPages(resume = null)');
+  const end = source.indexOf('async function waitForBidCards', start);
+  const scan = source.slice(start, end);
+  assert.match(scan, /await restoreSavedPage\(page, firstPageSignature/);
+  assert.match(scan, /reloadAndResumeOpportunityScan\(/);
+  assert.match(scan, /serverRecoveryAttempts < MAX_SERVER_RECOVERY_ATTEMPTS/);
+  assert.match(scan, /catch \(paginationError\)[\s\S]*reloadOrFail\(page \+ 1/);
+  assert.match(scan, /opportunityRetryState = \(\) => resumeState\(\)/);
 });
 
 test('a transient GeM error while bid cards are still loading reloads and resumes instead of hard-failing', () => {

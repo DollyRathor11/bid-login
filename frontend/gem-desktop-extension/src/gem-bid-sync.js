@@ -5,6 +5,9 @@
   let pauseRequested = false;
   let activeScanType = "";
   let disqualifiedPending = [];
+  // Where a running Bid To Be Participated scan would continue; reported with
+  // every progress update so Retry Scan can restart from that page.
+  let opportunityRetryState = null;
   let lastGemRemoteActionAt = 0;
   let gemBackoffMs = 0;
 
@@ -114,6 +117,9 @@
     if (activeScanType === "disqualified") {
       if (extra.pending) disqualifiedPending = extra.pending;
       extra = { ...extra, pending: disqualifiedPending };
+    }
+    if (activeScanType === "opportunity" && opportunityRetryState) {
+      extra = { ...extra, retry: opportunityRetryState() };
     }
     await runtimeMessage({ type: "GEM_BID_SYNC_PROGRESS", scanType: activeScanType, status, message, ...extra });
   }
@@ -1038,6 +1044,62 @@
     return { advanced: false, reason: lastReason };
   }
 
+  // After a reload GeM is back on page 1. Bring back the saved page without
+  // rescanning the pages before it. Used by both scans' recovery.
+  async function restoreSavedPage(page, firstPageSignature, report) {
+    // Jump straight to the saved page (pager API / numbered page links)
+    // instead of walking 1 -> 2 -> ... -> N with Next.
+    const jump = await jumpToSavedPage(page, firstPageSignature, async (fromPage, toPage) => {
+      await report(`Jumping directly to saved page ${page} (page ${fromPage} -> ${toPage})...`);
+    });
+    let restored = jump.restored;
+    let failure = "direct page jump did not render the saved page";
+    const jumpPage = jump.current || 1;
+    const jumpSignature = jump.signature || firstPageSignature;
+    if (!restored && !gemTransientErrorMessage()) {
+      const targetHash = `#page-${page}`;
+      if (location.hash.toLowerCase() === targetHash) {
+        history.replaceState(history.state, "", `${location.pathname}${location.search}#page-${jumpPage}`);
+      }
+      await waitForGemRemoteActionSlot(5000);
+      location.hash = targetHash;
+      restored = await waitForPageChange(jumpSignature, 20000);
+      if (!restored) failure = "direct page route did not render new cards";
+    }
+    // Some GeM sessions update #page-N without asking Angular to replace
+    // the cards. Fall back to the real Next control and fast-forward from
+    // wherever the jump stopped, without processing intermediate pages.
+    if (!restored && !gemTransientErrorMessage()) {
+      history.replaceState(history.state, "", `${location.pathname}${location.search}#page-${jumpPage}`);
+      let cursorPage = jumpPage;
+      let cursorSignature = jumpSignature;
+      try {
+        while (cursorPage < page) {
+          stopIfRequested();
+          await report(`Restoring saved page ${page}: moving through GeM pagination (${cursorPage} of ${page}) without rescanning earlier pages...`);
+          const advance = await advancePageWithRecovery(cursorSignature, cursorPage);
+          if (!advance.advanced) {
+            failure = `GeM pagination ended at page ${cursorPage} before saved page ${page}`;
+            break;
+          }
+          cursorPage += 1;
+          const restoredCards = await waitForBidCards(60000);
+          const nextSignature = restoredCards.map((item) => item.bidNo).join("|");
+          if (!nextSignature || nextSignature === cursorSignature) {
+            failure = `GeM did not render cards for recovery page ${cursorPage}`;
+            break;
+          }
+          cursorSignature = nextSignature;
+        }
+        restored = cursorPage === page && Boolean(cursorSignature);
+      } catch (error) {
+        if (error.code === "GEM_SYNC_STOPPED") throw error;
+        failure = error.message || "pagination fast-forward failed";
+      }
+    }
+    return { restored, failure };
+  }
+
   // GeM's "Something went wrong, please try again after some time" banner can
   // also appear while a page's bid cards are still rendering, not just while
   // clicking Next. Reload the tab and resume at the same page, mirroring the
@@ -1068,6 +1130,14 @@
       // that guard cannot recover the tab; let the caller rebuild the list.
       if (advance.reason === "gem-server-error") {
         const error = new Error(`GeM server error blocked pagination on page ${page}.`);
+        error.reason = advance.reason;
+        throw error;
+      }
+      // A pager that stays missing means GeM is stuck on "Searching..."; that
+      // tab does not recover by itself, so after one same-tab retry let the
+      // caller reload instead of waiting several minutes.
+      if (advance.reason === "missing" && recoveryAttempt >= 1) {
+        const error = new Error(`GeM pagination stayed missing on page ${page} (GeM list still searching).`);
         error.reason = advance.reason;
         throw error;
       }
@@ -1140,61 +1210,9 @@
           }
           throw new Error("GeM page 1 did not load while restoring the interrupted scan.");
         }
-        // Jump straight to the saved page (pager API / numbered page links)
-        // instead of walking 1 -> 2 -> ... -> N with Next.
-        const jump = await jumpToSavedPage(page, firstPageSignature, async (fromPage, toPage) => {
-          await progress("running", `Jumping directly to saved page ${page} (page ${fromPage} -> ${toPage})...`, {
-            page, saved, rejected, checked, pending: [...pending.values()],
-          });
-        });
-        let restored = jump.restored;
-        let restoreFailure = "direct page jump did not render the saved page";
-        let jumpPage = jump.current || 1;
-        let jumpSignature = jump.signature || firstPageSignature;
-        if (!restored && !gemTransientErrorMessage()) {
-          const targetHash = `#page-${page}`;
-          if (location.hash.toLowerCase() === targetHash) {
-            history.replaceState(history.state, "", `${location.pathname}${location.search}#page-${jumpPage}`);
-          }
-          await waitForGemRemoteActionSlot(5000);
-          location.hash = targetHash;
-          restored = await waitForPageChange(jumpSignature, 20000);
-          if (!restored) restoreFailure = "direct page route did not render new cards";
-        }
-        // Some GeM sessions update #page-N without asking Angular to replace
-        // the cards. Fall back to the real Next control and fast-forward from
-        // wherever the jump stopped, without processing intermediate pages.
-        if (!restored && !gemTransientErrorMessage()) {
-          history.replaceState(history.state, "", `${location.pathname}${location.search}#page-${jumpPage}`);
-          let cursorPage = jumpPage;
-          let cursorSignature = jumpSignature;
-          try {
-            while (cursorPage < page) {
-              stopIfRequested();
-              await progress(
-                "running",
-                `Restoring saved page ${page}: moving through GeM pagination (${cursorPage} of ${page}) without rescanning earlier pages...`,
-                { page, saved, rejected, checked, pending: [...pending.values()] },
-              );
-              const advance = await advancePageWithRecovery(cursorSignature, cursorPage);
-              if (!advance.advanced) {
-                restoreFailure = `GeM pagination ended at page ${cursorPage} before saved page ${page}`;
-                break;
-              }
-              cursorPage += 1;
-              const restoredCards = await waitForBidCards(60000);
-              const nextSignature = restoredCards.map((item) => item.bidNo).join("|");
-              if (!nextSignature || nextSignature === cursorSignature) {
-                restoreFailure = `GeM did not render cards for recovery page ${cursorPage}`;
-                break;
-              }
-              cursorSignature = nextSignature;
-            }
-            restored = cursorPage === page && Boolean(cursorSignature);
-          } catch (error) {
-            restoreFailure = error.message || "pagination fast-forward failed";
-          }
-        }
+        const { restored, failure: restoreFailure } = await restoreSavedPage(page, firstPageSignature, (message) => (
+          progress("running", message, { page, saved, rejected, checked, pending: [...pending.values()] })
+        ));
         if (!restored) {
           if (serverRecoveryAttempts < MAX_SERVER_RECOVERY_ATTEMPTS) {
             await reloadAndResumeDisqualifiedScan({
@@ -1910,14 +1928,40 @@
     let stoppedAtKnownBids = false;
     let knownPages = Number(resume?.knownPages || 0);
     let corrigendaFound = 0;
+    let serverRecoveryAttempts = Number(resume?.serverRecoveryAttempts || 0);
+    let categoryQuery = resume?.categoryQuery || "";
     const rejected = {
       product: 0, bunch: 0, quantity: 0, quantity_unread: 0, pac: 0, location: 0, date: 0, expired: 0, over120: 0, inkjet: 0, detail: 0, api: 0,
       ...(resume?.rejected || {}),
     };
     const apiReasons = {};
+    const currentCategoryQuery = () => {
+      if (!categoryQuery) {
+        const selectedText = text(categorySelectContainer());
+        categoryQuery = OPPORTUNITY_CATEGORIES.find((entry) => entry[2].test(selectedText))?.[1] || "";
+      }
+      return categoryQuery;
+    };
+    const resumeState = (resumePage = page, attempts = 0) => ({
+      page: resumePage, saved, created, updated, checked, rejected: { ...rejected }, knownPages,
+      categoryQuery: currentCategoryQuery(), serverRecoveryAttempts: attempts,
+    });
+    // Same recovery as the disqualified scan: cool down, reload, reapply the
+    // filters and category, and continue at the given page (at most
+    // MAX_SERVER_RECOVERY_ATTEMPTS times in a row before failing).
+    const reloadOrFail = async (resumePage, reason, failure) => {
+      if (serverRecoveryAttempts < MAX_SERVER_RECOVERY_ATTEMPTS) {
+        await reloadAndResumeOpportunityScan(
+          resumeState(resumePage, serverRecoveryAttempts + 1),
+          `${reason} Reloading GeM and continuing at page ${resumePage} automatically (${serverRecoveryAttempts + 1}/${MAX_SERVER_RECOVERY_ATTEMPTS})...`,
+        );
+      }
+      throw new Error(failure);
+    };
+    opportunityRetryState = () => resumeState();
     try {
       await progress("running", resume
-        ? `Restoring the selected category scan at page ${page} after GeM stopped loading...`
+        ? `Restoring the selected category scan at page ${page}...`
         : "Preparing the manually selected GeM category...", { page, saved, checked });
       const knownBids = await storedBidMap(OPPORTUNITY_KNOWN_BIDS_KEY);
       const runBids = resume ? await storedBidMap(OPPORTUNITY_RUN_BIDS_KEY) : {};
@@ -1929,15 +1973,46 @@
         await selectOpportunityCategory(category[1], category[2]);
       }
       if (page > 1) {
-        await waitForGemRemoteActionSlot(5000);
-        location.hash = `page-${page}`;
-        await sleep(3000);
+        const firstPageCards = await waitForBidCards(60000, async (seconds) => {
+          await progress("running", `Restoring page ${page}: waiting for GeM page 1 to load (${seconds}s)...`, { page, saved, checked });
+        });
+        const firstPageSignature = firstPageCards.map((item) => item.bidNo).join("|");
+        if (!firstPageSignature) {
+          const transientError = gemTransientErrorMessage();
+          await reloadOrFail(
+            page,
+            transientError ? `GeM showed "${transientError}" while restoring page ${page}.` : `GeM page 1 did not load while restoring page ${page}.`,
+            "GeM page 1 did not load while restoring the interrupted scan.",
+          );
+        }
+        const restore = await restoreSavedPage(page, firstPageSignature, (message) => (
+          progress("running", message, { page, saved, checked })
+        ));
+        if (!restore.restored) {
+          await reloadOrFail(
+            page,
+            `GeM did not render saved page ${page} (${restore.failure}).`,
+            `GeM did not restore page ${page} of the selected category after an automatic reload.`,
+          );
+        }
+        await sleep(1500);
       }
       const visited = new Set();
       while (true) {
-        const cards = await waitForBidCards(180000);
+        stopIfRequested();
+        const cards = await waitForBidCards(180000, async (seconds) => {
+          await progress("running", `Waiting for GeM bid cards on page ${page} to load (${seconds}s)...`, { page, saved, checked });
+        });
         const signature = cards.map((item) => item.bidNo).join("|");
-        if (!signature || visited.has(signature)) throw new Error(`Selected category scan repeated/stalled at page ${page}.`);
+        if (!signature) {
+          const transientError = gemTransientErrorMessage();
+          await reloadOrFail(
+            page,
+            transientError ? `GeM showed "${transientError}" while loading page ${page}.` : `GeM stopped rendering bid cards on page ${page}.`,
+            `Selected category scan stalled at page ${page}: GeM bid cards did not load.`,
+          );
+        }
+        if (visited.has(signature)) throw new Error(`Selected category scan repeated page ${page}.`);
         visited.add(signature);
         // With Latest First sorting, new bids come first. Once whole pages
         // contain only bids the previous completed scan already read, every
@@ -1979,38 +2054,37 @@
               (apiReasons[item.reason] ||= []).push(item.bid_no || bidNo);
             }
           } else if (row?.reject) rejected[row.reject] += 1;
-          // A failed detail download is retried by the next scan.
-          if (row?.reject !== "detail") runBids[bidNo] = Date.now();
+          // A failed detail download is retried by the next scan. Stored after
+          // every bid so a retry of this page skips the bids already read.
+          if (row?.reject !== "detail") {
+            runBids[bidNo] = Date.now();
+            await storeBidMap(OPPORTUNITY_RUN_BIDS_KEY, runBids);
+          }
         }
-        await storeBidMap(OPPORTUNITY_RUN_BIDS_KEY, runBids);
         await progress("running", `Selected category page ${page}: checked ${checked}; ${opportunitySaveSummary(saved, created, updated, rejected.api, apiReasons)}. Rejected before API: detail ${rejected.detail}, product ${rejected.product}, bunch ${rejected.bunch || 0}, qty<5 ${rejected.quantity}, qty unread ${rejected.quantity_unread}, PAC ${rejected.pac}, location ${rejected.location}, date ${rejected.date}, expired ${rejected.expired}, >120d ${rejected.over120}, inkjet-only ${rejected.inkjet}.`, { page, saved, checked });
-        const advance = await advancePageWithRecovery(signature, page, async (attempt, reason) => {
-          await progress(
-            "running",
-            `GeM did not load page ${page + 1} (${reason}). Reloading the tab and resuming automatically...`,
-            { page, saved, checked },
-          );
-          const selectedText = text(categorySelectContainer());
-          const category = OPPORTUNITY_CATEGORIES.find((entry) => entry[2].test(selectedText));
-          sessionStorage.setItem("acxxelOpportunityResume", JSON.stringify({
-            page: page + 1,
-            saved,
-            created,
-            updated,
-            checked,
-            rejected,
-            knownPages,
-            categoryQuery: category?.[1] || "",
-            savedAt: Date.now(),
-          }));
-          window.setTimeout(() => location.reload(), 250);
-          // Keep this execution parked until the reload replaces the document.
-          await new Promise(() => {});
-        });
+        let advance;
+        // GeM rate-limits rapid page changes with its generic server-error
+        // banner. Pause 3-5s (with jitter) before each Next click.
+        await sleep(3000 + Math.floor(Math.random() * 2000));
+        stopIfRequested();
+        try {
+          advance = await advancePageWithRecovery(signature, page, async (attempt, reason) => {
+            await progress(
+              "running",
+              `GeM pagination on page ${page} is ${reason}; retrying in the same tab before any reload (${attempt}/${MAX_PAGINATION_RECOVERY_ATTEMPTS})...`,
+              { page, saved, checked },
+            );
+          });
+        } catch (paginationError) {
+          if (paginationError.code === "GEM_SYNC_STOPPED") throw paginationError;
+          // Every bid on this page is already read, so continue at the next one.
+          await reloadOrFail(page + 1, `GeM pagination failed on page ${page}.`, paginationError.message);
+        }
         if (!advance.advanced) {
           break;
         }
         page += 1;
+        serverRecoveryAttempts = 0;
       }
       await storeBidMap(OPPORTUNITY_KNOWN_BIDS_KEY, mergeKnownBids(knownBids, runBids));
       await storeBidMap(OPPORTUNITY_RUN_BIDS_KEY, {});
@@ -2035,15 +2109,27 @@
           `Opportunity scan stopped after ${checked} bids; ${opportunitySaveSummary(saved, created, updated, rejected.api, apiReasons)}. Rejected before API: detail ${rejected.detail}, product ${rejected.product}, bunch ${rejected.bunch || 0}, qty<5 ${rejected.quantity}, qty unread ${rejected.quantity_unread}, PAC ${rejected.pac}, location ${rejected.location}, date ${rejected.date}, expired ${rejected.expired}, >120d ${rejected.over120}, inkjet-only ${rejected.inkjet}.`,
           { page, saved, checked },
         );
+        sessionStorage.removeItem("acxxelOpportunityResume");
         return;
       }
-      await progress("failed", error.message || "GeM opportunity scan failed.", { page, saved, checked });
+      sessionStorage.removeItem("acxxelOpportunityResume");
+      await progress("failed", `${error.message || "GeM opportunity scan failed."} Already saved bids are retained; click Retry Scan to continue from page ${page}.`, { page, saved, checked });
       error.syncProgressReported = true;
       throw error;
     } finally {
       syncing = false;
       activeScanType = "";
+      opportunityRetryState = null;
     }
+  }
+
+  async function reloadAndResumeOpportunityScan(state, message) {
+    sessionStorage.setItem("acxxelOpportunityResume", JSON.stringify({ ...state, savedAt: Date.now() }));
+    await progress("recovering", message, { page: state.page, saved: state.saved, checked: state.checked });
+    // An immediate reload after GeM's generic error tends to reproduce it.
+    await sleep(Math.min(8000 + Number(state.serverRecoveryAttempts || 0) * 5000, 30000));
+    location.reload();
+    await new Promise(() => {});
   }
 
   async function waitForBidCards(timeout = 60000, onWait = null) {
@@ -2253,7 +2339,7 @@
       }
       stopRequested = true;
       pauseRequested = false;
-      if (requestedType === "disqualified") sessionStorage.removeItem("acxxelDisqualifiedResume");
+      sessionStorage.removeItem(requestedType === "disqualified" ? "acxxelDisqualifiedResume" : "acxxelOpportunityResume");
       sendResponse({ ok: true, stopping: syncing });
       return true;
     }
@@ -2286,7 +2372,7 @@
     sendResponse({ ok: true, started: true, cardCount });
     window.setTimeout(() => {
       const runner = message.type === "START_GEM_OPPORTUNITY_SYNC" ? scanOpportunityPages : scanAllPages;
-      runner(message.type === "START_GEM_BID_SYNC" ? message.resume || null : null).catch(async (error) => {
+      runner(message.resume || null).catch(async (error) => {
         if (error.code === "GEM_SYNC_STOPPED") return;
         console.error("Acxxel GeM bid sync failed:", error);
         if (error.syncProgressReported) return;
