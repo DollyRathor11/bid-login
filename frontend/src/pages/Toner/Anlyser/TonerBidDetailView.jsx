@@ -1,3 +1,4 @@
+import { TonerModels, TonerBrands, CompatiblePrinterModels } from "../ReviewFields";
 import { useEffect, useState } from "react";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import SpecialDocEditor from "../../../components/analyser/SpecialDocEditor";
@@ -5,7 +6,7 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 // Toner-native dropdown vocabulary — same source used at the User config
 // step (TonerConfig.jsx), so the Analyser sees the exact same option text.
 import {
-  BRANDS, CARTRIDGE_TYPES, PRODUCT_CLASSES, COLOURS, TECHNOLOGIES,
+  CARTRIDGE_TYPES, COLOURS, TECHNOLOGIES,
   PAGE_YIELDS, YIELD_STANDARDS, CHIPS, PRINT_COVERAGES, WARRANTIES,
   WARRANTY_TYPES, QTY_PER_PACKS, COMPLIANCES, REPLACEMENT_POLICIES, YES_NO,
 } from "../User/TonerConfig";
@@ -55,7 +56,7 @@ const YIELD_STANDARD_DOCS = YIELD_STANDARDS.map((label) => ({
 // bidder now sends certificates instead of picking one from a list.
 const REQUIRED_FIELDS = [
   "bid_no", "dept_name", "organization", "qty", "pincode", "address", "atc",
-  "brand", "cartridge_type", "product_class", "colour", "compatibility", "technology",
+  "brand", "cartridge_type", "colour", "compatibility", "technology",
   "page_yield", "chip", "warranty", "warranty_type",
   "refillable", "qty_per_pack", "hsn_code", "replacement_policy", "date",
 ];
@@ -627,7 +628,7 @@ export default function TonerBidDetailView() {
         </VerifiedInputWrapper>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="qty" label="Quantity">
-          <input type="number" name="qty" value={form.qty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
+          <input type="number" name="qty" value={form.qty || ""} onChange={handleChange} disabled={readOnly} className={`${inputCls} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`} />
         </VerifiedInputWrapper>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="pincode" label="Buyer Pincode">
@@ -671,22 +672,11 @@ export default function TonerBidDetailView() {
         </div>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="brand" label="Brand">
-          <Select name="brand" options={BRANDS} />
+          <TonerBrands value={form.brand} disabled={readOnly} onChange={(brand) => setForm((prev) => ({ ...prev, brand }))} />
         </VerifiedInputWrapper>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="cartridge_type" label="Type of Cartridge">
           <Select name="cartridge_type" options={CARTRIDGE_TYPES} />
-        </VerifiedInputWrapper>
-
-        <div className="md:col-span-2 lg:col-span-3">
-          <Label>Toner Models</Label>
-          <div className="border border-gray-300 rounded-md px-3 py-2 text-sm">
-            {parseList(form.toner_models).map((toner) => `${toner.brand} ${toner.tonerModel}`).join(", ") || "Not selected"}
-          </div>
-        </div>
-
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="product_class" label="Product Class of Cartridge">
-          <Select name="product_class" options={PRODUCT_CLASSES} />
         </VerifiedInputWrapper>
 
         <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="colour" label="Colour of Ink">
@@ -694,8 +684,15 @@ export default function TonerBidDetailView() {
         </VerifiedInputWrapper>
 
         <div className="md:col-span-2 lg:col-span-3">
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="compatibility" label="Compatibility">
-            <textarea name="compatibility" value={form.compatibility || ""} onChange={handleChange} disabled={readOnly} rows={2} className={textareaCls} />
+          <Label>Toner Model Number</Label>
+          <TonerModels value={form.toner_models} />
+        </div>
+
+
+
+        <div className="md:col-span-2 lg:col-span-3">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="compatibility" label="Compatible Printer Models">
+            <CompatiblePrinterModels value={form.compatibility} disabled={readOnly} onChange={(compatibility) => setForm((prev) => ({ ...prev, compatibility }))} />
           </VerifiedInputWrapper>
         </div>
 

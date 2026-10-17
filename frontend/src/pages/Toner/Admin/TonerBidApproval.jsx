@@ -1,3 +1,4 @@
+import { TonerModels, TonerBrands, CompatiblePrinterModels } from "../ReviewFields";
 import { useEffect, useRef, useState } from "react";
 // Toner-native dropdown vocabulary — same source used at the User config
 // step (TonerConfig.jsx) and the Analyser's TonerBidDetailView.jsx.
@@ -938,13 +939,7 @@ export default function TonerBidApproval() {
                 </div>
                 <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Toner Model Number</label>
-                  <div className="min-h-[38px] flex flex-wrap items-center gap-2 border border-gray-300 rounded-md bg-gray-50 px-3 py-2 text-sm">
-                    {parseList(form.toner_models).length > 0 ? parseList(form.toner_models).map((toner) => (
-                      <span key={`${toner.brand}-${toner.tonerModel}`} className="max-w-full break-words rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-800">
-                        {toner.brand} {toner.tonerModel}
-                      </span>
-                    )) : <span className="text-gray-500">Not selected</span>}
-                  </div>
+                  <TonerModels value={form.toner_models} />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Department</label>
@@ -988,7 +983,7 @@ export default function TonerBidApproval() {
                   <input type="number" min="0" max="100" step="0.01" required name="local_content" value={form?.local_content || ""} onChange={handleChange}
                     placeholder="Enter %" className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <SpecField label="Brand" name="brand" options={SPEC_OPTIONS.brand} form={form} handleChange={handleChange} />
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Brand</label><TonerBrands value={form.brand} disabled={selected?.status === "approved"} onChange={(brand) => setForm((prev) => ({ ...prev, brand }))} /></div>
                 <div className="md:col-span-2 lg:col-span-3">
                   <label className="block text-sm font-medium text-gray-700 mb-1">ATC</label>
                   <textarea name="atc" value={form?.atc || ""} onChange={handleChange} rows={4}
@@ -1017,7 +1012,7 @@ export default function TonerBidApproval() {
                 <SpecField label="Type of Cartridge" name="cartridge_type" options={SPEC_OPTIONS.cartridge_type} form={form} handleChange={handleChange} />
                 <SpecField label="Colour of Ink" name="colour" options={SPEC_OPTIONS.colour} form={form} handleChange={handleChange} />
                 <SpecField label="Technology" name="technology" options={SPEC_OPTIONS.technology} form={form} handleChange={handleChange} />
-                <SpecField label="Compatibility" name="compatibility" isTextArea form={form} handleChange={handleChange} />
+                <div className="md:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-gray-700 mb-1">Compatible Printer Models</label><CompatiblePrinterModels value={form.compatibility} disabled={selected?.status === "approved"} onChange={(compatibility) => setForm((prev) => ({ ...prev, compatibility }))} /></div>
                 <SpecField label="Page Yield" name="page_yield" options={SPEC_OPTIONS.page_yield} form={form} handleChange={handleChange} />
                 <SpecField label="Chip" name="chip" options={SPEC_OPTIONS.chip} form={form} handleChange={handleChange} />
                 <SpecField label="Print Coverage" name="print_coverage" options={SPEC_OPTIONS.print_coverage} optional form={form} handleChange={handleChange} />

@@ -182,7 +182,7 @@ def _json(b,r=None):
     if model_number:
         cp=CatalogueProduct.objects.only("extra_specs").filter(model_no__iexact=model_number,category__iexact="toner").first()
         if cp:is_new_product=_catalogue_extra_specs(cp).get("_source")=="toner_bid"
-    submitted_by=b.username or (b.user.username if b.user else "")
+    submitted_by=b.user.username if b.user and b.user.role=="user" else b.username
     out.update(model_number=model_number,submitted_by=submitted_by,user_name=submitted_by,is_new_product=is_new_product)
     return out
 
@@ -191,7 +191,11 @@ def create_toner_bid(r):
     if r.method!="POST":return JsonResponse({"error":"POST required"},status=405)
     _ensure_table();d=_data(r)
     if not d.get("bid_no"):return JsonResponse({"error":"Bid number is required"},status=400)
-    t=request_user(r);u=t if t and t.role=="user" else User.objects.filter(id=d.get("user_id")).first();b=TonerBid(user=u,username=d.get("username","") or (u.username if u else ""),bid_no=d["bid_no"]);_assign(b,d);b.save()
+    t=request_user(r)
+    if t and t.role!="user":return JsonResponse({"error":"Please sign in as the submitting user to create a toner bid."},status=403)
+    u=t if t else User.objects.filter(id=d.get("user_id"),role="user").first()
+    if not u:return JsonResponse({"error":"User identity is missing. Please sign in again."},status=401)
+    b=TonerBid(user=u,username=u.username,bid_no=d["bid_no"]);_assign(b,d);b.save()
     return JsonResponse({"message":"Toner bid created","bid_id":b.id},status=201)
 
 @csrf_exempt
