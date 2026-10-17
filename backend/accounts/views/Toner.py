@@ -1,4 +1,5 @@
 import json, os, re, shutil, time
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from django.conf import settings
 from django.db import connection, models
 from django.http import JsonResponse
@@ -76,6 +77,7 @@ class TonerBid(models.Model):
     # only editable from TonerBidApproval.jsx, needed for the Make in India cert.
     local_content=models.CharField(max_length=20,blank=True,default="")
     unit_price=models.DecimalField(max_digits=12,decimal_places=2,default=0); total_price=models.DecimalField(max_digits=14,decimal_places=2,default=0)
+    margin=models.DecimalField(max_digits=12,decimal_places=0,null=True,blank=True)
     # ---- Documents step + review workflow (same shape as AioBid) ----
     upload_document=models.FileField(upload_to="toner_bid_documents/",null=True,blank=True); atc_special_document=models.FileField(upload_to="toner_bid_documents/special/",null=True,blank=True)
     selected_general_docs=models.TextField(blank=True,default="[]"); verified_fields=models.TextField(blank=True,default="[]"); status=models.CharField(max_length=30,default="draft")
@@ -247,6 +249,19 @@ def admin_review_toner_bid(r,bid_id):
     if not b:return JsonResponse({"error":"Toner bid not found"},status=404)
     status=d.get("status")
     if status not in ("approved","rejected","re-analyze"):return JsonResponse({"error":"Invalid admin status"},status=400)
+    if "margin" in d:
+        margin_text=str(d.get("margin") if d.get("margin") is not None else "").strip()
+        try:
+            margin=Decimal(margin_text) if margin_text else None
+            if margin is not None and (not margin.is_finite() or margin<0 or margin!=margin.to_integral_value() or margin>=Decimal("1e12")):
+                raise InvalidOperation
+        except (InvalidOperation,ValueError):
+            return JsonResponse({"error":"Margin must be a non-negative whole rupee amount."},status=400)
+        b.margin=margin
+        if margin is not None:
+            d=d.copy()
+            base=Decimal(str(safe_float(d.get("unit_price",b.unit_price))))
+            d["total_price"]=str((base+margin).quantize(Decimal("1"),rounding=ROUND_HALF_UP))
     if status=="approved":
         local_content=str(d.get("local_content") or "").strip().rstrip("%")
         if not local_content:return JsonResponse({"error":"Local Content (%) is mandatory."},status=400)

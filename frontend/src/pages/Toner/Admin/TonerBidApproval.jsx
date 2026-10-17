@@ -45,6 +45,11 @@ const toPrice = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const applyTonerMargin = (values) => {
+  if (values.margin == null || String(values.margin).trim() === "") return values;
+  return { ...values, total_price: String(Math.round(toPrice(values.unit_price) + toPrice(values.margin))) };
+};
+
 const TABS = [
   { id: "pending", label: "Pending", icon: "⏳", color: "text-amber-600", border: "border-amber-600" },
   { id: "re-analyze", label: "Re-Analyze", icon: "⚠️", color: "text-rose-600", border: "border-rose-600" },
@@ -630,7 +635,7 @@ export default function TonerBidApproval() {
   };
 
   const openModal = (bid) => {
-    const formattedBid = { ...bid, total_price: bid.status === "approved" ? bid.total_price : "" };
+    const formattedBid = bid.status === "approved" ? { ...bid } : applyTonerMargin({ ...bid, total_price: "" });
     setSelected(formattedBid);
     setForm({ ...formattedBid });
     setAdminNote(formattedBid.admin_note || "");
@@ -646,7 +651,14 @@ export default function TonerBidApproval() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => ({ ...prev, [name]: value }));
+    setForm((prev) => {
+      if (name === "margin") {
+        const margin = String(value).replace(/\D/g, "");
+        return margin === "" ? { ...prev, margin: "", total_price: "" } : applyTonerMargin({ ...prev, margin });
+      }
+      const next = { ...prev, [name]: value };
+      return name === "unit_price" || name === "qty" ? applyTonerMargin(next) : next;
+    });
   };
 
   const focusInvalidField = (fieldName) => {
@@ -1024,30 +1036,35 @@ export default function TonerBidApproval() {
                 <SpecField label="Compliance" name="compliance" options={SPEC_OPTIONS.compliance} optional form={form} handleChange={handleChange} />
                 <SpecField label="Replacement Policy" name="replacement_policy" options={SPEC_OPTIONS.replacement_policy} form={form} handleChange={handleChange} />
 
-                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
-                  <div className="rounded-lg border border-slate-300 bg-slate-50 p-4 shadow-sm">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <label className="block text-sm font-semibold text-slate-800">Unit Price</label>
-                      <div className="flex items-center gap-2">
+                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-slate-300 bg-slate-50 p-3">
+                    <div className="flex flex-col gap-2">
+                      <label className="block text-sm font-semibold text-slate-800">Total Value</label>
+                      <div className="flex min-w-0 items-center gap-2">
                         <span className="font-semibold text-slate-700">₹</span>
                         <input type="number" min="0" step="0.01" name="unit_price" placeholder="Price" value={priceInputValue(form?.unit_price ?? "")} onChange={handleChange}
-                          className="w-48 rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-lg font-semibold text-slate-800 outline-none" />
+                          className="w-full min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-800 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       </div>
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-4 shadow-sm">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
+                    <label htmlFor="toner-admin-margin" className="block text-sm font-semibold text-amber-900 mb-2">Margin (Rs.)</label>
+                    <input id="toner-admin-margin" type="text" inputMode="numeric" name="margin" value={form.margin ?? ""} onChange={handleChange} placeholder="Enter margin" disabled={selected?.status === "approved"}
+                      className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-right text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-100" />
+                  </div>
+                  <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3">
+                    <div className="flex flex-col gap-2">
                       <label className="block text-sm font-semibold text-emerald-900">
                         Bid Approved Price <span className="text-red-600">*</span>
                       </label>
-                      <div className="flex items-center gap-2">
+                      <div className="flex min-w-0 items-center gap-2">
                         <span className="font-semibold text-emerald-800">₹</span>
                         <input type="number" min="0" step="0.01" name="total_price" value={priceInputValue(form?.total_price ?? "")} onChange={handleChange} required
                           placeholder="Enter approved price"
-                          readOnly={selected?.status === "approved"}
+                          readOnly={selected?.status === "approved" || (form.margin != null && String(form.margin) !== "")}
                           disabled={selected?.status === "approved"}
-                          className="w-48 rounded-md border border-emerald-300 bg-white px-3 py-2 text-right text-lg font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                          className="w-full min-w-0 rounded-md border border-emerald-300 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       </div>
                     </div>
                   </div>
