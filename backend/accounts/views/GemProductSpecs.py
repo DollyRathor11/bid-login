@@ -610,10 +610,14 @@ def _update_printer_sheet(items):
             for column, field, _pattern, _exclude in PRINTER_SHEET_FIELDS:
                 if column not in values:
                     continue
+                old = _clean_text(before.get(model, {}).get(field))
+                # "2 Additional Tray Can be Added" (OM240, OM249) is kept: GeM
+                # lists only the 1 main tray, but Find Model accepts 1 or 2.
+                if column == "Number of Main Paper Tray" and re.search(r"additional\s+tray", old, re.IGNORECASE):
+                    continue
                 if column not in headers:
                     headers.append(column)
                     sheet.cell(1, len(headers)).value = column
-                old = _clean_text(before.get(model, {}).get(field))
                 if old != values[column]:
                     changes.append(f"{model} {column}: {old or '-'} -> {values[column]}")
                 sheet.cell(row, headers.index(column) + 1).value = values[column]
