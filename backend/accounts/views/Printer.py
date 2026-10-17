@@ -1513,6 +1513,10 @@ def match_printer_catalogue_models(request, bid_id):
             bid_value = bid_specs.get(bid_key, "")
             if _printer_bid_is_unspecified(bid_value):
                 continue
+            # A bid with Feeder Capacity "NA" sets no capacity requirement, so
+            # any model's feeder capacity is acceptable.
+            if bid_key == "feeder_capacity" and _printer_semantic_value(bid_key, bid_value) == "na":
+                continue
             catalogue_value = product.get(product_key, "")
             if not str(catalogue_value or "").strip() and _printer_semantic_value(bid_key, bid_value) == "na":
                 matched, score = True, 100

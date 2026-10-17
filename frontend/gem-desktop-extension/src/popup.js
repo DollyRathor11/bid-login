@@ -13,6 +13,10 @@ const opportunityState = document.getElementById("opportunity-state");
 const TERMINAL_STATUS_TTL_MS = 15_000;
 const TERMINAL_STATUSES = new Set(["failed", "stopped", "authentication_required"]);
 const ACTIVE_SCAN_STATUSES = new Set(["running", "starting", "paused", "recovering"]);
+// Retry Scan is always shown. On a scan that is still running (or stuck) it
+// reloads the GeM tab and continues at the saved page; on a failed or stopped
+// scan it restarts from that page.
+let opportunityRunning = false;
 const clearingStateKeys = new Set();
 let acxxelConnected = false;
 let lastSyncState = null;
@@ -98,8 +102,12 @@ function showOpportunityState(sync) {
   pauseOpportunityButton.disabled = !active || ["starting", "recovering"].includes(sync?.status);
   pauseOpportunityButton.textContent = paused ? "Resume Scan" : "Pause Scan";
 
-  retryOpportunityButton.hidden = !(["failed", "stopped"].includes(sync?.status) && sync?.retry);
-  retryOpportunityButton.disabled = !acxxelConnected;
+  opportunityRunning = active;
+  retryOpportunityButton.hidden = false;
+  retryOpportunityButton.disabled = !acxxelConnected || !sync?.retry?.page || sync?.status === "complete";
+  retryOpportunityButton.title = retryOpportunityButton.disabled
+    ? "No unfinished scan to retry."
+    : `Continue the scan at page ${sync.retry.page}.`;
 }
 
 function preventConcurrentScans(bidSync, opportunitySync) {
@@ -209,7 +217,9 @@ retryOpportunityButton.addEventListener("click", () => {
   retryOpportunityButton.disabled = true;
   retryOpportunityButton.textContent = "Retrying...";
   opportunityState.textContent = "Retrying Bid To Be Participated scan from the saved page...";
-  chrome.runtime.sendMessage({ type: "START_GEM_OPPORTUNITY_SYNC", resume: true }, (response) => {
+  // A running (or stuck) scan is restarted by reloading its tab.
+  const type = opportunityRunning ? "FORCE_RETRY_GEM_OPPORTUNITY_SYNC" : "START_GEM_OPPORTUNITY_SYNC";
+  chrome.runtime.sendMessage({ type, resume: true }, (response) => {
     retryOpportunityButton.textContent = "Retry Scan";
     if (chrome.runtime.lastError || !response?.ok) {
       retryOpportunityButton.disabled = false;

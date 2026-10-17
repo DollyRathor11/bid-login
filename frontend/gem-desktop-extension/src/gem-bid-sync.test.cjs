@@ -550,6 +550,11 @@ test('Bid To Be Participated scan recovers from GeM errors like the disqualified
   assert.match(scan, /serverRecoveryAttempts < MAX_SERVER_RECOVERY_ATTEMPTS/);
   assert.match(scan, /catch \(paginationError\)[\s\S]*reloadOrFail\(page \+ 1/);
   assert.match(scan, /opportunityRetryState = \(\) => resumeState\(\)/);
+  // Several ticked categories ("5 selected") are all restored after a reload,
+  // and an unreadable selection is never reloaded away.
+  assert.match(scan, /categoryQueries: currentCategoryQueries\(\)/);
+  assert.match(scan, /await selectOpportunityCategories\(categoryQueries\)/);
+  assert.match(scan, /if \(!currentCategoryQueries\(\)\.length\) \{\s*throw/);
 });
 
 test('a transient GeM error while bid cards are still loading reloads and resumes instead of hard-failing', () => {
@@ -738,4 +743,49 @@ test('saved-page recovery jumps via numbered page links instead of Next-by-Next'
   const far = await context.run(38);
   assert.equal(far.restored, true);
   assert.deepEqual(clicks, [39, 38]);
+});
+
+function cardReject(cardText) {
+  const cardStart = source.indexOf("const OPPORTUNITY_CARD_ITEM_NAMES");
+  const cardEnd = source.indexOf("function opportunityCardStartDate", cardStart);
+  const productsStart = source.indexOf("const OPPORTUNITY_PRODUCTS");
+  const productsEnd = source.indexOf("const OPPORTUNITY_CATEGORIES", productsStart);
+  assert.ok(cardStart >= 0 && cardEnd > cardStart && productsStart >= 0 && productsEnd > productsStart);
+  const context = {
+    cardText,
+    text: (node) => String(node?.innerText || node?.textContent || "").replace(/\s+/g, " ").trim(),
+    NO_MINIMUM_QUANTITY_PRODUCTS: new Set(["printer", "workstation"]),
+  };
+  vm.runInNewContext(
+    `${source.slice(productsStart, productsEnd)}; ${source.slice(cardStart, cardEnd)}; result = opportunityCardReject({ innerText: cardText });`,
+    context,
+  );
+  return context.result;
+}
+
+test('the seller-list card rules out only bids it can prove ineligible', () => {
+  const card = (items, quantity) => `BID NO: GEM/2026/B/8146949 Items: ${items} Quantity: ${quantity} Department Name And Address: Ministry of Defence`;
+  // Eligible-looking or unclear cards are left to the detail read.
+  assert.equal(cardReject(card("Entry and Mid Level Desktop Co...", 8)), "");
+  assert.equal(cardReject(card("High End Desktop Computer", 25)), "");
+  assert.equal(cardReject(card("A4 and Legal Size Multifunction Printer (MFP)", 1)), "");
+  assert.equal(cardReject(card("Fixed Computer Workstation (V2)", 2)), "");
+  assert.equal(cardReject(card("All in...", 2)), "");
+  assert.equal(cardReject("BID NO: GEM/2026/B/1 Department Name And Address: X"), "");
+  // Provable rejects.
+  assert.equal(cardReject(card("Entry and Mid Level Desktop Co...", 2)), "quantity");
+  assert.equal(cardReject(card("All in One PC (V2),A4 and Lega...", 2)), "bunch");
+  assert.equal(cardReject(card("Laptop - Notebook", 50)), "product");
+  assert.equal(cardReject(card("Entry and Mid Level Desktop Computer,Laptop - Notebook", 50)), "product");
+});
+
+test('an unfinished Bid To Be Participated scan is continued by the next scan', () => {
+  const start = source.indexOf('async function scanOpportunityPages(resume = null)');
+  const end = source.indexOf('async function waitForBidCards', start);
+  const scan = source.slice(start, end);
+  assert.match(scan, /unfinishedScans\[categoryKey\]/);
+  assert.match(scan, /await restoreSavedPage\(target, signature/);
+  assert.match(scan, /page: Math\.max\(page \+ 1, jumpTarget\)/);
+  assert.match(scan, /await saveUnfinished\(true\)/);
+  assert.match(scan, /const cardReject = opportunityCardReject\(card\)/);
 });

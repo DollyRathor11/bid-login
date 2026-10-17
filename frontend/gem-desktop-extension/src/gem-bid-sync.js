@@ -280,6 +280,11 @@
   // scan completes; an interrupted run must not hide the pages it never read.
   const OPPORTUNITY_RUN_BIDS_KEY = "gemOpportunityRunBids";
   const OPPORTUNITY_KNOWN_PAGES_TO_STOP = 2;
+  // Scans that stopped before the end, per category set: the page where each
+  // stopped and the bids it read. The next scan of those categories reads the
+  // new bids at the top, then jumps to that page instead of re-reading.
+  const OPPORTUNITY_UNFINISHED_KEY = "gemOpportunityUnfinished";
+  const OPPORTUNITY_UNFINISHED_TTL_MS = 7 * 86400000;
   const OPPORTUNITY_KNOWN_BID_TTL_MS = 150 * 86400000;
 
   async function storedBidMap(key) {
@@ -309,6 +314,43 @@
       if (now - Number(seenAt || 0) < OPPORTUNITY_KNOWN_BID_TTL_MS) merged[bidNo] = seenAt;
     }
     return merged;
+  }
+
+  // Full GeM item names, for matching the shortened names on a seller-list
+  // card ("Entry and Mid Level Desktop Co...").
+  const OPPORTUNITY_CARD_ITEM_NAMES = [
+    ["desktop", "entry and mid level desktop computer"],
+    ["desktop", "high end desktop computer"],
+    ["aio", "all in one pc (v2)"],
+    ["workstation", "fixed computer workstation"],
+    ["toner", "toner cartridges / ink cartridges"],
+    ["printer", "a4 and legal size multifunction printer (mfp)"],
+  ];
+
+  // A reject the seller-list card alone already proves, so the bid's detail
+  // and PDF are not downloaded: an item that is none of our products, more
+  // than one item (bunch), or one item below its minimum quantity. Anything
+  // unclear returns "" and is decided from the detail as before.
+  function opportunityCardReject(card) {
+    const itemsText = text(card).match(/\bItems?\s*:\s*(.+?)\s*\bQuantity\s*:/i)?.[1] || "";
+    const items = itemsText.split(/\s*,\s*/)
+      .map((item) => item.replace(/\s*\(Q\d+\)\s*/gi, " ").replace(/\s*(?:\.\.\.|…)\s*$/, "").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    if (!items.length || /\bPAC\b/i.test(itemsText)) return "";
+    const productOf = (item) => {
+      const lower = item.toLowerCase();
+      const byPattern = OPPORTUNITY_PRODUCTS.find(([, pattern]) => pattern.test(item))?.[0];
+      if (byPattern) return byPattern;
+      return OPPORTUNITY_CARD_ITEM_NAMES.find(([, name]) => name.startsWith(lower) || lower.startsWith(name))?.[0] || null;
+    };
+    // A very short visible name could still be one of ours; leave it alone.
+    if (items.some((item) => item.length < 8)) return "";
+    const products = items.map(productOf);
+    if (products.some((product) => !product)) return "product";
+    if (items.length > 1) return "bunch";
+    const quantity = opportunityCardQuantity(card);
+    if (quantity > 0 && quantity < 5 && !NO_MINIMUM_QUANTITY_PRODUCTS.has(products[0])) return "quantity";
+    return "";
   }
 
   function opportunityCardQuantity(card) {
@@ -1869,8 +1911,42 @@
     return container;
   }
 
-  async function selectOpportunityCategory(query, pattern) {
-    const container = await clearOpportunityCategory();
+  // Approved categories ticked in GeM's By Category dropdown (one or many),
+  // as OPPORTUNITY_CATEGORIES search queries. With several ticked the button
+  // only says "5 selected", so the ticked options are read instead. With one
+  // ticked GeM cuts the button text short ("Entry and Mid Lev..."), so a
+  // shortened name is matched by its start.
+  function selectedOpportunityCategories() {
+    const container = categorySelectContainer();
+    if (!container) return [];
+    const labels = [...container.querySelectorAll('input[type="checkbox"]:checked')]
+      .map((input) => text(input.closest(".multiSelectItem, li, label, [role=option]") || input.parentElement));
+    labels.push(text(container));
+    for (const node of [container, ...container.querySelectorAll("[title]")]) {
+      if (node.getAttribute("title")) labels.push(node.getAttribute("title"));
+    }
+    const shortened = labels
+      .map((label) => label.match(/^(.{8,}?)\s*(?:\.\.\.|…)/)?.[1].toLowerCase())
+      .filter(Boolean);
+    return OPPORTUNITY_CATEGORIES
+      .filter((entry) => labels.some((label) => entry[2].test(label))
+        || shortened.some((start) => entry[1].toLowerCase().startsWith(start)))
+      .map((entry) => entry[1]);
+  }
+
+  async function selectOpportunityCategories(queries) {
+    const categories = queries.map((query) => OPPORTUNITY_CATEGORIES.find((entry) => entry[1] === query));
+    if (!categories.length || categories.some((category) => !category)) {
+      throw new Error("Saved GeM category could not be restored.");
+    }
+    for (const [index, category] of categories.entries()) {
+      await selectOpportunityCategory(category[1], category[2], index === 0);
+    }
+  }
+
+  async function selectOpportunityCategory(query, pattern, clearFirst = true) {
+    const container = clearFirst ? await clearOpportunityCategory() : categorySelectContainer();
+    if (!container) throw new Error("GeM By Category search control was not found.");
     const toggle = [...container.querySelectorAll(
       ".ui-select-toggle, .ui-select-match, [role=combobox], button, a"
     )].find(visible);
@@ -1928,28 +2004,34 @@
     let stoppedAtKnownBids = false;
     let knownPages = Number(resume?.knownPages || 0);
     let corrigendaFound = 0;
+    let cardRejected = Number(resume?.cardRejected || 0);
     let serverRecoveryAttempts = Number(resume?.serverRecoveryAttempts || 0);
-    let categoryQuery = resume?.categoryQuery || "";
+    // Older saved states carry a single categoryQuery.
+    let categoryQueries = resume?.categoryQueries || (resume?.categoryQuery ? [resume.categoryQuery] : []);
     const rejected = {
       product: 0, bunch: 0, quantity: 0, quantity_unread: 0, pac: 0, location: 0, date: 0, expired: 0, over120: 0, inkjet: 0, detail: 0, api: 0,
       ...(resume?.rejected || {}),
     };
     const apiReasons = {};
-    const currentCategoryQuery = () => {
-      if (!categoryQuery) {
-        const selectedText = text(categorySelectContainer());
-        categoryQuery = OPPORTUNITY_CATEGORIES.find((entry) => entry[2].test(selectedText))?.[1] || "";
-      }
-      return categoryQuery;
+    // Read from the page until found, then kept: a reload clears GeM's
+    // selection, so the saved list is what gets ticked again.
+    const currentCategoryQueries = () => {
+      if (!categoryQueries.length) categoryQueries = selectedOpportunityCategories();
+      return categoryQueries;
     };
     const resumeState = (resumePage = page, attempts = 0) => ({
-      page: resumePage, saved, created, updated, checked, rejected: { ...rejected }, knownPages,
-      categoryQuery: currentCategoryQuery(), serverRecoveryAttempts: attempts,
+      page: resumePage, saved, created, updated, checked, rejected: { ...rejected }, knownPages, cardRejected,
+      categoryQueries: currentCategoryQueries(), serverRecoveryAttempts: attempts,
     });
     // Same recovery as the disqualified scan: cool down, reload, reapply the
     // filters and category, and continue at the given page (at most
     // MAX_SERVER_RECOVERY_ATTEMPTS times in a row before failing).
     const reloadOrFail = async (resumePage, reason, failure) => {
+      // A reload clears GeM's category selection; without knowing which
+      // categories to tick again it would only show an empty list.
+      if (!currentCategoryQueries().length) {
+        throw new Error(`${failure} GeM categories could not be read, so the page was not reloaded. Select the categories again and click Retry Scan.`);
+      }
       if (serverRecoveryAttempts < MAX_SERVER_RECOVERY_ATTEMPTS) {
         await reloadAndResumeOpportunityScan(
           resumeState(resumePage, serverRecoveryAttempts + 1),
@@ -1964,13 +2046,30 @@
         ? `Restoring the selected category scan at page ${page}...`
         : "Preparing the manually selected GeM category...", { page, saved, checked });
       const knownBids = await storedBidMap(OPPORTUNITY_KNOWN_BIDS_KEY);
-      const runBids = resume ? await storedBidMap(OPPORTUNITY_RUN_BIDS_KEY) : {};
-      if (!resume) await storeBidMap(OPPORTUNITY_RUN_BIDS_KEY, {});
+      // An earlier scan of the same categories that never finished keeps its
+      // read bids; this scan jumps to where it stopped (see below).
+      const categoryKey = [...currentCategoryQueries()].sort().join("|");
+      const unfinishedScans = await storedBidMap(OPPORTUNITY_UNFINISHED_KEY);
+      const unfinished = !resume && categoryKey && unfinishedScans[categoryKey]
+        && Date.now() - Number(unfinishedScans[categoryKey].savedAt || 0) < OPPORTUNITY_UNFINISHED_TTL_MS
+        ? unfinishedScans[categoryKey] : null;
+      const runBids = resume ? await storedBidMap(OPPORTUNITY_RUN_BIDS_KEY) : { ...(unfinished?.bids || {}) };
+      if (!resume) await storeBidMap(OPPORTUNITY_RUN_BIDS_KEY, runBids);
+      let jumpTarget = Number(unfinished?.page || 0);
+      let readBeforePages = 0;
+      const saveUnfinished = async (remove = false) => {
+        if (!categoryKey) return;
+        const now = Date.now();
+        const scans = Object.fromEntries(Object.entries(await storedBidMap(OPPORTUNITY_UNFINISHED_KEY))
+          .filter(([key, scan]) => key !== categoryKey && now - Number(scan?.savedAt || 0) < OPPORTUNITY_UNFINISHED_TTL_MS));
+        // Until the jump is made, the earlier scan's page is still the frontier.
+        if (!remove) scans[categoryKey] = { page: Math.max(page + 1, jumpTarget), bids: runBids, savedAt: now };
+        await storeBidMap(OPPORTUNITY_UNFINISHED_KEY, scans);
+      };
       const latestFirst = await applyOpportunityFilters();
-      if (resume?.categoryQuery) {
-        const category = OPPORTUNITY_CATEGORIES.find((entry) => entry[1] === resume.categoryQuery);
-        if (!category) throw new Error("Saved GeM category could not be restored.");
-        await selectOpportunityCategory(category[1], category[2]);
+      if (resume && categoryQueries.length) {
+        await progress("running", `Selecting GeM categories again: ${categoryQueries.join(", ")}...`, { page, saved, checked });
+        await selectOpportunityCategories(categoryQueries);
       }
       if (page > 1) {
         const firstPageCards = await waitForBidCards(60000, async (seconds) => {
@@ -2026,13 +2125,49 @@
         } else {
           knownPages = 0;
         }
+        // Back at bids the unfinished earlier scan already read: every page
+        // from here to where it stopped is read too, so jump straight there.
+        if (jumpTarget && latestFirst) {
+          const readBefore = cards.every(({ bidNo }) => knownBids[bidNo] || runBids[bidNo])
+            && cards.some(({ bidNo }) => runBids[bidNo]);
+          readBeforePages = readBefore ? readBeforePages + 1 : 0;
+          if (readBeforePages >= OPPORTUNITY_KNOWN_PAGES_TO_STOP) {
+            const target = jumpTarget;
+            jumpTarget = 0;
+            if (target > page + 1) {
+              await progress("running", `New bids done; pages after ${page} were read by the earlier unfinished scan. Jumping to page ${target}, where it stopped...`, { page, saved, checked });
+              const restore = await restoreSavedPage(target, signature, (message) => (
+                progress("running", message, { page, saved, checked })
+              ));
+              if (!restore.restored) {
+                await reloadOrFail(
+                  target,
+                  `GeM did not open page ${target} (${restore.failure}).`,
+                  `GeM did not open page ${target}, where the earlier scan stopped.`,
+                );
+              }
+              page = target;
+              serverRecoveryAttempts = 0;
+              await sleep(1500);
+              continue;
+            }
+          }
+        }
         for (const { bidNo, card } of cards) {
           stopIfRequested();
           await waitWhilePaused({ page, saved, checked });
           if (knownBids[bidNo] || runBids[bidNo]) continue;
           checked += 1;
-          await progress("running", `Opening ${bidNo} to verify full bid details...`, { page, saved, checked });
-          const row = await opportunityFromBidDetail(bidNo, card);
+          // The card alone already rules the bid out: skip its detail download.
+          const cardReject = opportunityCardReject(card);
+          let row;
+          if (cardReject) {
+            row = { reject: cardReject };
+            cardRejected += 1;
+          } else {
+            await progress("running", `Opening ${bidNo} to verify full bid details...`, { page, saved, checked });
+            row = await opportunityFromBidDetail(bidNo, card);
+          }
           if (row?.eligible) {
             const corrigendum = await corrigendumFor(bidNo, card);
             if (corrigendum.has_corrigendum !== null) Object.assign(row, corrigendum);
@@ -2061,7 +2196,8 @@
             await storeBidMap(OPPORTUNITY_RUN_BIDS_KEY, runBids);
           }
         }
-        await progress("running", `Selected category page ${page}: checked ${checked}; ${opportunitySaveSummary(saved, created, updated, rejected.api, apiReasons)}. Rejected before API: detail ${rejected.detail}, product ${rejected.product}, bunch ${rejected.bunch || 0}, qty<5 ${rejected.quantity}, qty unread ${rejected.quantity_unread}, PAC ${rejected.pac}, location ${rejected.location}, date ${rejected.date}, expired ${rejected.expired}, >120d ${rejected.over120}, inkjet-only ${rejected.inkjet}.`, { page, saved, checked });
+        await progress("running", `Selected category page ${page}: checked ${checked}; ${opportunitySaveSummary(saved, created, updated, rejected.api, apiReasons)}. Rejected before API: detail ${rejected.detail}, product ${rejected.product}, bunch ${rejected.bunch || 0}, qty<5 ${rejected.quantity}, qty unread ${rejected.quantity_unread}, PAC ${rejected.pac}, location ${rejected.location}, date ${rejected.date}, expired ${rejected.expired}, >120d ${rejected.over120}, inkjet-only ${rejected.inkjet}. ${cardRejected} ruled out from the card without opening.`, { page, saved, checked });
+        await saveUnfinished();
         let advance;
         // GeM rate-limits rapid page changes with its generic server-error
         // banner. Pause 3-5s (with jitter) before each Next click.
@@ -2088,6 +2224,7 @@
       }
       await storeBidMap(OPPORTUNITY_KNOWN_BIDS_KEY, mergeKnownBids(knownBids, runBids));
       await storeBidMap(OPPORTUNITY_RUN_BIDS_KEY, {});
+      await saveUnfinished(true);
       let recheck;
       try {
         recheck = await recheckSavedCorrigenda(runBids, { page, saved, checked });

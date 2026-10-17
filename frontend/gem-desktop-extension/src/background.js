@@ -780,6 +780,40 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return { ok: true, paused: true };
     }
+    if (message.type === "FORCE_RETRY_GEM_OPPORTUNITY_SYNC") {
+      // A Bid To Be Participated scan that stopped updating: reload its GeM
+      // tab with the saved resume point, the same way the scanner recovers by
+      // itself (categories ticked again, straight to the saved page).
+      const stored = (await chrome.storage.local.get("gemOpportunitySync")).gemOpportunitySync;
+      const retry = stored?.retry;
+      if (!retry?.page) throw new Error("This scan has no saved page to retry from.");
+      if (!retry.categoryQueries?.length) {
+        throw new Error("The GeM categories of this scan are not known. Refresh GeM, select the categories again and click Retry Scan.");
+      }
+      const tabs = await chrome.tabs.query({ url: "https://bidplus.gem.gov.in/seller-bids*" });
+      const probes = await Promise.all(tabs.map(async (tab) => ({
+        tab,
+        probe: await chrome.tabs.sendMessage(tab.id, { type: "PROBE_GEM_BID_SYNC" }).catch(() => null),
+      })));
+      const tab = probes.find((item) => item.probe?.syncing && item.probe.scanType === "opportunity")?.tab || tabs[0];
+      if (!tab?.id) throw new Error("Open the GeM Seller Bid List, then click Retry Scan.");
+      await chrome.storage.local.set({ gemOpportunitySync: {
+        ...stored,
+        status: "recovering",
+        message: `Retry: reloading GeM and continuing at page ${retry.page}...`,
+        updatedAt: Date.now(),
+        extensionVersion: chrome.runtime.getManifest().version,
+      } });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        func: (state) => {
+          sessionStorage.setItem("acxxelOpportunityResume", JSON.stringify({ ...state, serverRecoveryAttempts: 0, savedAt: Date.now() }));
+          location.reload();
+        },
+        args: [retry],
+      });
+      return { ok: true, retrying: true };
+    }
     if (["RESUME_GEM_BID_SYNC", "RESUME_GEM_OPPORTUNITY_SYNC"].includes(message.type)) {
       const opportunityScan = message.type === "RESUME_GEM_OPPORTUNITY_SYNC";
       const stateKey = opportunityScan ? "gemOpportunitySync" : "gemBidSync";
