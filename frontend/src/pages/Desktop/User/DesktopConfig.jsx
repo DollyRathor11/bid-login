@@ -107,6 +107,8 @@ export const MOTHERBOARDS = [
   { name: "H610, PCI X 16- 1 PCI 4 X1, M.2 1, 4 USB 2.0, 2USB 3.0, VGA, HDMI", price: 5000 },
   { name: "Q670 DDR4 2 DIMM, PCI X 16- 1 PCI 4 X2, M.2 2, 4 USB 2.0, 4 USB 3.0 TYPE C 1, VGA, HDMI", price: 8000 },
   { name: "Q670 DDR4 4 DIMM, PCI X 16- 1 PCI 4 X2, M.2 2, 4 USB 2.0, 4 USB 3.0 TYPE C 1, VGA, HDMI", price: 10000 },
+  { name: "Q670 DDR5 2 DIMM, PCI X 16- 1 PCI 4 X2, M.2 2, 4 USB 2.0, 4 USB 3.0 TYPE C 1, VGA, HDMI", price: 8000 },
+  { name: "Q670 DDR5 4 DIMM, PCI X 16- 1 PCI 4 X2, M.2 2, 4 USB 2.0, 4 USB 3.0 TYPE C 1, VGA, HDMI", price: 10000 },
 ];
 
 let liveRateByName = {};
@@ -136,7 +138,7 @@ const getFilteredIntelMotherboards = (processorName) => {
   }
   if (category === "intel_old") {
         return MOTHERBOARDS.filter(
-      (m) => m.name.includes("H610") || m.name.includes("Q670 DDR4")
+      (m) => m.name.includes("H610") || m.name.includes("Q670")
     );
   }
   return [];
@@ -166,7 +168,7 @@ export const isMotherboardCompatible = (processorName, mbName) => {
     category === "intel_ultra"
       ? ["H810"]
       : category === "intel_old"
-      ? ["H610", "Q670 DDR4"]
+      ? ["H610", "Q670"]
       : category === "amd_new"
       ? ["B650"]
       : category === "amd_old"
@@ -664,7 +666,7 @@ export default function DesktopConfig({ bidData, onNext }) {
                   Intel Motherboard
                   {processorCategory === "intel_old" && (
                     <span className="ml-2 text-blue-600 font-normal">
-                      (H610 / Q670 DDR4)
+                      (H610 / Q670 DDR4 / Q670 DDR5)
                     </span>
                   )}
                   {processorCategory === "intel_ultra" && (

@@ -13,6 +13,8 @@ import iso19752Pdf from "../../../assets/ISO IEC 19752.pdf?url";
 import iso19798Pdf from "../../../assets/ISO IEC 19798.pdf?url";
 import iso27001Pdf from "../../../assets/ISO 27001.pdf?url";
 import { priceInputValue } from "../../../utils/price";
+import { useGemBidLinks } from "../../../utils/gemBidLinks";
+import { GemBidNo } from "../../../utils/GemBidNo";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -505,6 +507,7 @@ function OnDemandDocView({ form, docType, label, hint, icon }) {
 export default function TonerBidApproval() {
   const [activeTab, setActiveTab] = useState("pending");
   const [bids, setBids] = useState([]);
+  const gemBidLinks = useGemBidLinks(bids);
   const [reAnalyzeCount, setReAnalyzeCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -814,7 +817,7 @@ export default function TonerBidApproval() {
                     <td className="px-4 py-4 text-sm text-gray-700 text-center">{startIdx + i + 1}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.analyser_username || "-"}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.dept_name}</td>
-                    <td className="px-4 py-4 text-sm text-blue-600 font-semibold text-center truncate">{bid.bid_no}</td>
+                    <td className="px-4 py-4 text-sm text-blue-600 font-semibold text-center truncate"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.model_number}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{formatSubmittedDate(bid)}</td>
                     <td className="px-4 py-4 text-center">
@@ -921,7 +924,7 @@ export default function TonerBidApproval() {
                 <div>
                   <h2 className="text-lg font-bold text-gray-800">Review & Update Toner</h2>
                   <p className="text-sm text-gray-500 mt-0.5">
-                    Bid No: <span className="text-blue-600 font-semibold ml-1">{selected.bid_no}</span>
+                    Bid No: <span className="text-blue-600 font-semibold ml-1"><GemBidNo bidNo={selected.bid_no} links={gemBidLinks} /></span>
                   </p>
                 </div>
               </div>

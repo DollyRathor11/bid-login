@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { priceInputValue } from "../../../utils/price";
+import { useGemBidLinks } from "../../../utils/gemBidLinks";
+import { GemBidNo } from "../../../utils/GemBidNo";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 const TABS = [
@@ -228,6 +230,7 @@ export default function PrinterBidApproval() {
     return ["pending", "approved", "re-analyze"].includes(status) ? status : "pending";
   });
   const [bids, setBids] = useState([]);
+  const gemBidLinks = useGemBidLinks(bids);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
@@ -390,7 +393,7 @@ export default function PrinterBidApproval() {
                 <td className="truncate px-4 py-4 text-center text-sm text-gray-700">{bid.analyser_display_name || bid.analyser_username || "-"}</td>
                 <td className="truncate px-4 py-4 text-center text-sm text-gray-700">{bid.dept_name || "-"}</td>
                 <td className="px-4 py-4 text-center text-sm font-medium text-gray-700">{getPrinterTypeLabel(bid.printer_type)}</td>
-                <td className="truncate px-4 py-4 text-center text-sm font-semibold text-blue-600">{bid.bid_no || "-"}</td>
+                <td className="truncate px-4 py-4 text-center text-sm font-semibold text-blue-600"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} fallback="-" /></td>
                 <td className="truncate px-4 py-4 text-center text-sm text-gray-700">{bid.model_number || "-"}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-center text-sm text-gray-700">{formatDate(bid.updated_at || bid.created_at)}</td>
                 <td className="px-4 py-4 text-center"><div className="flex justify-center"><StatusBadge status={activeTab} /></div></td>
@@ -442,7 +445,7 @@ export default function PrinterBidApproval() {
                 <div>
                   <h2 className="text-lg font-bold text-gray-800">Review & Update Printer</h2>
                   <div className="mt-1 flex flex-wrap items-center gap-2">
-                    <p className="text-sm text-gray-500">Bid No: <span className="ml-1 font-semibold text-blue-600">{selected.bid_no}</span></p>
+                    <p className="text-sm text-gray-500">Bid No: <span className="ml-1 font-semibold text-blue-600"><GemBidNo bidNo={selected.bid_no} links={gemBidLinks} /></span></p>
                     <span className="inline-flex items-center whitespace-nowrap rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
                       {getPrinterTypeLabel(form.printer_type)}
                     </span>

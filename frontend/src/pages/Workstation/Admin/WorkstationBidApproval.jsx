@@ -8,6 +8,8 @@ import {
   getFilteredIntelMotherboards, getFilteredAmdMotherboards, optionLabel,
 } from "../User/WorkstationConfig";
 import { priceInputValue } from "../../../utils/price";
+import { useGemBidLinks } from "../../../utils/gemBidLinks";
+import { GemBidNo } from "../../../utils/GemBidNo";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 const TABS = [
@@ -395,6 +397,7 @@ export default function WorkstationBidApproval() {
     return ["pending", "approved", "re-analyze"].includes(status) ? status : "pending";
   });
   const [bids, setBids] = useState([]);
+  const gemBidLinks = useGemBidLinks(bids);
   const [reAnalyzeCount, setReAnalyzeCount] = useState(0);
   const [selected, setSelected] = useState(null);
   const [form, setForm] = useState({});
@@ -667,7 +670,7 @@ export default function WorkstationBidApproval() {
                     <td className="px-4 py-4 text-sm text-gray-700 text-center">{startIdx + index + 1}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.analyser_display_name || "-"}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.dept_name || "-"}</td>
-                    <td className="px-4 py-4 text-sm text-blue-600 font-semibold text-center truncate">{bid.bid_no}</td>
+                    <td className="px-4 py-4 text-sm text-blue-600 font-semibold text-center truncate"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.model_number || "-"}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{formatSubmittedDate(bid)}</td>
                     <td className="px-4 py-4 text-center">
@@ -780,7 +783,7 @@ export default function WorkstationBidApproval() {
                 </button>
                 <div>
                   <h2 className="text-lg font-bold text-gray-800">Review & Update Workstation</h2>
-                  <p className="text-sm text-gray-500 mt-0.5">Bid No: <span className="text-blue-600 font-semibold ml-1">{selected.bid_no}</span></p>
+                  <p className="text-sm text-gray-500 mt-0.5">Bid No: <span className="text-blue-600 font-semibold ml-1"><GemBidNo bidNo={selected.bid_no} links={gemBidLinks} /></span></p>
                 </div>
               </div>
               <button type="button" onClick={closeModal} className="text-2xl text-gray-400 hover:text-gray-700 leading-none">×</button>

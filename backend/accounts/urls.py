@@ -171,6 +171,7 @@ urlpatterns = [
     path("gem/bid-results/pending/", views.gem_pending_bid_results, name="gem_pending_bid_results"),
     path("gem/bid-opportunities/", views.gem_bid_opportunities, name="gem_bid_opportunities"),
     path("gem/bid-opportunities/parse-pdf/", views.parse_gem_bid_pdf, name="parse_gem_bid_pdf"),
+    path("gem/bid-links/", views.gem_bid_links, name="gem_bid_links"),
     path("gem/bid-assignments/", views.gem_bid_assignments, name="gem_bid_assignments"),
     path("desktop-bids/<int:bid_id>/gem-jobs/", views.create_gem_upload_job, name="create_gem_upload_job"),
     path("printer-bids/<int:bid_id>/gem-jobs/", views.create_printer_gem_upload_job, name="create_printer_gem_upload_job"),

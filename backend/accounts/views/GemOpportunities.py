@@ -286,3 +286,20 @@ def parse_gem_bid_pdf(request):
     except Exception:
         return JsonResponse({"error": "GeM bid document could not be read."}, status=400)
     return JsonResponse({"detail_text": detail_text})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def gem_bid_links(request):
+    """{"bid_nos": [...]} -> {"links": {bid_no: GeM bid PDF url}}, for the bids
+    that came from Bid To Be Participated (the scan saved their GeM link)."""
+    _user, error = _require_login(request)
+    if error:
+        return error
+    try:
+        body = json.loads(request.body or "{}")
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "Invalid JSON payload."}, status=400)
+    bid_nos = {str(value or "").strip() for value in body.get("bid_nos") or [] if str(value or "").strip()}
+    rows = GemBidOpportunity.objects.filter(bid_no__in=list(bid_nos)[:2000]).exclude(pdf_url="")
+    return JsonResponse({"links": dict(rows.values_list("bid_no", "pdf_url"))})
