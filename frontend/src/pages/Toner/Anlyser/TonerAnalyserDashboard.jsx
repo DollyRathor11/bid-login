@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAnalyserTab } from "../../../utils/analyserTab";
+import { useGemBidLinks } from "../../../utils/gemBidLinks";
+import { GemBidNo } from "../../../utils/GemBidNo";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import { startGemUpload } from "../../../utils/gemUpload";
 import { useNavigate } from "react-router-dom";
@@ -16,6 +18,7 @@ export default function TonerAnalyserDashboard({ product = "toner" }) {
 
     const [activeTab, setActiveTab] = useAnalyserTab("toner");
     const [bids, setBids] = useState([]);
+    const gemBidLinks = useGemBidLinks(bids);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
     const [reAnalyzeCount, setReAnalyzeCount] = useState(0);
@@ -440,7 +443,7 @@ export default function TonerAnalyserDashboard({ product = "toner" }) {
                                             className="block break-all text-sm font-bold text-blue-600"
                                             title={bid.bid_no}
                                         >
-                                            {bid.bid_no}
+                                            <GemBidNo bidNo={bid.bid_no} links={gemBidLinks} />
                                         </span>
                                     </td>
 

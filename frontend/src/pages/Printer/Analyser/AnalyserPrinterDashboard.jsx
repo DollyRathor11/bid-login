@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAnalyserTab } from "../../../utils/analyserTab";
+import { useGemBidLinks } from "../../../utils/gemBidLinks";
+import { GemBidNo } from "../../../utils/GemBidNo";
 import { useNavigate } from "react-router-dom";
 import { FaTrash } from "react-icons/fa";
 
@@ -12,6 +14,7 @@ const VISIBLE_PAGES = 5;
 export default function AnalyserPrinterDashboard() {
   const [activeTab, setActiveTab] = useAnalyserTab("printer");
   const [bids, setBids] = useState([]);
+  const gemBidLinks = useGemBidLinks(bids);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [reAnalyzeCount, setReAnalyzeCount] = useState(0);
@@ -266,7 +269,7 @@ export default function AnalyserPrinterDashboard() {
                   {(safePage - 1) * ITEMS_PER_PAGE + i + 1}
                 </td>
                 <td className="break-words px-2 py-4 border-b border-gray-100">
-                  <span className="text-xs font-bold text-blue-600">{bid.bid_no}</span>
+                  <span className="text-xs font-bold text-blue-600"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></span>
                 </td>
                 <td className="break-words px-2 py-4 border-b border-gray-100">
                   <span className="block text-xs font-bold text-gray-800">
