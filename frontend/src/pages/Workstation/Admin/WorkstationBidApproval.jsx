@@ -670,7 +670,7 @@ export default function WorkstationBidApproval() {
                     <td className="px-4 py-4 text-sm text-gray-700 text-center">{startIdx + index + 1}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.analyser_display_name || "-"}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.dept_name || "-"}</td>
-                    <td className="px-4 py-4 text-sm text-blue-600 font-semibold text-center truncate"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></td>
+                    <td className="px-4 py-4 text-sm text-blue-600 font-semibold text-center break-all"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{bid.model_number || "-"}</td>
                     <td className="px-4 py-4 text-sm text-gray-700 text-center truncate">{formatSubmittedDate(bid)}</td>
                     <td className="px-4 py-4 text-center">
