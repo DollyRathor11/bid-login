@@ -382,7 +382,7 @@ export default function PrinterBidApproval() {
       <div className="overflow-x-auto">
         <table className="w-full table-fixed">
           <thead>
-            <tr className="bg-slate-800">{["S.No.", "Analyser", "Department", "Printer Type", "Bid No", "Model", "Submitted On", "Status", "Action"].map((h) => <th key={h} className="px-4 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-white">{h}</th>)}</tr>
+            <tr className="bg-slate-800">{["S.No.", "Analyser", "Department", "Printer Type", "Bid No", "Model", "Submitted On", "Status", "Action"].map((h) => <th key={h} className={`${h === "S.No." ? "w-16" : h === "Bid No" ? "w-52" : ""} px-4 py-4 text-center text-[11px] font-bold uppercase tracking-wide text-white`}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {loading && <tr><td colSpan="9" className="py-14 text-center text-gray-400">Loading printer bids...</td></tr>}
@@ -393,7 +393,7 @@ export default function PrinterBidApproval() {
                 <td className="truncate px-4 py-4 text-center text-sm text-gray-700">{bid.analyser_display_name || bid.analyser_username || "-"}</td>
                 <td className="truncate px-4 py-4 text-center text-sm text-gray-700">{bid.dept_name || "-"}</td>
                 <td className="px-4 py-4 text-center text-sm font-medium text-gray-700">{getPrinterTypeLabel(bid.printer_type)}</td>
-                <td className="break-all px-4 py-4 text-center text-sm font-semibold text-blue-600"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} fallback="-" /></td>
+                <td className="whitespace-nowrap px-4 py-4 text-center text-sm font-semibold text-blue-600"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} fallback="-" /></td>
                 <td className="truncate px-4 py-4 text-center text-sm text-gray-700">{bid.model_number || "-"}</td>
                 <td className="whitespace-nowrap px-4 py-4 text-center text-sm text-gray-700">{formatDate(bid.updated_at || bid.created_at)}</td>
                 <td className="px-4 py-4 text-center"><div className="flex justify-center"><StatusBadge status={activeTab} /></div></td>
