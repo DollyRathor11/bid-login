@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { visibleApprovedDownloads } from "../../../utils/approvedDownloads";
 
 const API_BASE = `${import.meta.env.VITE_API_URL}/desktop-bids`;
 
@@ -77,7 +78,7 @@ export default function ApprovedBidDownloads() {
           <span>Document</span>
           <span>Action</span>
         </div>
-        {APPROVED_DOWNLOADS.map(([docId, label]) => (
+        {visibleApprovedDownloads(APPROVED_DOWNLOADS, bid).map(([docId, label]) => (
           <div
             key={docId}
             className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-slate-100 px-5 py-4 last:border-0"

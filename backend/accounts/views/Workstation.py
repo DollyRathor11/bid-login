@@ -1358,7 +1358,10 @@ def generate_workstation_certificates(request, bid_id):
                 return docs
 
             groups = []
-            non_atc_generated = _gen_group(non_atc_ids)
+            # Only the documents chosen on the bid (plus Make in India, which an
+            # approved bid always carries) go into the bundle and its index.
+            chosen = set(bid.selected_general_docs or []) | {"make_in_india"}
+            non_atc_generated = _gen_group([cid for cid in non_atc_ids if cid in chosen])
             if non_atc_generated:
                 groups.append(("NON-ATC DOCUMENTS", non_atc_generated))
 

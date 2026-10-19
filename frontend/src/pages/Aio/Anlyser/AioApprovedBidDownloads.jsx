@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { visibleApprovedDownloads } from "../../../utils/approvedDownloads";
 
 // Same to same as Desktop's ApprovedBidDownloads.jsx, pointed at AIO's own
 // bid-documents endpoint and doc_type list (see generate_aio_documents in
@@ -81,7 +82,7 @@ export default function AioApprovedBidDownloads() {
           <span>Document</span>
           <span>Action</span>
         </div>
-        {APPROVED_DOWNLOADS.map(([docId, label]) => (
+        {visibleApprovedDownloads(APPROVED_DOWNLOADS, bid).map(([docId, label]) => (
           <div
             key={docId}
             className="grid grid-cols-[1fr_auto] items-center gap-4 border-b border-slate-100 px-5 py-4 last:border-0"

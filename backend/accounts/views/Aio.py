@@ -2499,6 +2499,9 @@ def generate_aio_documents(r,bid_id):
                     ("past_performance","PAST PERFORMANCE"),("oem_annual_turnover","OEM ANNUAL TURNOVER"),
                     ("make_in_india","MAKE IN INDIA"),("atc_acceptance_letter","ATC ACCEPTANCE LETTER"),
                 ]
+                # Only the documents chosen on the bid (plus Make in India, which
+                # an approved bid always carries) go into the bundle and its index.
+                non_atc_documents=[d for d in non_atc_documents if d[0] in set(selected)|{"make_in_india"}]
                 groups=[("NON-ATC DOCUMENTS",non_atc_documents),("ATC DOCUMENTS",[(cid,atc_labels[cid]) for cid in selected_atc_ids])]
                 out_name=_build_index_and_bundle("Index of all approved documents",groups,True,f"aio_{bid_id}_all_approved_documents.pdf")
                 if out_name is None:return JsonResponse({"error":"No approved documents available"},status=400)

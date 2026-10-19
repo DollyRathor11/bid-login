@@ -747,6 +747,10 @@ def generate_certificates(request, bid_id):
             ("make_in_india", "MAKE IN INDIA"),
             ("atc_acceptance_letter", "ATC ACCEPTANCE LETTER"),
         ]
+        # Only the documents chosen on the bid (plus Make in India, which an
+        # approved bid always carries) go into the bundle and its index.
+        chosen = set(bid.selected_general_docs or []) | {"make_in_india"}
+        non_atc_documents = [document for document in non_atc_documents if document[0] in chosen]
         atc_labels = {
             "warranty": "WARRANTY",
             "bidder_financial": "BIDDER FINANCIAL STANDING",
