@@ -1100,7 +1100,7 @@ export default function TonerBidApproval() {
                 {isApprovedBid && (
                   <button type="button" disabled={submitting} onClick={() => handleAction("approved")}
                     className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold px-8 py-2.5 rounded-md text-sm transition">
-                    {submitting ? "Updating..." : "💾 Update Approved Bid"}
+                    {submitting ? "Updating..." : "Update Approved Bid"}
                   </button>
                 )}
                 <button type="button" onClick={closeModal}
