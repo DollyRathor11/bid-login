@@ -511,6 +511,9 @@ export default function TonerBidApproval() {
   const [reAnalyzeCount, setReAnalyzeCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  // An approved bid opened from the Approved tab can be edited and saved again;
+  // the analyser's Approved section reads the same bid, so it shows the update.
+  const isApprovedBid = selected?.status === "approved";
   const [form, setForm] = useState({});
   const [adminNote, setAdminNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -703,7 +706,7 @@ export default function TonerBidApproval() {
       });
       const data = await res.json();
       if (res.ok) {
-        setMsg(action === "approved" ? "✅ Bid Approved Successfully!" : "⚠️ Sent back to Analyser");
+        setMsg(action === "approved" ? (isApprovedBid ? "✅ Approved bid updated" : "✅ Bid Approved Successfully!") : "⚠️ Sent back to Analyser");
         setTimeout(() => {
           closeModal();
           fetchBids();
@@ -998,7 +1001,7 @@ export default function TonerBidApproval() {
                   <input type="number" min="0" max="100" step="0.01" required name="local_content" value={form?.local_content || ""} onChange={handleChange}
                     placeholder="Enter %" className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <div><label className="block text-sm font-medium text-gray-700 mb-1">Brand</label><TonerBrands value={form.brand} disabled={selected?.status === "approved"} onChange={(brand) => setForm((prev) => ({ ...prev, brand }))} /></div>
+                <div><label className="block text-sm font-medium text-gray-700 mb-1">Brand</label><TonerBrands value={form.brand} onChange={(brand) => setForm((prev) => ({ ...prev, brand }))} /></div>
                 <div className="md:col-span-2 lg:col-span-3">
                   <label className="block text-sm font-medium text-gray-700 mb-1">ATC</label>
                   <textarea name="atc" value={form?.atc || ""} onChange={handleChange} rows={4}
@@ -1027,7 +1030,7 @@ export default function TonerBidApproval() {
                 <SpecField label="Type of Cartridge" name="cartridge_type" options={SPEC_OPTIONS.cartridge_type} form={form} handleChange={handleChange} />
                 <SpecField label="Colour of Ink" name="colour" options={SPEC_OPTIONS.colour} form={form} handleChange={handleChange} />
                 <SpecField label="Technology" name="technology" options={SPEC_OPTIONS.technology} form={form} handleChange={handleChange} />
-                <div className="md:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-gray-700 mb-1">Compatible Printer Models</label><CompatiblePrinterModels value={form.compatibility} disabled={selected?.status === "approved"} onChange={(compatibility) => setForm((prev) => ({ ...prev, compatibility }))} /></div>
+                <div className="md:col-span-2 lg:col-span-3"><label className="block text-sm font-medium text-gray-700 mb-1">Compatible Printer Models</label><CompatiblePrinterModels value={form.compatibility} onChange={(compatibility) => setForm((prev) => ({ ...prev, compatibility }))} /></div>
                 <SpecField label="Page Yield" name="page_yield" options={SPEC_OPTIONS.page_yield} form={form} handleChange={handleChange} />
                 <SpecField label="Chip" name="chip" options={SPEC_OPTIONS.chip} form={form} handleChange={handleChange} />
                 <SpecField label="Print Coverage" name="print_coverage" options={SPEC_OPTIONS.print_coverage} optional form={form} handleChange={handleChange} />
@@ -1053,7 +1056,7 @@ export default function TonerBidApproval() {
 
                   <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
                     <label htmlFor="toner-admin-margin" className="block text-sm font-semibold text-amber-900 mb-2">Margin (Rs.)</label>
-                    <input id="toner-admin-margin" type="text" inputMode="numeric" name="margin" value={form.margin ?? ""} onChange={handleChange} placeholder="Enter margin" disabled={selected?.status === "approved"}
+                    <input id="toner-admin-margin" type="text" inputMode="numeric" name="margin" value={form.margin ?? ""} onChange={handleChange} placeholder="Enter margin"
                       className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-right text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-100" />
                   </div>
                   <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3">
@@ -1065,8 +1068,7 @@ export default function TonerBidApproval() {
                         <span className="font-semibold text-emerald-800">₹</span>
                         <input type="number" min="0" step="0.01" name="total_price" value={priceInputValue(form?.total_price ?? "")} onChange={handleChange} required
                           placeholder="Enter approved price"
-                          readOnly={selected?.status === "approved" || (form.margin != null && String(form.margin) !== "")}
-                          disabled={selected?.status === "approved"}
+                          readOnly={(form.margin != null && String(form.margin) !== "")}
                           className="w-full min-w-0 rounded-md border border-emerald-300 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       </div>
                     </div>
@@ -1094,6 +1096,12 @@ export default function TonerBidApproval() {
                       {submitting ? "Processing..." : "⚠️ Send to Re-Analyze"}
                     </button>
                   </>
+                )}
+                {isApprovedBid && (
+                  <button type="button" disabled={submitting} onClick={() => handleAction("approved")}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold px-8 py-2.5 rounded-md text-sm transition">
+                    {submitting ? "Updating..." : "💾 Update Approved Bid"}
+                  </button>
                 )}
                 <button type="button" onClick={closeModal}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-8 py-2.5 rounded-md text-sm transition">

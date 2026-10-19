@@ -450,6 +450,9 @@ export default function DesktopBidApproval() {
   const [reAnalyzeCount, setReAnalyzeCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
+  // An approved bid opened from the Approved tab can be edited and saved again;
+  // the analyser's Approved section reads the same bid, so it shows the update.
+  const isApprovedBid = selected?.status === "approved" || selected?.review_status === "approved";
   const [form, setForm] = useState({});
   const [adminNote, setAdminNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -691,7 +694,7 @@ export default function DesktopBidApproval() {
       const data = await res.json();
 
       if (res.ok) {
-        setMsg(action === "approved" ? "✅ Bid Approved Successfully!" : "⚠️ Sent back to Analyser");
+        setMsg(action === "approved" ? (isApprovedBid ? "✅ Approved bid updated" : "✅ Bid Approved Successfully!") : "⚠️ Sent back to Analyser");
         setTimeout(() => {
           closeModal();
           fetchBids();
@@ -1091,7 +1094,7 @@ export default function DesktopBidApproval() {
                       <label className="block text-sm font-semibold text-amber-900">Margin</label>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-amber-800">₹</span>
-                        <input type="number" min="0" step="1" name="margin" value={form?.margin ?? ""} onChange={handleChange} placeholder="Margin" readOnly={selected?.status === "approved" || selected?.review_status === "approved"} disabled={selected?.status === "approved" || selected?.review_status === "approved"}
+                        <input type="number" min="0" step="1" name="margin" value={form?.margin ?? ""} onChange={handleChange} placeholder="Margin"
                           className="w-40 rounded-md border border-amber-300 bg-white px-3 py-2 text-right text-lg font-semibold text-slate-900 outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                       </div>
                     </div>
@@ -1112,8 +1115,7 @@ export default function DesktopBidApproval() {
                           onChange={handleChange}
                           required
                           placeholder="Enter approved price"
-                          readOnly={selected?.status === "approved" || selected?.review_status === "approved" || Boolean(form?.margin)}
-                          disabled={selected?.status === "approved" || selected?.review_status === "approved"}
+                          readOnly={Boolean(form?.margin)}
                           className="w-48 rounded-md border border-emerald-300 bg-white px-3 py-2 text-right text-lg font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 read-only:cursor-not-allowed read-only:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                         />
                       </div>
@@ -1169,6 +1171,12 @@ export default function DesktopBidApproval() {
                       {submitting ? "Processing..." : "⚠️ Send to Re-Analyze"}
                     </button>
                   </>
+                )}
+                {isApprovedBid && (
+                  <button type="button" disabled={submitting} onClick={() => handleAction("approved")}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-semibold px-8 py-2.5 rounded-md text-sm transition">
+                    {submitting ? "Updating..." : "💾 Update Approved Bid"}
+                  </button>
                 )}
                 <button type="button" onClick={closeModal}
                   className="bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold px-8 py-2.5 rounded-md text-sm transition">

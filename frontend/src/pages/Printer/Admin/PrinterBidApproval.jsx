@@ -234,6 +234,9 @@ export default function PrinterBidApproval() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
+  // An approved bid opened from the Approved tab can be edited and saved again;
+  // the analyser's Approved section reads the same bid, so it shows the update.
+  const isApprovedBid = selected?.status === "approved" || selected?.review_status === "approved";
   const [form, setForm] = useState({});
   const [adminNote, setAdminNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -312,7 +315,7 @@ export default function PrinterBidApproval() {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Admin review failed.");
-      setMessage(status === "approved" ? "Bid approved successfully." : "Bid sent for re-analysis.");
+      setMessage(status === "approved" ? (isApprovedBid ? "Approved bid updated." : "Bid approved successfully.") : "Bid sent for re-analysis.");
       await fetchBids();
       window.setTimeout(closeModal, 700);
     } catch (err) {
@@ -487,6 +490,7 @@ export default function PrinterBidApproval() {
             </div>
             <div className="flex flex-wrap gap-3 border-t px-6 py-5">
               {selected.status !== "approved" && <><button type="button" disabled={submitting} onClick={() => handleAction("approved")} className="rounded bg-emerald-600 px-8 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{submitting ? "Saving..." : "Approve Bid"}</button><button type="button" disabled={submitting} onClick={() => handleAction("re-analyze")} className="rounded bg-rose-600 px-8 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60">Send to Re-Analyze</button></>}
+              {isApprovedBid && <button type="button" disabled={submitting} onClick={() => handleAction("approved")} className="rounded bg-blue-600 px-8 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{submitting ? "Updating..." : "Update Approved Bid"}</button>}
               <button type="button" onClick={closeModal} className="rounded bg-gray-200 px-8 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-300">Cancel</button>
             </div>
           </div>
