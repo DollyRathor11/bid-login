@@ -300,6 +300,13 @@ def gem_bid_links(request):
         body = json.loads(request.body or "{}")
     except (TypeError, ValueError):
         return JsonResponse({"error": "Invalid JSON payload."}, status=400)
-    bid_nos = {str(value or "").strip() for value in body.get("bid_nos") or [] if str(value or "").strip()}
-    rows = GemBidOpportunity.objects.filter(bid_no__in=list(bid_nos)[:2000]).exclude(pdf_url="")
-    return JsonResponse({"links": dict(rows.values_list("bid_no", "pdf_url"))})
+    # A bid number typed on a bid can carry spaces, lower case or hidden
+    # characters ("gem/2026/B/ 8128134"); the scan saved "GEM/2026/B/8128134".
+    wanted = {}
+    for value in body.get("bid_nos") or []:
+        match = re.search(r"GEM\W*(\d{4})\W*B\W*(\d+)", str(value or ""), re.IGNORECASE)
+        if match:
+            wanted.setdefault(f"GEM/{match.group(1)}/B/{match.group(2)}", set()).add(str(value))
+    rows = GemBidOpportunity.objects.filter(bid_no__in=list(wanted)[:2000]).exclude(pdf_url="")
+    links = {typed: url for bid_no, url in rows.values_list("bid_no", "pdf_url") for typed in wanted[bid_no]}
+    return JsonResponse({"links": links})
