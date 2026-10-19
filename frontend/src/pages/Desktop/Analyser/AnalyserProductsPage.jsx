@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import img1 from "../../../assets/img1.png";
 import img2 from "../../../assets/img2.png";
 import img3 from "../../../assets/img3.png";
@@ -1433,9 +1434,16 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
 }
 
 export default function CatalogueProducts() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const linkedProductId = searchParams.get("product");
+  const linkedCategory = searchParams.get("category");
   const [products, setProducts] = useState([]);
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [categoryFilter, setCategoryFilter] = useState(() =>
+    ["Desktop", "AIO", "Workstation", "Printer", "Toner"].find(
+      category => category.toLowerCase() === linkedCategory?.toLowerCase()
+    ) || "All"
+  );
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -1555,36 +1563,37 @@ export default function CatalogueProducts() {
   }, [categoryFilter]);
 
   useEffect(() => {
-    const handleBrowserBack = () => {
-      if (!productHistoryPushed.current) return;
-
-      productHistoryPushed.current = false;
+    if (!linkedProductId || !linkedCategory) {
       setSelectedProduct(null);
-    };
-
-    window.addEventListener("popstate", handleBrowserBack);
-    return () => window.removeEventListener("popstate", handleBrowserBack);
-  }, []);
+      return;
+    }
+    const product = products.find(item =>
+      String(item.id) === linkedProductId &&
+      String(item.category || "").toLowerCase() === linkedCategory.toLowerCase()
+    );
+    setSelectedProduct(product || null);
+  }, [linkedProductId, linkedCategory, products]);
 
   const openProductDetails = (product) => {
-    if (!productHistoryPushed.current) {
-      window.history.pushState(
-        { catalogueProductDetails: true },
-        "",
-        window.location.href
-      );
-      productHistoryPushed.current = true;
-    }
-
+    const params = new URLSearchParams(searchParams);
+    params.set("product", String(product.id));
+    params.set("category", String(product.category || "").toLowerCase());
+    setSearchParams(params);
+    productHistoryPushed.current = true;
     setSelectedProduct(product);
   };
 
   const closeProductDetails = () => {
     if (productHistoryPushed.current) {
+      productHistoryPushed.current = false;
       window.history.back();
       return;
     }
 
+    const params = new URLSearchParams(searchParams);
+    params.delete("product");
+    params.delete("category");
+    setSearchParams(params, { replace: true });
     setSelectedProduct(null);
   };
 
@@ -1690,83 +1699,71 @@ export default function CatalogueProducts() {
           )}
         </div>
 
-        <div className="bg-white rounded-2xl shadow-sm border overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-slate-800 text-white">
-                <tr>
-                  <th className="px-5 py-4 text-left w-20">S.No.</th>
-                  <th className="px-5 py-4 text-left w-28">Image</th>
-                  <th className="px-5 py-4 text-left">Model</th>
-                  <th className="px-5 py-4 text-left">Category</th>
-                  <th className="px-5 py-4 text-left w-40">View Details</th>
-                </tr>
-              </thead>
-
-              <tbody className="divide-y divide-gray-100">
-                {loading ? (
-                  <tr>
-                    <td
-                      colSpan="5"
-                      className="px-5 py-10 text-center text-gray-500"
-                    >
-                      Loading...
-                    </td>
-                  </tr>
-                ) : products.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan="5"
-                      className="px-5 py-10 text-center text-gray-500"
-                    >
-                      No products found.
-                    </td>
-                  </tr>
-                ) : (
-                  products.map((product, index) => (
-                    <tr key={product.id} className="hover:bg-gray-50">
-                      <td className="px-5 py-4 font-semibold text-gray-700">
-                        {index + 1}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="w-16 h-16 border rounded-lg bg-white flex items-center justify-center overflow-hidden">
-                          <img
-                            src={getImage(product, product?.__imageIndex ?? index)}
-                            alt={product.model_no}
-                            className="w-full h-full object-contain p-1"
-                            onError={(e) => {
-                              e.currentTarget.src = getFallbackImage(product?.__imageIndex ?? index);
-                            }}
-                          />
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <div className="font-bold text-gray-900">
-                          {product.model_no || "—"}
-                        </div>
-                      </td>
-
-                      <td className="px-5 py-4 text-gray-700">
-                        {product.category || "—"}
-                      </td>
-
-                      <td className="px-5 py-4">
-                        <button
-                          onClick={() => openProductDetails(product)}
-                          className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold"
-                        >
-                          View Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <p className="text-sm text-slate-500">
+            <span className="font-semibold text-slate-900">{products.length}</span> products
+            {categoryFilter !== "All" && <span> in {categoryFilter}</span>}
+          </p>
+          <span className="text-xs text-slate-400">Select a product to explore all specifications</span>
         </div>
+        {loading ? (
+          <div role="status" className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500">Loading products...</div>
+        ) : products.length === 0 ? (
+          <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-slate-500">No products found.</div>
+        ) : (
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {products.map((product, index) => {
+              const workstation = isWorkstationProduct(product);
+              const aio = isAioProduct(product);
+              const printer = isPrinterProduct(product);
+              const toner = isTonerProduct(product);
+              const specs = printer ? getPrinterSpecs(product) : workstation ? getWorkstationSpecs(product) : aio ? getAioSpecs(product) : getExtraSpecs(product);
+              const highlights = printer || toner
+                ? Object.entries(specs).filter(([, value]) => value && displaySpecValue(value) !== "NA").slice(0, 4)
+                : [
+                    ["Processor", workstation ? displaySpecValue(specs["Processor Number"] || product.processor) : displayBasicProcessor(product, specs)],
+                    ["RAM", workstation ? displaySpecValue(specs.RAM || product.ram) : aio ? displaySpecValue(product.ram || specs["RAM Size (GB)"]) : displayBasicRam(product, specs)],
+                    ["Storage", workstation ? displayWorkstationStorage(product, specs) : aio ? displaySpecValue(product.storage || specs["Storage Capacity (in GB)"]) : displayBasicStorage(product, specs)],
+                    ["OS", workstation ? displaySpecValue(specs["Factory Pre-loaded Operating System"] || product.os) : aio ? displaySpecValue(specs["Operating System (Factory Preloaded with Certification)"] || product.os) : displayBasicOs(product, specs)],
+                  ].filter(([, value]) => value && value !== "NA");
+              return (
+                <button
+                  type="button"
+                  key={`${product.category}-${product.id}`}
+                  onClick={() => openProductDetails(product)}
+                  aria-label={`View details for ${product.model_no || product.category}`}
+                  className="group flex min-w-0 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:border-blue-300 hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+                >
+                  <div className="relative flex h-60 w-full items-center justify-center bg-white px-6 pb-4 pt-10">
+                    <span className="absolute left-4 top-4 rounded-md bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">{product.category}</span>
+                    <img
+                      src={getImage(product, product.__imageIndex ?? index)}
+                      alt={product.model_no || product.category}
+                      loading="lazy"
+                      className="h-full w-full object-contain transition duration-300 group-hover:scale-105"
+                      onError={event => { event.currentTarget.src = getFallbackImage(product.__imageIndex ?? index); }}
+                    />
+                  </div>
+                  <div className="flex flex-1 flex-col border-t border-slate-100 p-5">
+                    <h2 className="break-words text-base font-bold leading-6 text-slate-900 group-hover:text-blue-600">{product.model_no || "Model unavailable"}</h2>
+                    <dl className="mb-5 mt-4 space-y-2.5">
+                      {highlights.map(([label, value]) => (
+                        <div key={label} className="text-xs leading-5">
+                          <dt className="text-slate-400">{label}</dt>
+                          <dd className="line-clamp-2 break-words font-medium text-slate-700">{displaySpecValue(value)}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <div className="mt-auto flex items-center justify-between border-t border-slate-100 pt-4 text-sm font-semibold text-blue-600">
+                      <span>View specifications</span>
+                      <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">&rarr;</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
