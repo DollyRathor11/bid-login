@@ -109,6 +109,14 @@ def _xlsx_rows(path):
         for row in sheet_root.findall(".//main:sheetData/main:row", namespace):
             values = []
             for cell in row.findall("main:c", namespace):
+                # Empty cells are not stored, so place each value by its own
+                # column ("C5" -> 3rd) instead of by position.
+                letters = re.match(r"[A-Z]+", cell.get("r") or "")
+                if letters:
+                    column = 0
+                    for letter in letters.group(0):
+                        column = column * 26 + ord(letter) - 64
+                    values.extend([""] * (column - 1 - len(values)))
                 cell_type = cell.get("t")
                 value_node = cell.find("main:v", namespace)
                 inline_node = cell.find("main:is/main:t", namespace)
@@ -254,7 +262,9 @@ def _printer_semantic_value(field, value):
             return "single pass feeder"
         if text == "adf" or "automatic document feeder" in text:
             return "adf"
-        if text == "platen":
+        # An MFP listed without a document feeder ("NA" in printer.xlsx, e.g.
+        # OM010, OM221) scans on the platen only.
+        if text in {"platen", "na"}:
             return "platen"
     if field == "connectivity" and text == "select all":
         return "usb port ethernet wi fi"

@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import urllib.request
 
 import openpyxl
@@ -531,6 +532,108 @@ def _update_workstation_sheet(items):
         desktop_excel._save_workbook(workbook, path)
 
 
+PRINTER_CATEGORY = re.compile(r"printer|\bmfp\b", re.IGNORECASE)
+
+# printer.xlsx columns the Printer catalogue reads first (Printer.py
+# _load_printer_catalogue), each with the GeM label it is taken from. The
+# older columns stay as they are; these GeM-named ones take precedence.
+PRINTER_SHEET_FIELDS = [
+    ("Printing Technology", "printing_technology", r"print(ing|er) technology", None),
+    ("Cartridge Technology", "cartridge_technology", r"cartridge technology", None),
+    ("Type of Printing", "type_of_printing", r"type of printing", None),
+    ("Availability of Fax", "fax_availability", r"\bfax\b", None),
+    ("Operating System Compatibility", "operating_system_compatibility", r"operating system", None),
+    ("Mono Print Speed PPM", "mono_print_speed_ppm", r"(mono|black).*\bppm\b|\bppm\b.*(mono|black)", r"colou?r"),
+    ("Colour Print Speed PPM", "colour_print_speed_ppm", r"colou?r.*\bppm\b|\bppm\b.*colou?r", r"scan"),
+    ("Auto Duplexing", "auto_duplexing", r"duplex", r"feeder"),
+    ("Reduction and Enlarge Features", "reduction_enlarge_features", r"reduction|enlarge", None),
+    ("Maximum Scan Area", "max_scan_area", r"scan area", None),
+    ("A4 Scan Speed Colour", "a4_scan_speed_colour", r"scan speed.*colou?r|colou?r.*scan speed", None),
+    ("Scan To Functions", "scan_to_functions", r"scan to", None),
+    ("Original Document Feeder Type", "document_feeder_type", r"feeder type", None),
+    ("Feeder Capacity", "feeder_capacity", r"feeder capacity", None),
+    ("Number of Main Paper Tray", "main_paper_tray_count", r"number of (main )?paper tray", r"capacity"),
+    ("Total Main Paper Tray Combined Capacity", "total_paper_tray_capacity", r"paper tray.*capacity", r"bypass"),
+    ("Bypass Tray Facility", "bypass_tray_facility", r"bypass.*facility", None),
+    ("Bypass Tray Capacity", "bypass_tray_capacity", r"bypass.*capacity", None),
+    ("Connectivity", "connectivity", r"connectivity", None),
+    ("Duty Cycle", "duty_cycle", r"duty cycle", None),
+    ("On Site Warranty", "onsite_warranty", r"on\s*-?\s*site warranty", None),
+]
+
+
+def _printer_sheet_values(pairs):
+    """GeM printer specs -> {printer.xlsx column: value} (filled labels only)."""
+    raw, _get = _gem_specs(pairs)
+    values = {}
+    for column, _field, pattern, exclude in PRINTER_SHEET_FIELDS:
+        for label, value in raw.items():
+            if value and re.search(pattern, label, re.IGNORECASE) and not (exclude and re.search(exclude, label, re.IGNORECASE)):
+                values[column] = value
+                break
+    return values
+
+
+def _update_printer_sheet(items):
+    """Recheck printer.xlsx against GeM: the specs of every model already in
+    the sheet are rewritten from its GeM listing. No model is added; a backup
+    is kept and each changed value is reported."""
+    from .Printer import _load_printer_catalogue, _printer_catalogue_path
+
+    path = _printer_catalogue_path()
+    if not os.path.exists(path):
+        return {"updated": [], "not_in_sheet": [], "changes": []}
+    before = {p["model_no"].upper(): p for p in _load_printer_catalogue()}
+    updated, not_in_sheet, changes = [], [], []
+    with desktop_excel._file_lock(path):
+        workbook = openpyxl.load_workbook(path)
+        sheet = workbook.active
+        headers = [_clean_text(cell.value) for cell in sheet[1]]
+        model_col = next((i + 1 for i, h in enumerate(headers) if h in {"Model Number", "Acxxel"}), None)
+        if not model_col:
+            return {"updated": [], "not_in_sheet": [], "changes": []}
+        rows = {
+            _clean_text(sheet.cell(row, model_col).value).upper(): row
+            for row in range(2, sheet.max_row + 1)
+            if _clean_text(sheet.cell(row, model_col).value)
+        }
+        for item in items:
+            text = f"{_clean_text(item.get('model_no'))} {_clean_text(item.get('title'))}".upper()
+            model = next((m for m in rows if re.search(rf"(?<![A-Z0-9]){re.escape(m)}(?![A-Z0-9])", text)), None)
+            if not model:
+                not_in_sheet.append(_clean_text(item.get("model_no")) or _clean_text(item.get("title")))
+                continue
+            values = _printer_sheet_values(item.get("pairs"))
+            if not values:
+                continue
+            row = rows[model]
+            for column, field, _pattern, _exclude in PRINTER_SHEET_FIELDS:
+                if column not in values:
+                    continue
+                old = _clean_text(before.get(model, {}).get(field))
+                # "2 Additional Tray Can be Added" (OM240, OM249) is kept: GeM
+                # lists only the 1 main tray, but Find Model accepts 1 or 2.
+                if column == "Number of Main Paper Tray" and re.search(r"additional\s+tray", old, re.IGNORECASE):
+                    continue
+                if column not in headers:
+                    headers.append(column)
+                    sheet.cell(1, len(headers)).value = column
+                if old != values[column]:
+                    changes.append(f"{model} {column}: {old or '-'} -> {values[column]}")
+                sheet.cell(row, headers.index(column) + 1).value = values[column]
+            updated.append(model)
+        if updated:
+            backup_dir = os.path.join(settings.BASE_DIR, "catalogue_backups")
+            os.makedirs(backup_dir, exist_ok=True)
+            stamp = timezone.now().strftime("%Y%m%d-%H%M%S")
+            shutil.copy2(path, os.path.join(backup_dir, f"printer_{stamp}.xlsx"))
+            desktop_excel._save_workbook(workbook, path)
+            with open(os.path.join(settings.BASE_DIR, CATEGORY_EXCEL_DIR, "printer_recheck.txt"), "a", encoding="utf-8") as log:
+                log.write(f"\n{stamp}: {len(set(updated))} printer models rechecked, {len(changes)} values changed\n")
+                log.writelines(f"  {line}\n" for line in changes)
+    return {"updated": sorted(set(updated)), "not_in_sheet": not_in_sheet, "changes": changes}
+
+
 # How each product category is written in the directory.
 CATEGORY_NAMES = {"aio": "AIO", "toner": "Toner", "workstation": "Workstation"}
 
@@ -664,13 +767,20 @@ def save_gem_category_excel(request):
     except Exception as e:
         return JsonResponse({"error": f"{os.path.basename(path)} could not be saved: {e}"}, status=500)
     directory_added = directory_updated = 0
+    printer_sheet = None
     if AIO_CATEGORY.match(category):
         directory_added, directory_updated = _save_aio_directory(items)
     elif TONER_CATEGORY.match(category):
         directory_added, directory_updated = _save_toner_directory(items)
     elif WORKSTATION_CATEGORY.match(category):
         directory_added, directory_updated = _save_workstation_directory(items)
+    elif PRINTER_CATEGORY.search(category):
+        try:
+            printer_sheet = _update_printer_sheet(items)
+        except PermissionError:
+            return JsonResponse({"error": "printer.xlsx is open in another program. Close it and scan again."}, status=409)
     return JsonResponse({
+        "printer_sheet": printer_sheet,
         "directory_added": directory_added, "directory_updated": directory_updated,
         "file": os.path.join(CATEGORY_EXCEL_DIR, os.path.basename(path)),
         "added": added, "updated": updated, "total_rows": len(rows),

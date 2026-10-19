@@ -99,6 +99,12 @@
       body: JSON.stringify({ category, products }),
     });
     run.target = result.file;
+    // Printer scans recheck the models already in printer.xlsx (none added).
+    if (result.printer_sheet) {
+      result.printer_sheet.updated.forEach((model) => (run.printerModels ||= new Set()).add(model));
+      run.printerChanges = (run.printerChanges || 0) + result.printer_sheet.changes.length;
+      run.target += ` + printer.xlsx: ${run.printerModels?.size || 0} models rechecked, ${run.printerChanges} values changed (list in gem_products/printer_recheck.txt)`;
+    }
     return products.length;
   }
 
