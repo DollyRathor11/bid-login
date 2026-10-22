@@ -427,7 +427,7 @@ class GemBidAssignmentHistory(models.Model):
     assignment = models.ForeignKey(
         GemBidAssignment, on_delete=models.CASCADE, related_name="history"
     )
-    action = models.CharField(max_length=30)
+    action = models.CharField(max_length=50)
     from_user = models.ForeignKey(
         User, on_delete=models.PROTECT, related_name="gem_bid_assignment_history_from",
         blank=True, null=True,

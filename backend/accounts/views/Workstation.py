@@ -152,6 +152,36 @@ def _workstation_catalogue_match_value(bid_value, catalogue_value, field_name=""
     return score >= 100, score
 
 
+# Desktop's _CATALOGUE_FIELD_MAP has no graphics card or power supply, the two
+# specs that set workstations apart, so the directory and saved-bid steps of
+# Find Model check them as well, with the same rule as the worksation.xlsx step.
+_WS_EXTRA_MATCH_FIELDS = (
+    ("graphics", "Graphics Card", "graphic_card"),
+    ("power_supply", "Power Supply", "power_supply"),
+)
+
+
+def _ws_extra_match_details(bid_specs, value_for):
+    """Match rows for graphics card and power supply. ``value_for(catalogue_key,
+    bid_field)`` returns (label, value) from the product or saved bid."""
+    rows = []
+    for bid_key, catalogue_key, bid_field in _WS_EXTRA_MATCH_FIELDS:
+        bid_value = bid_specs.get(bid_key, "")
+        if _match_is_blank(bid_value):
+            continue
+        label, other_value = value_for(catalogue_key, bid_field)
+        matched, score = _workstation_catalogue_match_value(bid_value, other_value, bid_key)
+        rows.append({
+            "field": bid_key,
+            "bid_value": bid_value,
+            "matched": bool(matched),
+            "catalogue_key": label,
+            "catalogue_value": other_value,
+            "score": score,
+        })
+    return rows
+
+
 # ────────────────────────────────────────────
 # STEP 1 — Create Workstation Bid
 # ────────────────────────────────────────────
@@ -695,6 +725,14 @@ def match_workstation_catalogue_models(request, bid_id):
                 "catalogue_value": best_value,
                 "score": best_score,
             })
+        for row in _ws_extra_match_details(bid_specs, lambda key, _field: (key, _catalogue_extra_specs(product).get(key, ""))):
+            checked_count += 1
+            if row["matched"]:
+                matched_count += 1
+                total_score += max(float(row["score"] or 0), 0)
+            else:
+                total_score += max(float(row["score"] or 0), 0) * 0.25
+            details.append(row)
         if checked_count == 0:
             continue
         is_perfect = checked_count >= MIN_STRONG_MATCH_FIELDS and matched_count == checked_count
@@ -738,6 +776,14 @@ def match_workstation_catalogue_models(request, bid_id):
                 "catalogue_value": best_value,
                 "score": best_score,
             })
+        for row in _ws_extra_match_details(bid_specs, lambda _key, field: (field, getattr(other_bid, field, "") or "")):
+            checked_count += 1
+            if row["matched"]:
+                matched_count += 1
+                total_score += max(float(row["score"] or 0), 0)
+            else:
+                total_score += max(float(row["score"] or 0), 0) * 0.25
+            details.append(row)
         if checked_count == 0:
             continue
         is_perfect = checked_count >= MIN_STRONG_MATCH_FIELDS and matched_count == checked_count
