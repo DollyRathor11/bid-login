@@ -14,6 +14,7 @@ import {
   FaClipboardList,
   FaCheckCircle,
   FaExclamationTriangle,
+  FaBan,
   FaChartLine,
   FaTachometerAlt,
 } from "react-icons/fa";
@@ -102,7 +103,7 @@ const AnalyserHome = () => {
   const productDropdownRef = useRef(null);
   const [selectedYear, setSelectedYear] = useState(2026);
   const [yearOptions, setYearOptions] = useState([2026, 2027, 2028]);
-  const [stats, setStats] = useState({ pending: 0, reviewed: 0, reAnalyze: 0, total: 0 });
+  const [stats, setStats] = useState({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
   const [dailyData, setDailyData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -129,7 +130,7 @@ const AnalyserHome = () => {
 
   const fetchDashboardData = useCallback(async () => {
     if (!selectedProduct.ready) {
-      setStats({ pending: 0, reviewed: 0, reAnalyze: 0, total: 0 });
+      setStats({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
       setDailyData([]);
       setMonthlyData([]);
       setLoading(false);
@@ -138,26 +139,29 @@ const AnalyserHome = () => {
     setLoading(true);
     try {
       const api = DASHBOARD_API_MAP[selectedProduct.key];
-      const [monthlyRes, dailyRes, pendingRes, reviewedRes, reAnalyzeRes] = await Promise.all([
+      const [monthlyRes, dailyRes, pendingRes, reviewedRes, reAnalyzeRes, rejectedRes] = await Promise.all([
         fetch(`${api.monthly}?year=${selectedYear}`),
         fetch(api.daily),
         fetch(`${api.list}?status=pending&role=analyser&year=${selectedYear}`),
         fetch(`${api.list}?status=${selectedProduct.key === "desktop" ? "approved" : "reviewed"}&role=analyser&year=${selectedYear}`),
         fetch(`${api.list}?status=re-analyze&role=analyser&year=${selectedYear}`),
+        fetch(`${api.list}?status=rejected&role=analyser&year=${selectedYear}`),
       ]);
       const monthlyJson = monthlyRes.ok ? await monthlyRes.json() : [];
       const dailyJson = dailyRes.ok ? await dailyRes.json() : [];
       const pendingJson = pendingRes.ok ? await pendingRes.json() : [];
       const reviewedJson = reviewedRes.ok ? await reviewedRes.json() : [];
       const reAnalyzeJson = reAnalyzeRes.ok ? await reAnalyzeRes.json() : [];
+      const rejectedJson = rejectedRes.ok ? await rejectedRes.json() : [];
       const pending = Array.isArray(pendingJson) ? pendingJson.length : 0;
       const reviewed = Array.isArray(reviewedJson) ? reviewedJson.length : 0;
       const reAnalyze = Array.isArray(reAnalyzeJson) ? reAnalyzeJson.length : 0;
-      setStats({ pending, reviewed, reAnalyze, total: pending + reviewed + reAnalyze });
+      const rejected = Array.isArray(rejectedJson) ? rejectedJson.length : 0;
+      setStats({ pending, reviewed, reAnalyze, rejected, total: pending + reviewed + reAnalyze + rejected });
       setMonthlyData(normalizeMonthlyData(monthlyJson));
       setDailyData(normalizeDailyData(dailyJson));
     } catch {
-      setStats({ pending: 0, reviewed: 0, reAnalyze: 0, total: 0 });
+      setStats({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
       setDailyData([]);
       setMonthlyData([]);
     } finally {
@@ -171,7 +175,8 @@ const AnalyserHome = () => {
   const pieData = [
     { name: "Approved", value: stats.reviewed, fill: STATUS_COLORS.approved },
     { name: "Pending", value: stats.pending, fill: STATUS_COLORS.pending },
-    { name: "Rejected", value: stats.reAnalyze, fill: STATUS_COLORS.rejected },
+    { name: "Re-Analyze", value: stats.reAnalyze, fill: STATUS_COLORS.rejected },
+    { name: "Rejected", value: stats.rejected, fill: "#7f1d1d" },
   ];
 
   return (
@@ -204,10 +209,11 @@ const AnalyserHome = () => {
           )}
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=pending`)} label="Pending Bids" value={stats.pending} Icon={FaClipboardList} gradient="bg-gradient-to-br from-amber-400 to-orange-500" loading={loading} />
         <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=approved`)} label="Approved Bids" value={stats.reviewed} Icon={FaCheckCircle} gradient="bg-gradient-to-br from-emerald-400 to-emerald-600" loading={loading} />
-        <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=re-analyze`)} label="Rejected / Re-Analyze Bids" value={stats.reAnalyze} Icon={FaExclamationTriangle} gradient="bg-gradient-to-br from-rose-500 to-rose-700" loading={loading} />
+        <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=re-analyze`)} label="Re-Analyze Bids" value={stats.reAnalyze} Icon={FaExclamationTriangle} gradient="bg-gradient-to-br from-rose-500 to-rose-700" loading={loading} />
+        <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=rejected`)} label="Rejected Bids" value={stats.rejected} Icon={FaBan} gradient="bg-gradient-to-br from-red-800 to-red-950" loading={loading} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm">

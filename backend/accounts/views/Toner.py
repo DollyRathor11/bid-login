@@ -8,6 +8,7 @@ from django.views.decorators.csrf import csrf_exempt
 from ..models import User, CatalogueProduct
 from ..auth_identity import request_user, actor_name
 from ..bid_documents import MISSING_DOCUMENTS_ERROR, has_bid_documents
+from ..bid_status import BID_REJECTED, REJECTED_SECTION
 # Pure text/scoring helpers, reused as-is (same pattern AIO/Workstation use)
 # so Toner's model search behaves the same way as every other product line.
 from .Desktop import _match_is_blank, _values_overlap_score, _catalogue_values_for_keys, _catalogue_extra_specs, safe_float
@@ -211,13 +212,14 @@ def update_toner_bid(r,bid_id):
 def list_toner_bids(r):
     _ensure_table();q=TonerBid.objects.all();s=r.GET.get("status");role=r.GET.get("role")
     if role=="admin":
-        db_status={"pending":["analyzed"],"re-analyze":["rejected","re-analyze"],"approved":["approved"]}.get(s,["analyzed"])
+        db_status={"pending":["analyzed"],"re-analyze":["rejected","re-analyze"],"approved":["approved"],REJECTED_SECTION:[BID_REJECTED]}.get(s,["analyzed"])
         q=q.filter(status__in=db_status)
     # Like Desktop: a bid reaches the analyser only once the user has
     # submitted its documents (status "complete"), not after the config step.
     elif s=="pending":q=q.filter(status="complete")
     elif s=="approved":q=q.filter(status="approved")
     elif s=="re-analyze":q=q.filter(status__in=["rejected","re-analyze"])
+    elif s==REJECTED_SECTION:q=q.filter(status=BID_REJECTED)
     elif role=="analyser":q=q.exclude(status="draft")
     rows=[_json(x,r) for x in q]
     if s:
@@ -248,6 +250,14 @@ def admin_review_toner_bid(r,bid_id):
     _ensure_table();b=TonerBid.objects.filter(id=bid_id).first();d=_data(r)
     if not b:return JsonResponse({"error":"Toner bid not found"},status=404)
     status=d.get("status")
+    if status==BID_REJECTED:
+        # Final "Reject Bid" from the admin's Pending view: only the decision
+        # is saved ("rejected" itself means sent back for re-analysis here).
+        if b.status!="analyzed":return JsonResponse({"error":"Only a pending bid can be rejected."},status=400)
+        if not str(d.get("admin_note") or "").strip():return JsonResponse({"error":"Please enter the reason for rejecting this bid."},status=400)
+        b.status=BID_REJECTED;b.admin_note=str(d.get("admin_note") or "").strip();b.admin_username=actor_name(r,d.get("admin_username",""))
+        b.save(update_fields=["status","admin_note","admin_username","updated_at"])
+        return JsonResponse({"message":"Bid rejected","bid":_json(b,r)})
     if status not in ("approved","rejected","re-analyze"):return JsonResponse({"error":"Invalid admin status"},status=400)
     if "margin" in d:
         margin_text=str(d.get("margin") if d.get("margin") is not None else "").strip()

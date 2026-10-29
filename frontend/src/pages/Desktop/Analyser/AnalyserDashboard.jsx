@@ -246,6 +246,18 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                 </button>
 
                 <button
+                    onClick={() => setActiveTab("rejected")}
+                    className={`py-4 px-2 text-sm font-semibold transition-all flex items-center gap-2
+                    ${activeTab === "rejected"
+                            ? "text-red-800 border-b-2 border-red-800"
+                            : "text-gray-500 hover:text-gray-700"
+                        }`}
+                >
+                    <span>⛔</span>
+                    Rejected
+                </button>
+
+                <button
                     onClick={() => setActiveTab("gem-transfer")}
                     className={`py-4 px-2 text-sm font-semibold transition-all flex items-center gap-2
                     ${activeTab === "gem-transfer"
@@ -407,7 +419,9 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                                     className={`bg-white hover:bg-gray-50 transition-colors
                                     ${bid.status === "approved"
                                             ? "border-l-4 border-l-emerald-500"
-                                            : bid.status === "re-analyze"
+                                            : bid.status === "bid_rejected"
+                                                ? "border-l-4 border-l-red-800"
+                                                : bid.status === "re-analyze"
                                                 ? "border-l-4 border-l-rose-500"
                                                 : "border-l-4 border-l-amber-500"
                                         }`}
@@ -482,6 +496,12 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                                             </span>
                                         )}
 
+                                        {bid.status === "bid_rejected" && (
+                                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                                                ⛔ Rejected
+                                            </span>
+                                        )}
+
                                     </td>
                                     )}
 
@@ -489,7 +509,7 @@ export default function AnalyserDashboard({ product = "desktop" }) {
 
                                         <div className="flex items-center gap-2">
 
-                                        {bid.status === "approved" ? (
+                                        {bid.status === "approved" || bid.status === "bid_rejected" ? (
                                                 activeTab === "gem-transfer" ? (
                                                     <GemUploadButton onClick={() => uploadToGem(bid.id)} loading={gemStartingId === bid.id} />
                                                 ) : (

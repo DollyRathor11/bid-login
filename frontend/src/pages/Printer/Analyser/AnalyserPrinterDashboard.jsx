@@ -182,6 +182,16 @@ export default function AnalyserPrinterDashboard() {
             </span>
           )}
         </button>
+
+        <button
+          onClick={() => handleTabChange("rejected")}
+          className={`py-4 px-2 text-sm font-semibold transition-all flex items-center gap-2 outline-none focus:outline-none focus-visible:outline-none ${
+            activeTab === "rejected" ? "text-red-800 border-b-2 border-red-800" : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <span>⛔</span>
+          Rejected
+        </button>
         {activeTab === "approved" && selectedBidIds.size > 0 && (
           <button type="button" onClick={bulkDeleteBids} disabled={bulkDeleting}
             className="ml-auto inline-flex min-h-9 items-center gap-2 rounded bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50">
@@ -260,6 +270,8 @@ export default function AnalyserPrinterDashboard() {
                 className={`bg-white hover:bg-gray-50 transition-colors ${
                   bid.status === "approved"
                     ? "border-l-4 border-l-emerald-500"
+                    : bid.status === "bid_rejected"
+                    ? "border-l-4 border-l-red-800"
                     : bid.status === "re-analyze"
                     ? "border-l-4 border-l-rose-500"
                     : "border-l-4 border-l-amber-500"
@@ -320,11 +332,11 @@ export default function AnalyserPrinterDashboard() {
                   <button
                     onClick={() =>
                       navigate(`/analyser-dashboard/printer/bid/${bid.id}`, {
-                        state: { bid, readOnly: bid.status === "approved" },
+                        state: { bid, readOnly: bid.status === "approved" || bid.status === "bid_rejected" },
                       })
                     }
                     className={`px-3 py-2 rounded text-[11px] font-bold uppercase tracking-wide shadow-sm transition-all whitespace-nowrap text-white ${
-                      bid.status === "approved"
+                      bid.status === "approved" || bid.status === "bid_rejected"
                         ? "bg-emerald-600 hover:bg-emerald-700"
                         : bid.status === "re-analyze"
                         ? "bg-rose-600 hover:bg-rose-700"

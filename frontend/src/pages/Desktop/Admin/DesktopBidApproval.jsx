@@ -7,6 +7,7 @@ import {
 import { priceInputValue } from "../../../utils/price";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
 import { GemBidNo } from "../../../utils/GemBidNo";
+import RejectBidDialog from "../../../components/Admin/RejectBidDialog";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -58,6 +59,7 @@ const TABS = [
   { id: "pending", label: "Pending", icon: "⏳", color: "text-amber-600", border: "border-amber-600" },
   { id: "re-analyze", label: "Re-Analyze", icon: "⚠️", color: "text-rose-600", border: "border-rose-600" },
   { id: "approved", label: "Approved", icon: "✅", color: "text-emerald-600", border: "border-emerald-600" },
+  { id: "rejected", label: "Rejected", icon: "⛔", color: "text-red-800", border: "border-red-800" },
 ];
 
 const GENERAL_DOCS = [
@@ -443,7 +445,7 @@ function SpecialDocView({ form }) {
 export default function DesktopBidApproval() {
   const [activeTab, setActiveTab] = useState(() => {
     const status = new URLSearchParams(window.location.search).get("status");
-    return ["pending", "approved", "re-analyze"].includes(status) ? status : "pending";
+    return ["pending", "approved", "re-analyze", "rejected"].includes(status) ? status : "pending";
   });
   const [bids, setBids] = useState([]);
   const gemBidLinks = useGemBidLinks(bids);
@@ -456,6 +458,7 @@ export default function DesktopBidApproval() {
   const [form, setForm] = useState({});
   const [adminNote, setAdminNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [deletingId, setDeletingId] = useState(null);
@@ -653,7 +656,8 @@ export default function DesktopBidApproval() {
     field.addEventListener("change", clearHighlight, { once: true });
   };
 
-  const handleAction = async (action) => {
+  // note: the admin note to save; Reject Bid passes the popup's reason.
+  const handleAction = async (action, note = adminNote) => {
     setMsg("");
     if (action === "approved") {
       const localContent = String(form.local_content || "").trim().replace(/%$/, "");
@@ -684,7 +688,7 @@ export default function DesktopBidApproval() {
       formData.set("local_content", form.local_content || "");
             formData.set("optional_ports", form.optional_ports || "");
       formData.set("status", action);
-      formData.set("admin_note", adminNote);
+      formData.set("admin_note", note);
       formData.set("admin_username", localStorage.getItem("username") || "");
 
       const res = await fetch(`${API_BASE}/desktop-bids/${form.id}/admin-review/`, {
@@ -694,7 +698,7 @@ export default function DesktopBidApproval() {
       const data = await res.json();
 
       if (res.ok) {
-        setMsg(action === "approved" ? (isApprovedBid ? "✅ Approved bid updated" : "✅ Bid Approved Successfully!") : "⚠️ Sent back to Analyser");
+        setMsg(action === "approved" ? (isApprovedBid ? "✅ Approved bid updated" : "✅ Bid Approved Successfully!") : action === "bid_rejected" ? "⛔ Bid Rejected" : "⚠️ Sent back to Analyser");
         setTimeout(() => {
           closeModal();
           fetchBids();
@@ -716,6 +720,8 @@ export default function DesktopBidApproval() {
       return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">✅ Approved</span>;
     if (status === "pending")
       return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">⏳ Pending</span>;
+    if (status === "bid_rejected")
+      return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">⛔ Rejected</span>;
     return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700">⚠️ Re-Analyze</span>;
   };
 
@@ -1170,6 +1176,10 @@ export default function DesktopBidApproval() {
                       className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-semibold px-8 py-2.5 rounded-md text-sm transition">
                       {submitting ? "Processing..." : "⚠️ Send to Re-Analyze"}
                     </button>
+                    <button type="button" disabled={submitting} onClick={() => setRejectOpen(true)}
+                      className="bg-red-900 hover:bg-red-950 disabled:bg-red-700 text-white font-semibold px-8 py-2.5 rounded-md text-sm transition">
+                      {submitting ? "Processing..." : "⛔ Reject Bid"}
+                    </button>
                   </>
                 )}
                 {isApprovedBid && (
@@ -1187,6 +1197,12 @@ export default function DesktopBidApproval() {
           </div>
         </div>
       )}
+      <RejectBidDialog
+        open={rejectOpen}
+        submitting={submitting}
+        onCancel={() => setRejectOpen(false)}
+        onConfirm={(reason) => { setRejectOpen(false); handleAction("bid_rejected", reason); }}
+      />
     </div>
   );
 }

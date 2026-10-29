@@ -136,13 +136,13 @@ function getPrinterModelImage(modelNo) {
   return PRINTER_MODEL_IMAGES[normalizedModel] || null;
 }
 
-function AdminNoteBanner({ note }) {
+function AdminNoteBanner({ note, title = "Admin Review Note - Action Required" }) {
   if (!note) return null;
   return (
     <div className="mb-6 rounded-xl border-2 border-rose-400 bg-rose-50 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 bg-rose-500 px-4 py-2.5">
         <span className="text-white font-bold text-sm tracking-wide uppercase">
-          Admin Review Note - Action Required
+          {title}
         </span>
       </div>
       <div className="px-5 py-4">
@@ -667,6 +667,7 @@ export default function PrinterBidDetailView() {
   }
 
   const isReAnalyze = form?.status === "re-analyze" || form?.review_status === "re-analyze";
+  const isRejected = form?.status === "bid_rejected" || form?.review_status === "bid_rejected";
   const isReviewed = form?.status === "reviewed" || form?.review_status === "reviewed";
   const isApproved = form?.status === "approved" || form?.review_status === "approved";
   const isPending = !isReAnalyze && !isReviewed && !isApproved;
@@ -724,6 +725,7 @@ export default function PrinterBidDetailView() {
       </div>
 
       {isReAnalyze && form?.admin_note && <AdminNoteBanner note={form.admin_note} />}
+      {isRejected && form?.admin_note && <AdminNoteBanner note={form?.admin_note} title="Bid Rejected by Admin — Reason" />}
 
       {msg && (
         <div className={`mb-4 px-4 py-2 rounded text-sm font-medium ${msg.toLowerCase().includes("success") || msg.toLowerCase().includes("forwarded") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>

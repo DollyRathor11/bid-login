@@ -14,6 +14,7 @@ from ..models import User, DesktopBid, CatalogueProduct
 from ..auth_identity import request_user, actor_name
 from ..epbg import normalize_epbg
 from ..bid_documents import MISSING_DOCUMENTS_ERROR, has_bid_documents
+from ..bid_status import BID_REJECTED, REJECTED_SECTION
 from .. import desktop_excel
 from ..restricted_pincodes import is_restricted_pincode, restriction_message
 from .bid_cleanup import delete_bid_with_related_data
@@ -5315,6 +5316,7 @@ def list_desktop_bids(request):
                 "pending": "reviewed",
                 "re-analyze": "re-analyze",
                 "approved": "approved",
+                REJECTED_SECTION: BID_REJECTED,
             }
             db_status = status_map.get(status_filter, "reviewed")
 
@@ -5335,13 +5337,20 @@ def list_desktop_bids(request):
                     status="complete",
                     review_status__in=["reviewed", "approved"],
                 ).order_by("-created_at")
+            elif status_filter == REJECTED_SECTION:
+                bids = DesktopBid.objects.filter(
+                    status="complete",
+                    review_status=BID_REJECTED,
+                ).order_by("-updated_at")
             else:
                 bids = DesktopBid.objects.filter(
                     status="complete",
                     review_status=status_filter,
                 ).order_by("-created_at")
 
-        result = [_bid_data(bid, request, status_label=status_filter) for bid in bids]
+        # Rejected rows say "bid_rejected": AIO/Toner screens read "rejected" as re-analyze.
+        label = BID_REJECTED if status_filter == REJECTED_SECTION else status_filter
+        result = [_bid_data(bid, request, status_label=label) for bid in bids]
         return JsonResponse(result, safe=False, status=200)
 
     except Exception as e:
@@ -5556,6 +5565,19 @@ def admin_review_desktop_bid(request, bid_id):
             ).parse()
         else:
             data = json.loads(request.body)
+
+        if data.get("status") == BID_REJECTED:
+            # Final "Reject Bid" from the admin's Pending view: only the
+            # decision is saved, none of the form's other fields.
+            if bid.review_status != "reviewed":
+                return JsonResponse({"error": "Only a pending bid can be rejected."}, status=400)
+            if not str(data.get("admin_note") or "").strip():
+                return JsonResponse({"error": "Please enter the reason for rejecting this bid."}, status=400)
+            bid.review_status = BID_REJECTED
+            bid.admin_note = str(data.get("admin_note") or "").strip()
+            bid.admin_username = actor_name(request, data.get("admin_username", ""))
+            bid.save(update_fields=["review_status", "admin_note", "admin_username", "updated_at"])
+            return JsonResponse({"success": True, "bid_id": bid.id, "review_status": bid.review_status, "message": "Bid rejected."})
 
         restriction_error = _pincode_restriction_error(data)
         if restriction_error:
@@ -7125,12 +7147,14 @@ def admin_desktop_stats(request):
         pending = base_qs.filter(review_status="reviewed").count()
         approved = base_qs.filter(review_status="approved").count()
         re_analyze = base_qs.filter(review_status="re-analyze").count()
+        rejected = base_qs.filter(review_status=BID_REJECTED).count()
 
         return JsonResponse({
             "pending": pending,
             "approved": approved,
             "reAnalyze": re_analyze,
-            "total": pending + approved + re_analyze,
+            "rejected": rejected,
+            "total": pending + approved + re_analyze + rejected,
         }, status=200)
 
     except Exception as e:

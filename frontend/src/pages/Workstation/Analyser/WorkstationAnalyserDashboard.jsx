@@ -194,6 +194,14 @@ export default function WorkstationAnalyserDashboard() {
             </span>
           )}
         </button>
+        <button
+          onClick={() => setActiveTab("rejected")}
+          className={`py-4 px-2 text-sm font-semibold transition-all flex items-center gap-2 ${
+            activeTab === "rejected" ? "text-red-800 border-b-2 border-red-800" : "text-gray-500 hover:text-gray-700"
+          }`}
+        >
+          <span>⛔</span><span>Rejected</span>
+        </button>
         <button onClick={() => setActiveTab("gem-transfer")}
           className={`py-4 px-2 text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === "gem-transfer" ? "text-blue-600 border-b-2 border-blue-600" : "text-gray-500 hover:text-gray-700"}`}>
           <span>↗</span><span>Transfer Catalogue to GeM</span>
@@ -294,6 +302,8 @@ export default function WorkstationAnalyserDashboard() {
                 const rowColor =
                   status === "approved"
                     ? "border-l-4 border-l-emerald-500"
+                    : status === "bid_rejected"
+                      ? "border-l-4 border-l-red-800"
                     : status === "re-analyze"
                       ? "border-l-4 border-l-rose-500"
                       : "border-l-4 border-l-amber-500";
@@ -342,9 +352,14 @@ export default function WorkstationAnalyserDashboard() {
                           Re-Analyze
                         </span>
                       )}
+                      {status === "bid_rejected" && (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">
+                          Rejected
+                        </span>
+                      )}
                     </td>}
                     <td className="px-5 py-4 border-b border-gray-100">
-                      {status === "approved" || activeTab === "gem-transfer" ? (
+                      {status === "approved" || status === "bid_rejected" || activeTab === "gem-transfer" ? (
                         activeTab === "gem-transfer" ? (
                             <GemUploadButton onClick={() => uploadToGem(bid.id)} loading={gemStartingId === bid.id} />
                         ) : (

@@ -22,6 +22,7 @@ import {
   FaBox,
   FaShieldAlt,
   FaTags,
+  FaBan,
 } from "react-icons/fa";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
@@ -89,7 +90,7 @@ const ADMIN_DASHBOARD_API_MAP = {
   },
 };
 
-const PIE_COLORS = ["#f59e0b", "#10b981", "#ef4444"];
+const PIE_COLORS = ["#f59e0b", "#10b981", "#ef4444", "#7f1d1d"];
 
 const normalizeMonthlyData = (data = []) =>
   data.map((item) => ({
@@ -151,7 +152,7 @@ const AdminHome = () => {
   const analyserDropdownRef = useRef(null);
   
   const [stats, setStats] = useState({
-    totalBids: null, pending: null, approved: null, reAnalyze: null,
+    totalBids: null, pending: null, approved: null, reAnalyze: null, rejected: null,
   });
   const [statsLoading, setStatsLoading] = useState(true);
   const [userCount, setUserCount] = useState(null);
@@ -192,7 +193,7 @@ const AdminHome = () => {
 
   const fetchStats = useCallback(async () => {
     if (!selectedProduct.ready) {
-      setStats({ totalBids: 0, pending: 0, approved: 0, reAnalyze: 0 });
+      setStats({ totalBids: 0, pending: 0, approved: 0, reAnalyze: 0, rejected: 0 });
       setStatsLoading(false);
       return;
     }
@@ -212,6 +213,7 @@ const AdminHome = () => {
           pending: d.pending ?? null,
           approved: d.approved ?? null,
           reAnalyze: d.reAnalyze ?? null,
+          rejected: d.rejected ?? null,
         });
       }
     } catch (err) {
@@ -301,6 +303,7 @@ const AdminHome = () => {
     { name: "Pending Review", value: stats.pending ?? 0 },
     { name: "Approved", value: stats.approved ?? 0 },
     { name: "Re-Analyze", value: stats.reAnalyze ?? 0 },
+    { name: "Rejected", value: stats.rejected ?? 0 },
   ];
 
   return (
@@ -389,11 +392,12 @@ const AdminHome = () => {
       </div>
 
       {}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         <MetricCard icon={<FaFileInvoiceDollar className="text-blue-600" />} num={stats.totalBids} label="Total Bids" gradient="bg-gradient-to-br from-blue-500 to-blue-600" iconBg="bg-blue-100" loading={statsLoading} />
         <MetricCard onClick={() => navigate(`${approvalPath}?status=pending`)} icon={<FaHourglassHalf className="text-amber-500" />} num={stats.pending} label="Pending Review" gradient="bg-gradient-to-br from-amber-400 to-amber-500" iconBg="bg-amber-100" loading={statsLoading} />
         <MetricCard onClick={() => navigate(`${approvalPath}?status=approved`)} icon={<FaThumbsUp className="text-emerald-600" />} num={stats.approved} label="Approved Bids" gradient="bg-gradient-to-br from-emerald-500 to-emerald-600" iconBg="bg-emerald-100" loading={statsLoading} />
         <MetricCard onClick={() => navigate(`${approvalPath}?status=re-analyze`)} icon={<FaThumbsDown className="text-rose-600" />} num={stats.reAnalyze} label="Re-Analyze" gradient="bg-gradient-to-br from-rose-500 to-rose-600" iconBg="bg-rose-100" loading={statsLoading} />
+        <MetricCard onClick={() => navigate(`${approvalPath}?status=rejected`)} icon={<FaBan className="text-red-800" />} num={stats.rejected} label="Rejected Bids" gradient="bg-gradient-to-br from-red-800 to-red-950" iconBg="bg-red-100" loading={statsLoading} />
       </div>
       <div className="grid grid-cols-2 gap-4">
         <MetricCard onClick={() => navigate("/admin-dashboard/add-user")} icon={<FaUsers className="text-violet-600" />} num={userCount} label="Total Users Registered" gradient="bg-gradient-to-br from-violet-500 to-violet-600" iconBg="bg-violet-100" loading={accountsLoading} />

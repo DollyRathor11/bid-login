@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { priceInputValue } from "../../../utils/price";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
 import { GemBidNo } from "../../../utils/GemBidNo";
+import RejectBidDialog from "../../../components/Admin/RejectBidDialog";
 
 const API_BASE = import.meta.env.VITE_API_URL || "";
 const TABS = [
   { id: "pending", label: "Pending", icon: "⏳", color: "text-amber-600", border: "border-amber-600" },
   { id: "re-analyze", label: "Re-Analyze", icon: "⚠️", color: "text-rose-600", border: "border-rose-600" },
   { id: "approved", label: "Approved", icon: "✅", color: "text-emerald-600", border: "border-emerald-600" },
+  { id: "rejected", label: "Rejected", icon: "⛔", color: "text-red-800", border: "border-red-800" },
 ];
 
 const GENERAL_DOCS = [
@@ -227,7 +229,7 @@ const PrinterDocumentsView = ({ form, documentUrl }) => {
 export default function PrinterBidApproval() {
   const [activeTab, setActiveTab] = useState(() => {
     const status = new URLSearchParams(window.location.search).get("status");
-    return ["pending", "approved", "re-analyze"].includes(status) ? status : "pending";
+    return ["pending", "approved", "re-analyze", "rejected"].includes(status) ? status : "pending";
   });
   const [bids, setBids] = useState([]);
   const gemBidLinks = useGemBidLinks(bids);
@@ -240,6 +242,7 @@ export default function PrinterBidApproval() {
   const [form, setForm] = useState({});
   const [adminNote, setAdminNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [message, setMessage] = useState("");
   const [reAnalyzeCount, setReAnalyzeCount] = useState(0);
@@ -289,7 +292,8 @@ export default function PrinterBidApproval() {
     setSelected(bid); setForm({ ...bid }); setAdminNote(bid.admin_note || ""); setMessage("");
   };
 
-  const handleAction = async (status) => {
+  // note: the admin note to save; Reject Bid passes the popup's reason.
+  const handleAction = async (status, note = adminNote) => {
     const localContent = String(form.local_content ?? "").trim();
     if (status === "approved" && (localContent === "" || Number(localContent) < 0 || Number(localContent) > 100)) {
       const validationMessage = "Please enter a valid Local Content percentage between 0 and 100 before approving the bid.";
@@ -309,13 +313,13 @@ export default function PrinterBidApproval() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...form, status, admin_note: adminNote,
+          ...form, status, admin_note: note,
           admin_username: localStorage.getItem("admin_username") || localStorage.getItem("username") || "",
         }),
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || "Admin review failed.");
-      setMessage(status === "approved" ? (isApprovedBid ? "Approved bid updated." : "Bid approved successfully.") : "Bid sent for re-analysis.");
+      setMessage(status === "approved" ? (isApprovedBid ? "Approved bid updated." : "Bid approved successfully.") : status === "bid_rejected" ? "Bid rejected." : "Bid sent for re-analysis.");
       await fetchBids();
       window.setTimeout(closeModal, 700);
     } catch (err) {
@@ -350,6 +354,7 @@ export default function PrinterBidApproval() {
   const StatusBadge = ({ status }) => {
     if (status === "approved") return <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-700">✅ Approved</span>;
     if (status === "pending") return <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-700">⏳ Pending</span>;
+    if (status === "rejected" || status === "bid_rejected") return <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">⛔ Rejected</span>;
     return <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-rose-100 px-2.5 py-1 text-xs font-bold text-rose-700">⚠️ Re-Analyze</span>;
   };
 
@@ -489,13 +494,19 @@ export default function PrinterBidApproval() {
               </div>
             </div>
             <div className="flex flex-wrap gap-3 border-t px-6 py-5">
-              {selected.status !== "approved" && <><button type="button" disabled={submitting} onClick={() => handleAction("approved")} className="rounded bg-emerald-600 px-8 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{submitting ? "Saving..." : "Approve Bid"}</button><button type="button" disabled={submitting} onClick={() => handleAction("re-analyze")} className="rounded bg-rose-600 px-8 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60">Send to Re-Analyze</button></>}
+              {selected.status !== "approved" && selected.status !== "bid_rejected" && <><button type="button" disabled={submitting} onClick={() => handleAction("approved")} className="rounded bg-emerald-600 px-8 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">{submitting ? "Saving..." : "Approve Bid"}</button><button type="button" disabled={submitting} onClick={() => handleAction("re-analyze")} className="rounded bg-rose-600 px-8 py-2.5 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-60">Send to Re-Analyze</button>{selected.review_status === "reviewed" && <button type="button" disabled={submitting} onClick={() => setRejectOpen(true)} className="rounded bg-red-900 px-8 py-2.5 text-sm font-semibold text-white hover:bg-red-950 disabled:opacity-60">Reject Bid</button>}</>}
               {isApprovedBid && <button type="button" disabled={submitting} onClick={() => handleAction("approved")} className="rounded bg-blue-600 px-8 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">{submitting ? "Updating..." : "Update Approved Bid"}</button>}
               <button type="button" onClick={closeModal} className="rounded bg-gray-200 px-8 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-300">Cancel</button>
             </div>
           </div>
         </div>
       )}
+      <RejectBidDialog
+        open={rejectOpen}
+        submitting={submitting}
+        onCancel={() => setRejectOpen(false)}
+        onConfirm={(reason) => { setRejectOpen(false); handleAction("bid_rejected", reason); }}
+      />
     </div>
   );
 }

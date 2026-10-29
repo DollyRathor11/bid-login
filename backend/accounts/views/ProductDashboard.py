@@ -5,6 +5,7 @@ from django.db.models import Q
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods
 
+from ..bid_status import BID_REJECTED
 from ..models import DesktopBid, PrinterBid, WorkstationBid
 
 
@@ -72,13 +73,13 @@ def _admin_label(bid):
 
 def _base_queryset(product, role, year=None, analyser=None):
     if product in ("aio", "toner"):
-        queryset = _model(product).objects.filter(status__in=["analyzed", "approved", "rejected", "re-analyze"])
+        queryset = _model(product).objects.filter(status__in=["analyzed", "approved", "rejected", "re-analyze", BID_REJECTED])
     else:
         queryset = _model(product).objects.filter(status="complete")
         if role == "admin":
-            queryset = queryset.filter(review_status__in=["reviewed", "approved", "re-analyze"])
+            queryset = queryset.filter(review_status__in=["reviewed", "approved", "re-analyze", BID_REJECTED])
         else:
-            queryset = queryset.filter(review_status__in=["pending", "reviewed", "approved", "re-analyze"])
+            queryset = queryset.filter(review_status__in=["pending", "reviewed", "approved", "re-analyze", BID_REJECTED])
     if year:
         queryset = queryset.filter(created_at__year=year)
     if analyser:
@@ -166,15 +167,18 @@ def _stats(request, product):
         pending = queryset.filter(status="analyzed").count()
         approved = queryset.filter(status="approved").count()
         re_analyze = queryset.filter(status__in=["rejected", "re-analyze"]).count()
+        rejected = queryset.filter(status=BID_REJECTED).count()
     else:
         pending = queryset.filter(review_status="reviewed").count()
         approved = queryset.filter(review_status="approved").count()
         re_analyze = queryset.filter(review_status="re-analyze").count()
+        rejected = queryset.filter(review_status=BID_REJECTED).count()
     return JsonResponse({
         "pending": pending,
         "approved": approved,
         "reAnalyze": re_analyze,
-        "total": pending + approved + re_analyze,
+        "rejected": rejected,
+        "total": pending + approved + re_analyze + rejected,
     })
 
 

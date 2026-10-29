@@ -10,12 +10,14 @@ import {
 import { priceInputValue } from "../../../utils/price";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
 import { GemBidNo } from "../../../utils/GemBidNo";
+import RejectBidDialog from "../../../components/Admin/RejectBidDialog";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 const TABS = [
   { id: "pending", label: "Pending", icon: "⏳", color: "text-amber-600", border: "border-amber-600" },
   { id: "re-analyze", label: "Re-Analyze", icon: "⚠️", color: "text-rose-600", border: "border-rose-600" },
   { id: "approved", label: "Approved", icon: "✅", color: "text-emerald-600", border: "border-emerald-600" },
+  { id: "rejected", label: "Rejected", icon: "⛔", color: "text-red-800", border: "border-red-800" },
 ];
 
 const ROWS_PER_PAGE = 10;
@@ -394,7 +396,7 @@ function SpecialDocView({ form }) {
 export default function WorkstationBidApproval() {
   const [activeTab, setActiveTab] = useState(() => {
     const status = new URLSearchParams(window.location.search).get("status");
-    return ["pending", "approved", "re-analyze"].includes(status) ? status : "pending";
+    return ["pending", "approved", "re-analyze", "rejected"].includes(status) ? status : "pending";
   });
   const [bids, setBids] = useState([]);
   const gemBidLinks = useGemBidLinks(bids);
@@ -407,6 +409,7 @@ export default function WorkstationBidApproval() {
   const [adminNote, setAdminNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [rejectOpen, setRejectOpen] = useState(false);
   const [msg, setMsg] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedBidIds, setSelectedBidIds] = useState(new Set());
@@ -531,7 +534,8 @@ export default function WorkstationBidApproval() {
     });
   };
 
-  const handleAction = async (status) => {
+  // note: the admin note to save; Reject Bid passes the popup's reason.
+  const handleAction = async (status, note = adminNote) => {
     if (status === "approved" && toPrice(form.total_price) <= 0) {
       setMsg("Please enter a valid Bid Approved Price.");
       document.querySelector('[name="total_price"]')?.focus();
@@ -543,7 +547,7 @@ export default function WorkstationBidApproval() {
       const payload = {
         ...form,
         status,
-        admin_note: adminNote,
+        admin_note: note,
         admin_username: localStorage.getItem("admin_username") || localStorage.getItem("username") || "",
       };
       const res = await fetch(`${API_BASE}/workstation-bids/${selected.id}/admin-review/`, {
@@ -553,7 +557,7 @@ export default function WorkstationBidApproval() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Admin review failed.");
-      setMsg(status === "approved" ? (isApprovedBid ? "Approved bid updated." : "Bid approved successfully.") : "Bid sent to re-analyze.");
+      setMsg(status === "approved" ? (isApprovedBid ? "Approved bid updated." : "Bid approved successfully.") : status === "bid_rejected" ? "Bid rejected." : "Bid sent to re-analyze.");
       await fetchBids();
       await fetchReAnalyzeCount();
       setTimeout(closeModal, 700);
@@ -570,6 +574,9 @@ export default function WorkstationBidApproval() {
     }
     if (status === "pending") {
       return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">⏳ Pending</span>;
+    }
+    if (status === "bid_rejected") {
+      return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800">⛔ Rejected</span>;
     }
     return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-700">⚠️ Re-Analyze</span>;
   };
@@ -985,7 +992,7 @@ export default function WorkstationBidApproval() {
               </div>
 
               <div className="mt-8 flex gap-3 flex-wrap">
-                {selected.review_status !== "approved" && (
+                {selected.review_status !== "approved" && selected.review_status !== "bid_rejected" && (
                   <>
                     <button type="button" disabled={submitting} onClick={() => handleAction("approved")}
                       className="bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white font-semibold px-8 py-2.5 rounded-md text-sm transition">
@@ -995,6 +1002,12 @@ export default function WorkstationBidApproval() {
                       className="bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-semibold px-8 py-2.5 rounded-md text-sm transition">
                       {submitting ? "Processing..." : "⚠️ Send to Re-Analyze"}
                     </button>
+                    {selected.review_status === "reviewed" && (
+                      <button type="button" disabled={submitting} onClick={() => setRejectOpen(true)}
+                        className="bg-red-900 hover:bg-red-950 disabled:bg-red-700 text-white font-semibold px-8 py-2.5 rounded-md text-sm transition">
+                        {submitting ? "Processing..." : "⛔ Reject Bid"}
+                      </button>
+                    )}
                   </>
                 )}
                 {isApprovedBid && (
@@ -1012,6 +1025,12 @@ export default function WorkstationBidApproval() {
           </div>
         </div>
       )}
+      <RejectBidDialog
+        open={rejectOpen}
+        submitting={submitting}
+        onCancel={() => setRejectOpen(false)}
+        onConfirm={(reason) => { setRejectOpen(false); handleAction("bid_rejected", reason); }}
+      />
     </div>
   );
 }

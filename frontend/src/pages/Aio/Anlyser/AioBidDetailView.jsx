@@ -63,14 +63,14 @@ const Label = ({ children, optional }) => (
   </label>
 );
 
-const AdminNoteBanner = ({ note }) => {
+const AdminNoteBanner = ({ note, title = "Admin Review Note — Action Required" }) => {
   if (!note) return null;
   return (
     <div className="mb-6 rounded-xl border-2 border-rose-400 bg-rose-50 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 bg-rose-500 px-4 py-2.5">
         <span className="text-white text-base">⚠️</span>
         <span className="text-white font-bold text-sm tracking-wide uppercase">
-          Admin Review Note — Action Required
+          {title}
         </span>
       </div>
       <div className="px-5 py-4">
@@ -689,6 +689,7 @@ export default function AioBidDetailView() {
   }
 
   const isReAnalyze = form.status === "re-analyze" || form.status === "rejected";
+  const isRejected = form.status === "bid_rejected" || form.review_status === "bid_rejected";
   const isAnalyzed = form.status === "analyzed";
   const isApproved = form.status === "approved";
   const isPending = !isReAnalyze && !isAnalyzed && !isApproved;
@@ -739,6 +740,7 @@ export default function AioBidDetailView() {
       </div>
 
       {isReAnalyze && form.admin_note && <AdminNoteBanner note={form.admin_note} />}
+      {isRejected && form.admin_note && <AdminNoteBanner note={form.admin_note} title="Bid Rejected by Admin — Reason" />}
 
       {msg && (
         <div className={`mb-4 px-4 py-2 rounded text-sm font-medium ${msg.includes("✅") ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{msg}</div>

@@ -96,13 +96,13 @@ const USER_DOCS = [
 
 const fullMediaUrl = (url) => !url ? "" : url.startsWith("http") ? url : `${API_BASE.replace("/api", "")}${url}`;
 
-const AdminNoteBanner = ({ note }) => {
+const AdminNoteBanner = ({ note, title = "Admin Review Note - Action Required" }) => {
   if (!note) return null;
   return (
     <div className="mx-6 mt-4 rounded-xl border-2 border-rose-400 bg-rose-50 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 bg-rose-500 px-4 py-2.5">
         <span className="text-white font-bold text-sm tracking-wide uppercase">
-          Admin Review Note - Action Required
+          {title}
         </span>
       </div>
       <div className="px-5 py-4">
@@ -689,6 +689,7 @@ export default function WorkstationBidDetailView() {
   };
 
   const isReAnalyze = form?.status === "re-analyze" || form?.status === "re_analyze" || form?.review_status === "re-analyze";
+  const isRejected = form?.status === "bid_rejected" || form?.review_status === "bid_rejected";
   const isReviewed = form?.status === "reviewed" || form?.review_status === "reviewed";
   const isApproved = form?.status === "approved" || form?.review_status === "approved";
   const isPending = !isReAnalyze && !isReviewed && !isApproved;
@@ -732,6 +733,7 @@ export default function WorkstationBidDetailView() {
       </div>
 
       {isReAnalyze && form?.admin_note && <AdminNoteBanner note={form.admin_note} />}
+      {isRejected && form?.admin_note && <AdminNoteBanner note={form?.admin_note} title="Bid Rejected by Admin — Reason" />}
 
       {msg && <div className="mb-4 px-4 py-2 rounded bg-red-50 text-red-700 text-sm font-medium border border-red-200">{msg}</div>}
 

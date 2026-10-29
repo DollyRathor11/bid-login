@@ -13,6 +13,7 @@ from ..models import User, WorkstationBid, CatalogueProduct
 from ..auth_identity import request_user, actor_name
 from ..epbg import normalize_epbg
 from ..bid_documents import MISSING_DOCUMENTS_ERROR, has_bid_documents
+from ..bid_status import BID_REJECTED, REJECTED_SECTION
 from .bid_cleanup import delete_bid_with_related_data
 
 from .Desktop import (
@@ -884,13 +885,16 @@ def list_workstation_bids(request):
         status_filter = request.GET.get("status", "pending")
         role = request.GET.get("role", "analyser")
         if role == "admin":
-            db_status = {"pending": "reviewed", "re-analyze": "re-analyze", "approved": "approved"}.get(status_filter, "reviewed")
+            db_status = {"pending": "reviewed", "re-analyze": "re-analyze", "approved": "approved", REJECTED_SECTION: BID_REJECTED}.get(status_filter, "reviewed")
             bids = WorkstationBid.objects.filter(status="complete", review_status=db_status).order_by("-updated_at")
         elif status_filter == "reviewed":
             bids = WorkstationBid.objects.filter(status="complete", review_status__in=["reviewed", "approved"]).order_by("-created_at")
+        elif status_filter == REJECTED_SECTION:
+            bids = WorkstationBid.objects.filter(status="complete", review_status=BID_REJECTED).order_by("-updated_at")
         else:
             bids = WorkstationBid.objects.filter(status="complete", review_status=status_filter).order_by("-created_at")
-        return JsonResponse([_workstation_bid_data(bid, request, status_filter) for bid in bids], safe=False)
+        label = BID_REJECTED if status_filter == REJECTED_SECTION else status_filter
+        return JsonResponse([_workstation_bid_data(bid, request, label) for bid in bids], safe=False)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
 
@@ -974,6 +978,18 @@ def admin_review_workstation_bid(request, bid_id):
     try:
         bid = WorkstationBid.objects.get(id=bid_id)
         data = request.POST if request.content_type and request.content_type.startswith("multipart/form-data") else json.loads(request.body)
+        if data.get("status") == BID_REJECTED:
+            # Final "Reject Bid" from the admin's Pending view: only the
+            # decision is saved, none of the form's other fields.
+            if bid.review_status != "reviewed":
+                return JsonResponse({"error": "Only a pending bid can be rejected."}, status=400)
+            if not str(data.get("admin_note") or "").strip():
+                return JsonResponse({"error": "Please enter the reason for rejecting this bid."}, status=400)
+            bid.review_status = BID_REJECTED
+            bid.admin_note = str(data.get("admin_note") or "").strip()
+            bid.admin_username = actor_name(request, data.get("admin_username", ""))
+            bid.save(update_fields=["review_status", "admin_note", "admin_username", "updated_at"])
+            return JsonResponse({"success": True, "bid_id": bid.id, "review_status": bid.review_status, "message": "Bid rejected."})
         action = data.get("status", "")
         if action not in ("approved", "re-analyze"):
             return JsonResponse({"error": "Invalid status."}, status=400)
