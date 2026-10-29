@@ -576,6 +576,16 @@ export default function AioBidApproval() {
     }
   };
 
+  const linkedBidOpened = useRef(false);
+  useEffect(() => {
+    const linkedId = new URLSearchParams(window.location.search).get("bid");
+    if (!linkedId || linkedBidOpened.current) return;
+    const linkedBid = bids.find(bid => String(bid.id) === linkedId);
+    if (linkedBid) {
+      linkedBidOpened.current = true;
+      openModal(linkedBid);
+    }
+  }, [bids]);
   const openModal = (bid) => {
     const formattedBid = {
       ...bid,

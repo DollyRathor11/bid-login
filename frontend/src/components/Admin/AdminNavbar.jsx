@@ -33,7 +33,7 @@ const API_BASE = import.meta.env.VITE_API_URL;
 const ADMIN_API = `${API_BASE}/admin`;
 
 const bidItems = [
-  { name: "All Bids Approval", path: "/admin-dashboard/all-bids-approval", ready: true },
+  { name: "All Bids Products Approval", path: "/admin-dashboard/all-bids-approval", ready: true },
   { name: "Desktop Bid Approval",     path: "/admin-dashboard/desktop-bid-approval", ready: true  },
   { name: "AIO Bid Approval",         path: "/aio-bid-approval",                     ready: true },
   { name: "Workstation Bid Approval", path: "/admin-dashboard/workstation-bid-approval", ready: true },
@@ -439,7 +439,7 @@ const AdminHome = () => {
       </div>
 
       {}
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard icon={<FaFileInvoiceDollar className="text-blue-600" />} num={stats.totalBids} label="Total Bids" gradient="bg-gradient-to-br from-blue-500 to-blue-600" iconBg="bg-blue-100" loading={statsLoading} />
 
         <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=pending`)} icon={<FaHourglassHalf className="text-amber-500" />} num={stats.pending} label={selectedUser || selectedAnalyser ? "Pending Bids" : "Pending Review"} gradient="bg-gradient-to-br from-amber-400 to-amber-500" iconBg="bg-amber-100" loading={statsLoading} />
@@ -447,8 +447,6 @@ const AdminHome = () => {
         <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=re-analyze`)} icon={<FaThumbsDown className="text-rose-600" />} num={stats.reAnalyze} label="Re-Analyze" gradient="bg-gradient-to-br from-rose-500 to-rose-600" iconBg="bg-rose-100" loading={statsLoading} />
         <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=rejected`)} icon={<FaBan className="text-red-800" />} num={stats.rejected} label="Rejected Bids" gradient="bg-gradient-to-br from-red-800 to-red-950" iconBg="bg-red-100" loading={statsLoading} />
 
-      </div>
-      <div className="grid grid-cols-2 gap-4">
         <MetricCard onClick={() => navigate("/admin-dashboard/add-user")} icon={<FaUsers className="text-violet-600" />} num={userCount} label="Total Users Registered" gradient="bg-gradient-to-br from-violet-500 to-violet-600" iconBg="bg-violet-100" loading={accountsLoading} />
         <MetricCard onClick={() => navigate("/admin-dashboard/add-analyser")} icon={<FaUserTie className="text-cyan-600" />} num={analyserCount} label="Total Analysers Registered" gradient="bg-gradient-to-br from-cyan-500 to-cyan-600" iconBg="bg-cyan-100" loading={accountsLoading} />
         <MetricCard onClick={() => navigate("/admin-dashboard/add-management")} icon={<FaUserTie className="text-indigo-600" />} num={postBidSummary?.management_count} label="Total Management Registered" gradient="bg-gradient-to-br from-indigo-500 to-indigo-600" iconBg="bg-indigo-100" loading={postBidLoading} />
@@ -599,6 +597,15 @@ const AdminNavbar = () => {
 
         {}
         <div className="flex-1 p-3 overflow-y-auto hide-scrollbar">
+          <button
+            type="button"
+            onClick={() => navigate("/admin-dashboard")}
+            aria-current={isDashboardHome ? "page" : undefined}
+            className={`mb-3 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition ${isDashboardHome ? "bg-gray-700/70 text-white" : "text-gray-200 hover:bg-gray-700/50"}`}
+          >
+            <FaChartLine className="text-blue-400" />
+            <span className="text-sm font-medium">Admin Dashboard</span>
+          </button>
 
           {}
           <button

@@ -488,6 +488,16 @@ export default function WorkstationBidApproval() {
     }
   };
 
+  const linkedBidOpened = useRef(false);
+  useEffect(() => {
+    const linkedId = new URLSearchParams(window.location.search).get("bid");
+    if (!linkedId || linkedBidOpened.current) return;
+    const linkedBid = bids.find(bid => String(bid.id) === linkedId);
+    if (linkedBid) {
+      linkedBidOpened.current = true;
+      openModal(linkedBid);
+    }
+  }, [bids]);
   const openModal = (bid) => {
     setSelected(bid);
     const next = { ...bid, freightInstallation: bid.freightInstallation || "Yes", hddreturnable: !bid.hddreturnable || bid.hddreturnable === "No" ? "None" : bid.hddreturnable };
