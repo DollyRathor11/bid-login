@@ -33,6 +33,7 @@ const API_BASE = import.meta.env.VITE_API_URL;
 const ADMIN_API = `${API_BASE}/admin`;
 
 const bidItems = [
+  { name: "All Bids Approval", path: "/admin-dashboard/all-bids-approval", ready: true },
   { name: "Desktop Bid Approval",     path: "/admin-dashboard/desktop-bid-approval", ready: true  },
   { name: "AIO Bid Approval",         path: "/aio-bid-approval",                     ready: true },
   { name: "Workstation Bid Approval", path: "/admin-dashboard/workstation-bid-approval", ready: true },
@@ -50,6 +51,7 @@ const adminItems = [
 ];
 
 const BID_PRODUCTS = [
+  { key: "all",         label: "All Bids",    icon: <FaFileInvoiceDollar />, color: "#2563eb", ready: true },
   { key: "desktop",     label: "Desktop",     icon: <FaDesktop />, color: "#6366f1", ready: true  },
   { key: "aio",         label: "AIO",         icon: <FaLaptop />,  color: "#8b5cf6", ready: true },
   { key: "workstation", label: "Workstation", icon: <FaServer />,  color: "#0ea5e9", ready: true },
@@ -91,6 +93,38 @@ const ADMIN_DASHBOARD_API_MAP = {
 };
 
 const PIE_COLORS = ["#f59e0b", "#10b981", "#ef4444", "#7f1d1d"];
+
+const fetchDashboard = async (product, endpoint, params = "", options = {}) => {
+  const keys = product === "all" ? Object.keys(ADMIN_DASHBOARD_API_MAP) : [product];
+  const data = await Promise.all(keys.map(async key => {
+    const personView = ["stats", "monthly", "daily"].includes(endpoint) && (new URLSearchParams(params).get("user") || new URLSearchParams(params).get("analyser"));
+    const url = personView ? `${ADMIN_API}/dashboard/${key}/person/${endpoint}/` : endpoint === "participants"
+      ? `${ADMIN_API}/dashboard/${key}/participants/`
+      : ADMIN_DASHBOARD_API_MAP[key][endpoint];
+    const response = await fetch(`${url}?${params}`, options);
+    if (!response.ok) throw new Error(`Unable to load ${key} dashboard`);
+    return response.json();
+  }));
+  if (product !== "all") return data[0];
+  if (endpoint === "years") return [...new Set(data.flat())].sort((a, b) => b - a);
+  if (endpoint === "participants") return {
+    users: [...new Set(data.flatMap(item => item.users || []))].sort(),
+    analysers: [...new Set(data.flatMap(item => item.analysers || []))].sort(),
+  };
+  if (endpoint === "stats") return data.reduce((sum, item) => {
+    for (const key of ["total", "pending", "approved", "reAnalyze", "rejected"]) sum[key] += Number(item[key] || 0);
+    return sum;
+  }, { total: 0, pending: 0, approved: 0, reAnalyze: 0, rejected: 0 });
+  const rows = new Map();
+  for (const item of data.flat()) {
+    const key = endpoint === "monthly" ? item.monthNumber : item.date;
+    if (!rows.has(key)) rows.set(key, { ...item, total: 0, pending: 0, approved: 0, rejected: 0 });
+    const row = rows.get(key);
+    for (const field of ["total", "pending", "approved", "rejected"]) row[field] += Number(item[field] || 0);
+  }
+  return [...rows.values()].sort((a, b) => endpoint === "monthly"
+    ? a.monthNumber - b.monthNumber : a.date.localeCompare(b.date));
+};
 
 const normalizeMonthlyData = (data = []) =>
   data.map((item) => ({
@@ -140,7 +174,7 @@ const MetricCard = ({ icon, num, label, gradient, iconBg, loading = false, onCli
 
 const AdminHome = () => {
   const navigate = useNavigate();
-  const [selectedProduct, setSelectedProduct] = useState(BID_PRODUCTS[0]);
+  const [selectedProduct, setSelectedProduct] = useState(BID_PRODUCTS.find(product => product.key === "desktop"));
   const [dropOpen, setDropOpen] = useState(false);
   const productDropdownRef = useRef(null);
   
@@ -157,6 +191,8 @@ const AdminHome = () => {
   const [statsLoading, setStatsLoading] = useState(true);
   const [userCount, setUserCount] = useState(null);
   const [analyserCount, setAnalyserCount] = useState(null);
+  const [postBidSummary, setPostBidSummary] = useState(null);
+  const [postBidLoading, setPostBidLoading] = useState(true);
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [yearOptions, setYearOptions] = useState([new Date().getFullYear()]);
@@ -168,6 +204,30 @@ const AdminHome = () => {
   useOutsideClick(analyserDropdownRef, () => setAnalyserDropOpen(false), analyserDropOpen);
 
   const approvalPath = `/admin-dashboard/${selectedProduct.key}-bid-approval`;
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadPostBidSummary = async () => {
+      setPostBidLoading(true);
+      try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+        const response = await fetch(`${ADMIN_API}/dashboard/post-bid-summary/`, {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: controller.signal,
+        });
+        if (!response.ok) throw new Error("Unable to load post-bid summary");
+        const data = await response.json();
+        if (!controller.signal.aborted) setPostBidSummary(data);
+      } catch (error) {
+        if (error.name !== "AbortError") console.error("Post-bid summary error:", error);
+      } finally {
+        if (!controller.signal.aborted) setPostBidLoading(false);
+      }
+    };
+    loadPostBidSummary();
+    const interval = setInterval(loadPostBidSummary, 60000);
+    return () => { controller.abort(); clearInterval(interval); };
+  }, []);
 
   const fetchAccountCounts = useCallback(async () => {
     setAccountsLoading(true);
@@ -199,15 +259,10 @@ const AdminHome = () => {
     }
     setStatsLoading(true);
     try {
-      const api = ADMIN_DASHBOARD_API_MAP[selectedProduct.key];
       const params = new URLSearchParams();
       if (selectedAnalyser) params.set("analyser", selectedAnalyser);
       if (selectedUser) params.set("user", selectedUser);
-      const url = `${api.stats}?${params}`;
-      
-      const res = await fetch(url);
-      if (res.ok) {
-        const d = await res.json();
+      const d = await fetchDashboard(selectedProduct.key, "stats", params);
         setStats({
           totalBids: d.total ?? null,
           pending: d.pending ?? null,
@@ -215,8 +270,8 @@ const AdminHome = () => {
           reAnalyze: d.reAnalyze ?? null,
           rejected: d.rejected ?? null,
         });
-      }
     } catch (err) {
+      setStats({ totalBids: null, pending: null, approved: null, reAnalyze: null });
       console.error("Admin stats error:", err);
     } finally {
       setStatsLoading(false);
@@ -226,10 +281,7 @@ const AdminHome = () => {
   const fetchYears = useCallback(async () => {
     if (!selectedProduct.ready) return;
     try {
-      const api = ADMIN_DASHBOARD_API_MAP[selectedProduct.key];
-      const res = await fetch(api.years);
-      if (!res.ok) return;
-      const data = await res.json();
+      const data = await fetchDashboard(selectedProduct.key, "years");
       if (Array.isArray(data) && data.length > 0) {
         setYearOptions(data);
         const currentYear = new Date().getFullYear();
@@ -247,19 +299,15 @@ const AdminHome = () => {
     }
     setChartsLoading(true);
     try {
-      const api = ADMIN_DASHBOARD_API_MAP[selectedProduct.key];
       const params = new URLSearchParams();
       if (selectedAnalyser) params.set("analyser", selectedAnalyser);
       if (selectedUser) params.set("user", selectedUser);
-      const monthlyUrl = `${api.monthly}?year=${selectedYear}&${params}`;
-      const dailyUrl = `${api.daily}?${params}`;
-
-      const [monthlyRes, dailyRes] = await Promise.all([
-        fetch(monthlyUrl),
-        fetch(dailyUrl),
+      const [monthly, daily] = await Promise.all([
+        fetchDashboard(selectedProduct.key, "monthly", `year=${selectedYear}&${params}`),
+        fetchDashboard(selectedProduct.key, "daily", params),
       ]);
-      setMonthlyData(normalizeMonthlyData(monthlyRes.ok ? await monthlyRes.json() : []));
-      setDailyData(normalizeDailyData(dailyRes.ok ? await dailyRes.json() : []));
+      setMonthlyData(normalizeMonthlyData(monthly));
+      setDailyData(normalizeDailyData(daily));
     } catch {
       setMonthlyData([]);
       setDailyData([]);
@@ -272,8 +320,7 @@ const AdminHome = () => {
     const controller = new AbortController();
     setAnalysers([]);
     setBidUsers([]);
-    fetch(`${ADMIN_API}/dashboard/${selectedProduct.key}/participants/`, { signal: controller.signal })
-      .then(response => response.ok ? response.json() : { users: [], analysers: [] })
+    fetchDashboard(selectedProduct.key, "participants", "", { signal: controller.signal })
       .then(data => {
         setAnalysers(data.analysers || []);
         setBidUsers(data.users || []);
@@ -346,11 +393,11 @@ const AdminHome = () => {
         <select
           aria-label="Filter bids by user"
           value={selectedUser}
-          onChange={event => setSelectedUser(event.target.value)}
+          onChange={event => { setSelectedUser(event.target.value); setSelectedAnalyser(null); }}
           className="bg-white border-2 border-slate-200 px-4 py-2.5 rounded-xl font-black text-slate-700 text-sm shadow-sm hover:border-blue-500 min-w-[190px]"
         >
           <option value="">All Users</option>
-          {bidUsers.map(name => <option key={name} value={name}>{name}</option>)}
+          {[...new Set([...bidUsers, ...Object.keys(postBidSummary?.assigned_by_user || {})])].sort().map(name => <option key={name} value={name}>{name}</option>)}
         </select>
         <div ref={analyserDropdownRef} className="relative">
           <button
@@ -375,7 +422,7 @@ const AdminHome = () => {
                 analysers.map((name, idx) => (
                   <div
                     key={idx}
-                    onClick={() => { setSelectedAnalyser(name); setAnalyserDropOpen(false); }}
+                    onClick={() => { setSelectedAnalyser(name); setSelectedUser(""); setAnalyserDropOpen(false); }}
                     className={`flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 cursor-pointer font-bold text-sm transition-colors ${selectedAnalyser === name ? 'bg-blue-50 text-blue-600' : 'text-slate-600'}`}
                   >
                     {name}
@@ -394,14 +441,18 @@ const AdminHome = () => {
       {}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
         <MetricCard icon={<FaFileInvoiceDollar className="text-blue-600" />} num={stats.totalBids} label="Total Bids" gradient="bg-gradient-to-br from-blue-500 to-blue-600" iconBg="bg-blue-100" loading={statsLoading} />
-        <MetricCard onClick={() => navigate(`${approvalPath}?status=pending`)} icon={<FaHourglassHalf className="text-amber-500" />} num={stats.pending} label="Pending Review" gradient="bg-gradient-to-br from-amber-400 to-amber-500" iconBg="bg-amber-100" loading={statsLoading} />
-        <MetricCard onClick={() => navigate(`${approvalPath}?status=approved`)} icon={<FaThumbsUp className="text-emerald-600" />} num={stats.approved} label="Approved Bids" gradient="bg-gradient-to-br from-emerald-500 to-emerald-600" iconBg="bg-emerald-100" loading={statsLoading} />
-        <MetricCard onClick={() => navigate(`${approvalPath}?status=re-analyze`)} icon={<FaThumbsDown className="text-rose-600" />} num={stats.reAnalyze} label="Re-Analyze" gradient="bg-gradient-to-br from-rose-500 to-rose-600" iconBg="bg-rose-100" loading={statsLoading} />
-        <MetricCard onClick={() => navigate(`${approvalPath}?status=rejected`)} icon={<FaBan className="text-red-800" />} num={stats.rejected} label="Rejected Bids" gradient="bg-gradient-to-br from-red-800 to-red-950" iconBg="bg-red-100" loading={statsLoading} />
+
+        <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=pending`)} icon={<FaHourglassHalf className="text-amber-500" />} num={stats.pending} label={selectedUser || selectedAnalyser ? "Pending Bids" : "Pending Review"} gradient="bg-gradient-to-br from-amber-400 to-amber-500" iconBg="bg-amber-100" loading={statsLoading} />
+        <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=approved`)} icon={<FaThumbsUp className="text-emerald-600" />} num={stats.approved} label="Approved Bids" gradient="bg-gradient-to-br from-emerald-500 to-emerald-600" iconBg="bg-emerald-100" loading={statsLoading} />
+        <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=re-analyze`)} icon={<FaThumbsDown className="text-rose-600" />} num={stats.reAnalyze} label="Re-Analyze" gradient="bg-gradient-to-br from-rose-500 to-rose-600" iconBg="bg-rose-100" loading={statsLoading} />
+        <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=rejected`)} icon={<FaBan className="text-red-800" />} num={stats.rejected} label="Rejected Bids" gradient="bg-gradient-to-br from-red-800 to-red-950" iconBg="bg-red-100" loading={statsLoading} />
+
       </div>
       <div className="grid grid-cols-2 gap-4">
         <MetricCard onClick={() => navigate("/admin-dashboard/add-user")} icon={<FaUsers className="text-violet-600" />} num={userCount} label="Total Users Registered" gradient="bg-gradient-to-br from-violet-500 to-violet-600" iconBg="bg-violet-100" loading={accountsLoading} />
         <MetricCard onClick={() => navigate("/admin-dashboard/add-analyser")} icon={<FaUserTie className="text-cyan-600" />} num={analyserCount} label="Total Analysers Registered" gradient="bg-gradient-to-br from-cyan-500 to-cyan-600" iconBg="bg-cyan-100" loading={accountsLoading} />
+        <MetricCard onClick={() => navigate("/admin-dashboard/add-management")} icon={<FaUserTie className="text-indigo-600" />} num={postBidSummary?.management_count} label="Total Management Registered" gradient="bg-gradient-to-br from-indigo-500 to-indigo-600" iconBg="bg-indigo-100" loading={postBidLoading} />
+        {!selectedAnalyser && <MetricCard icon={<FaFileInvoiceDollar className="text-teal-600" />} num={postBidSummary ? (selectedUser ? postBidSummary.assigned_by_user[selectedUser] ?? 0 : postBidSummary.assigned_total) : null} label={selectedUser ? `Post-Bid Assignments (${selectedUser})` : "Total Post-Bid Assignments"} gradient="bg-gradient-to-br from-teal-500 to-teal-600" iconBg="bg-teal-100" loading={postBidLoading} />}
       </div>
 
       {}
@@ -409,7 +460,7 @@ const AdminHome = () => {
         <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm">
           <h3 className="text-base font-black text-slate-800 mb-5 flex items-center gap-3 uppercase tracking-tight">
             <div className="w-1 h-6 bg-blue-600 rounded-full" />
-            Daily Activity {selectedAnalyser && <span className="text-xs text-blue-600 normal-case font-bold">({selectedAnalyser})</span>}
+            Daily Activity {(selectedUser || selectedAnalyser) && <span className="text-xs text-blue-600 normal-case font-bold">({selectedUser || selectedAnalyser})</span>}
           </h3>
           <ResponsiveContainer width="100%" height={230}>
             <BarChart data={dailyData} barCategoryGap="32%">
@@ -424,7 +475,7 @@ const AdminHome = () => {
         <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm flex flex-col items-center">
           <h3 className="w-full text-base font-black text-slate-800 mb-2 flex items-center gap-3 uppercase tracking-tight">
             <div className="w-1 h-6 bg-indigo-600 rounded-full" />
-            Status Ratio {selectedAnalyser && <span className="text-xs text-blue-600 normal-case font-bold">({selectedAnalyser})</span>}
+            Status Ratio {(selectedUser || selectedAnalyser) && <span className="text-xs text-blue-600 normal-case font-bold">({selectedUser || selectedAnalyser})</span>}
           </h3>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
@@ -447,7 +498,7 @@ const AdminHome = () => {
         <div className="flex items-center justify-between mb-5">
           <h3 className="text-base font-black text-slate-800 flex items-center gap-3 uppercase tracking-tight">
             <FaChartLine className="text-blue-600" />
-            Monthly Performance {selectedAnalyser && <span className="text-xs text-blue-600 normal-case font-bold">({selectedAnalyser})</span>}
+            Monthly Performance {(selectedUser || selectedAnalyser) && <span className="text-xs text-blue-600 normal-case font-bold">({selectedUser || selectedAnalyser})</span>}
           </h3>
           <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="bg-white border-2 border-slate-200 px-4 py-2 rounded-xl font-black text-slate-700 text-sm shadow-sm hover:border-blue-500 outline-none">
             {yearOptions.map((year) => (

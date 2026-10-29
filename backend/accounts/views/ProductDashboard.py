@@ -9,6 +9,24 @@ from ..bid_status import BID_REJECTED
 from ..models import DesktopBid, PrinterBid, WorkstationBid
 
 
+@require_http_methods(["GET"])
+def admin_post_bid_summary(request):
+    from .Gem import _require_role
+    from ..models import GemBidAssignment, User
+    from django.db.models import Count
+
+    _, error = _require_role(request, {"admin"})
+    if error:
+        return error
+    assignments = GemBidAssignment.objects.filter(hidden_for_admin=False)
+    counts = list(assignments.values("assigned_to__username").annotate(total=Count("id")))
+    return JsonResponse({
+        "management_count": User.objects.filter(role="management").count(),
+        "assigned_total": assignments.count(),
+        "assigned_by_user": {row["assigned_to__username"]: row["total"] for row in counts},
+    })
+
+
 MODELS = {
     "desktop": DesktopBid,
     "workstation": WorkstationBid,
@@ -71,6 +89,35 @@ def _admin_label(bid):
     return None
 
 
+def _admin_dashboard_queryset(request, product, year=None):
+    username, analyser = request.GET.get("user"), request.GET.get("analyser")
+    if username or analyser:
+        queryset = _model(product).objects.exclude(status="draft")
+        if year:
+            queryset = queryset.filter(created_at__year=year)
+        # A selected user is a creator view, independent of the analyser.
+        if username:
+            return _filter_user(queryset, username)
+        return queryset.filter(analyser_username=analyser)
+    return _base_queryset(product, "admin", year=year)
+
+
+def _dashboard_admin_label(bid):
+    if getattr(bid, "review_status", None) == BID_REJECTED or bid.status == BID_REJECTED:
+        return "rejected"
+    return _admin_label(bid) or "pending"
+
+
+@require_http_methods(["GET"])
+def admin_person_dashboard(request, product, endpoint):
+    if product not in ("desktop", "aio", "workstation", "printer", "toner"):
+        return JsonResponse({"error": "Unknown product"}, status=404)
+    handlers = {"stats": _stats, "monthly": lambda r, p: _monthly(r, p, "admin"), "daily": lambda r, p: _daily(r, p, "admin")}
+    if endpoint not in handlers:
+        return JsonResponse({"error": "Unknown dashboard endpoint"}, status=404)
+    return handlers[endpoint](request, product)
+
+
 def _base_queryset(product, role, year=None, analyser=None):
     if product in ("aio", "toner"):
         queryset = _model(product).objects.filter(status__in=["analyzed", "approved", "rejected", "re-analyze", BID_REJECTED])
@@ -109,10 +156,10 @@ def _monthly(request, product, role):
         {"month": name, "monthNumber": index + 1, "total": 0, **{key: 0 for key in status_keys}}
         for index, name in enumerate(months)
     ]
-    label_for = _admin_label if role == "admin" else _analyser_label
+    label_for = _dashboard_admin_label if role == "admin" else _analyser_label
     queryset = _base_queryset(product, role, year=year, analyser=analyser)
     if role == "admin":
-        queryset = _filter_user(queryset, request.GET.get("user"))
+        queryset = _admin_dashboard_queryset(request, product, year=year)
     for bid in queryset:
         label = label_for(bid)
         if not bid.created_at or label not in status_keys:
@@ -145,8 +192,8 @@ def _daily(request, product, role):
         created_at__date__lte=today,
     )
     if role == "admin":
-        queryset = _filter_user(queryset, request.GET.get("user"))
-    label_for = _admin_label if role == "admin" else _analyser_label
+        queryset = _admin_dashboard_queryset(request, product).filter(created_at__date__gte=sunday, created_at__date__lte=today)
+    label_for = _dashboard_admin_label if role == "admin" else _analyser_label
     for bid in queryset:
         label = label_for(bid)
         if not bid.created_at or label not in status_keys:
@@ -162,7 +209,7 @@ def _daily(request, product, role):
 
 def _stats(request, product):
     analyser = request.GET.get("analyser")
-    queryset = _filter_user(_base_queryset(product, "admin", analyser=analyser), request.GET.get("user"))
+    queryset = _admin_dashboard_queryset(request, product)
     if product in ("aio", "toner"):
         pending = queryset.filter(status="analyzed").count()
         approved = queryset.filter(status="approved").count()
@@ -173,6 +220,8 @@ def _stats(request, product):
         approved = queryset.filter(review_status="approved").count()
         re_analyze = queryset.filter(review_status="re-analyze").count()
         rejected = queryset.filter(review_status=BID_REJECTED).count()
+    if request.GET.get("user") or analyser:
+        pending = queryset.count() - approved - re_analyze - rejected
     return JsonResponse({
         "pending": pending,
         "approved": approved,

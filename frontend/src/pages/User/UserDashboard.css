@@ -1,0 +1,25 @@
+.user-dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  column-gap: 16px;
+  row-gap: 24px;
+}
+
+.user-dashboard-cards > .user-dashboard-card-top {
+  grid-column: span 2;
+}
+
+.user-dashboard-cards > .user-dashboard-card-bottom {
+  grid-column: span 3;
+}
+
+@media (max-width: 639px) {
+  .user-dashboard-cards {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .user-dashboard-cards > .user-dashboard-card {
+    grid-column: span 1;
+  }
+}

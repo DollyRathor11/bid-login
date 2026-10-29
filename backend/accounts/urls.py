@@ -41,6 +41,7 @@ from .views.Printer import (
     generate_printer_certificates,
 )
 from .views import ProductDashboard as product_dashboard
+from .views.UserDashboard import user_dashboard
 from .views.Aio import (
     create_aio_bid,
     update_aio_bid,
@@ -107,6 +108,7 @@ urlpatterns = [
     path("register-admin/", views.register_admin),
     path("delete-admin/<int:id>/", views.delete_admin),
     path("management-list/", views.management_list),
+    path("user/dashboard/", user_dashboard),
     path("register-management/", views.register_management),
     path("delete-management/<int:id>/", views.delete_management),
     path('login/', views.login),
@@ -295,6 +297,8 @@ urlpatterns = [
     path("admin/aio-bids/daily-activity/", product_dashboard.admin_aio_daily_activity),
     path("admin/aio-bids/stats/", product_dashboard.admin_aio_stats),
     path("admin/dashboard/<str:product>/participants/", product_dashboard.admin_dashboard_participants),
+    path("admin/dashboard/post-bid-summary/", product_dashboard.admin_post_bid_summary),
+    path("admin/dashboard/<str:product>/person/<str:endpoint>/", product_dashboard.admin_person_dashboard),
     path("admin/toner-bids/dashboard-years/", product_dashboard.admin_toner_dashboard_years),
     path("admin/toner-bids/monthly-performance/", product_dashboard.admin_toner_monthly_performance),
     path("admin/toner-bids/daily-activity/", product_dashboard.admin_toner_daily_activity),

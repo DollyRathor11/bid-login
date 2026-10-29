@@ -915,6 +915,11 @@ def generate_toner_documents(r,bid_id):
                     _force_tender_no_date(p,fitz,b.bid_no,date,recipient_bottom)
                     if typ=="manufacturer_auth" and pidx==0:
                         _fill_manufacturer_auth_body(p,fitz)
+            if typ=="service_support":
+                for page in d:
+                    matches=page.search_for("Service Support Details on page no. 2,3,4,5")
+                    for rect in matches:page.add_redact_annot(rect,fill=(1,1,1))
+                    if matches:page.apply_redactions(images=0,graphics=0)
             _dedupe_stacked_signature_images(d,fitz)
             d.save(path);d.close();m.close()
         elif typ=="approved_price_paper":

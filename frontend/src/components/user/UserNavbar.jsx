@@ -11,6 +11,7 @@ import {
   FaChevronDown,
   FaUserCircle,
   FaClipboardList,
+  FaChartLine,
 } from "react-icons/fa";
 
 const UserNavbar = () => {
@@ -118,6 +119,11 @@ const UserNavbar = () => {
         </div>
 
         <div className="flex-1 p-3 overflow-y-auto hide-scrollbar">
+          <button type="button" onClick={() => navigate("/user/dashboard")}
+            className={`mb-3 flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-all ${isActive("/user/dashboard") || isActive("/user") ? "bg-gray-700/50 text-white" : "text-gray-300 hover:bg-gray-700/50 hover:text-white"}`}>
+            <FaChartLine className="text-blue-400" />
+            <span className="text-sm font-medium">User Dashboard</span>
+          </button>
           <div onClick={() => navigate("/user/bid-to-be-participated")}
             className={`mb-3 flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 transition-all ${isActive("/user/bid-to-be-participated") ? "bg-gray-700/50 text-white" : "text-gray-300 hover:bg-gray-700/50 hover:text-white"}`}>
             <FaClipboardList className="text-amber-400" />
@@ -174,7 +180,7 @@ const UserNavbar = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
 
         <div className="flex justify-between items-center bg-white shadow-sm px-6 py-4 border-b border-gray-200">
-          <h1 className="text-xl font-semibold text-gray-800">Dashboard</h1>
+          <h1 className="text-xl font-semibold text-gray-800">{isActive("/user/dashboard") || isActive("/user") ? "User Dashboard" : "Dashboard"}</h1>
           <div className="flex items-center gap-3">
             <div className="flex flex-col items-end">
               <span className="text-sm font-bold text-gray-800">

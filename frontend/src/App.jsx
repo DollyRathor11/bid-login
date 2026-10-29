@@ -9,6 +9,8 @@ import AnalyserDocument from "./pages/Desktop/Analyser/Analyserdocument";
 import DesktopBidApproval from "./pages/Desktop/Admin/DesktopBidApproval";
 
 import UserNavbar from "./components/user/UserNavbar";
+import UserDashboard from "./pages/User/UserDashboard";
+import AllBidsApproval from "./pages/Admin/AllBidsApproval";
 import CreateDesktopBid from "./pages/Desktop/User/CreateDesktopBid";
 import CreateWorkstationBid from "./pages/Workstation/User/CreateWorkstationBid";
 import WorkstationAnalyserDashboard from "./pages/Workstation/Analyser/WorkstationAnalyserDashboard";
@@ -88,7 +90,8 @@ function App() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
 
         <Route path="/user" element={<UserNavbar />}>
-          <Route index element={<div>Select a product</div>} />
+          <Route index element={<UserDashboard />} />
+          <Route path="dashboard" element={<UserDashboard />} />
           <Route path="bid-to-be-participated" element={<UserAssignedBids />} />
         </Route>
 
@@ -138,6 +141,7 @@ function App() {
           <Route path="add-analyser" element={<AddAnalyser />} />
           <Route path="add-admin" element={<AddAnalyser accountType="admin" />} />
           <Route path="add-management" element={<AddAnalyser accountType="management" />} />
+          <Route path="all-bids-approval" element={<AllBidsApproval />} />
           <Route path="component-rates/:product" element={<ComponentRates />} />
           <Route
             path="add-product"
