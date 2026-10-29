@@ -27,7 +27,7 @@ const PRICE_FIELDS = [
   "ram_price", "ssd1_price", "ssd2_price", "hdd_price", "graphics_price", "cabinet_price",
   "keyboard_price", "power_supply_price", "monitor_price", "os_price", "warranty_price",
   "freightInstallation_price", "hddreturnable_price", "extra_requirements_price",
-  "epbg_price", "optional_ports_price",
+  "epbg_price", "optional_ports_price", "graphics_description_price", "additional_software_price",
 ];
 const toPrice = (value) => Number(String(value ?? "").replace(/,/g, "").trim()) || 0;
 const calculateTotalPrice = (values) => PRICE_FIELDS.reduce((sum, name) => sum + toPrice(values?.[name]), 0);
@@ -908,8 +908,8 @@ export default function WorkstationBidApproval() {
 
               <PriceField label="Processor Description" name="pro_descp" priceName="pro_descp_price" isTextArea optional form={form} handleChange={handleChange} />
               <PriceField label="Motherboard Description" name="motherboard_descp" priceName="motherboard_descp_price" isTextArea optional form={form} handleChange={handleChange} />
-              <PriceField label="Graphics Description" name="gp" isTextArea optional form={form} handleChange={handleChange} />
-              <PriceField label="Additional Software" name="software1" isTextArea optional form={form} handleChange={handleChange} />
+              <PriceField label="Graphics Description" name="gp" priceName="graphics_description_price" isTextArea optional form={form} handleChange={handleChange} />
+              <PriceField label="Additional Software" name="software1" priceName="additional_software_price" isTextArea optional form={form} handleChange={handleChange} />
               <PriceField label="Extra Requirements" name="extra_requirements" priceName="extra_requirements_price" isTextArea optional form={form} handleChange={handleChange} />
 
               <div>

@@ -37,7 +37,7 @@ const PRICE_FIELDS = [
   "processor_price", "ram_price", "hdd_price", "ssd_price", "os_price",
   "dvd_price", "wifi_price", "screen_price", "keyboard_price", "warranty_price",
   "motherboard_price", "freightInstallation_price", "hddreturnable_price",
-  "epbg_price",
+  "epbg_price", "pro_descp_price", "motherboard_descp_price", "software1_price", "gp_price",
 ];
 
 const toPrice = (value) => {
@@ -994,10 +994,10 @@ export default function AioBidApproval() {
                 <PriceField label="Keyboard & Mouse" name="keyboard" priceName="keyboard_price" options={SPEC_OPTIONS.keyboard} form={form} handleChange={handleChange} />
                 <PriceField label="Warranty" name="warranty" priceName="warranty_price" options={SPEC_OPTIONS.warranty} form={form} handleChange={handleChange} />
                 <PriceField label="Motherboard" name="motherboard" priceName="motherboard_price" options={SPEC_OPTIONS.motherboard} form={form} handleChange={handleChange} />
-                <PriceField label="Processor Description" name="pro_descp" isTextArea optional form={form} handleChange={handleChange} />
-                <PriceField label="Motherboard Description" name="motherboard_descp" isTextArea optional form={form} handleChange={handleChange} />
-                <PriceField label="Additional Software" name="software1" isTextArea optional form={form} handleChange={handleChange} />
-                <PriceField label="Graphics Description" name="gp" isTextArea optional form={form} handleChange={handleChange} />
+                <PriceField label="Processor Description" name="pro_descp" priceName="pro_descp_price" isTextArea optional form={form} handleChange={handleChange} />
+                <PriceField label="Motherboard Description" name="motherboard_descp" priceName="motherboard_descp_price" isTextArea optional form={form} handleChange={handleChange} />
+                <PriceField label="Additional Software" name="software1" priceName="software1_price" isTextArea optional form={form} handleChange={handleChange} />
+                <PriceField label="Graphics Description" name="gp" priceName="gp_price" isTextArea optional form={form} handleChange={handleChange} />
 
                 <PriceField label="EPBG (%)" name="epbg" priceName="epbg_price" form={form} handleChange={handleChange} />
 

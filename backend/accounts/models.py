@@ -520,6 +520,7 @@ class WorkstationBid(models.Model):
     graphic_card = models.CharField(max_length=255, blank=True, null=True)
     graphic_card_price = models.FloatField(default=0)
     graphics_description = models.TextField(blank=True, null=True, help_text="Technical description of GPU")
+    graphics_description_price = models.FloatField(default=0)
 
 
 
@@ -543,6 +544,7 @@ class WorkstationBid(models.Model):
     os_price = models.FloatField(default=0)
 
     additional_software = models.TextField(blank=True, null=True, help_text="MS Office, Antivirus, etc.")
+    additional_software_price = models.FloatField(default=0)
 
     wifi = models.CharField(max_length=100, blank=True, null=True)
     wifi_price = models.FloatField(default=0)

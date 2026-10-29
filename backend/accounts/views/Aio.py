@@ -29,6 +29,8 @@ class AioBid(models.Model):
     wifi=models.TextField(blank=True,default=""); wifi_price=models.DecimalField(max_digits=12,decimal_places=2,default=1000); keyboard=models.TextField(blank=True,default=""); keyboard_price=models.DecimalField(max_digits=12,decimal_places=2,default=1000)
     dvd=models.CharField(max_length=50,blank=True,default=""); dvd_price=models.DecimalField(max_digits=12,decimal_places=2,default=1000); warranty=models.CharField(max_length=50,blank=True,default=""); warranty_price=models.DecimalField(max_digits=12,decimal_places=2,default=1000)
     pro_descp=models.TextField(blank=True,default=""); software1=models.TextField(blank=True,default=""); gp=models.TextField(blank=True,default=""); motherboard_descp=models.TextField(blank=True,default="")
+    # Admin price boxes for the description fields, like Desktop's.
+    pro_descp_price=models.DecimalField(max_digits=12,decimal_places=2,default=0); motherboard_descp_price=models.DecimalField(max_digits=12,decimal_places=2,default=0); software1_price=models.DecimalField(max_digits=12,decimal_places=2,default=0); gp_price=models.DecimalField(max_digits=12,decimal_places=2,default=0)
     local_content=models.CharField(max_length=20,blank=True,default="")
     freightInstallation=models.CharField(max_length=50,default="Yes"); freightInstallation_price=models.DecimalField(max_digits=12,decimal_places=2,default=1000); hddreturnable=models.CharField(max_length=10,default="Yes"); hddreturnable_price=models.DecimalField(max_digits=12,decimal_places=2,default=1000); epbg=models.CharField(max_length=20,blank=True,default="0"); epbg_price=models.DecimalField(max_digits=12,decimal_places=2,default=0)
     total_price=models.DecimalField(max_digits=14,decimal_places=2,default=0)
@@ -71,7 +73,7 @@ class AioGemAuditLog(models.Model):
     class Meta: app_label="accounts"; db_table="accounts_aiogemauditlog"; ordering=["-created_at"]
     def __str__(self):return f"{self.job_id}: {self.event}"
 
-FIELDS=["bid_no","dept_name","organization","model_no","model","qty","date","start_date","atc","address","pincode","processor","processor_price","ram","ram_price","hdd","hdd_price","ssd","ssd_price","os","os_price","motherboard","motherboard_price","screen_size","screen_price","wifi","wifi_price","keyboard","keyboard_price","dvd","dvd_price","warranty","warranty_price","pro_descp","software1","gp","motherboard_descp","freightInstallation","freightInstallation_price","hddreturnable","hddreturnable_price","epbg","epbg_price","local_content"]
+FIELDS=["bid_no","dept_name","organization","model_no","model","qty","date","start_date","atc","address","pincode","processor","processor_price","ram","ram_price","hdd","hdd_price","ssd","ssd_price","os","os_price","motherboard","motherboard_price","screen_size","screen_price","wifi","wifi_price","keyboard","keyboard_price","dvd","dvd_price","warranty","warranty_price","pro_descp","software1","gp","motherboard_descp","pro_descp_price","motherboard_descp_price","software1_price","gp_price","freightInstallation","freightInstallation_price","hddreturnable","hddreturnable_price","epbg","epbg_price","local_content"]
 PRICES={x for x in FIELDS if x.endswith("_price")}
 def _doc_processor(b):
     # Processor "None" -> the processor written in Processor Description.

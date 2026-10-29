@@ -390,6 +390,7 @@ def _workstation_bid_data(bid, request, status_label=None):
         "dvd_price", "warranty_price", "freightInstallation_price",
         "hdd_non_return_price", "extra_requirements_price",
         "epbg_price", "optional_ports_price",
+        "graphics_description_price", "additional_software_price",
     )
     calculated_price = sum(float(getattr(bid, field, 0) or 0) for field in price_fields)
     approved_price = bid.final_amount or bid.total_price or calculated_price
@@ -467,6 +468,8 @@ def _workstation_bid_data(bid, request, status_label=None):
         "hdd_non_return_price": bid.hdd_non_return_price,
         "extra_requirements": bid.extra_requirements or "",
         "extra_requirements_price": bid.extra_requirements_price,
+        "graphics_description_price": bid.graphics_description_price,
+        "additional_software_price": bid.additional_software_price,
         "optional_ports": bid.optional_ports or "",
         "optional_ports_price": bid.optional_ports_price,
         "epbg_price": bid.epbg_price,
@@ -539,6 +542,8 @@ def _apply_workstation_payload(bid, data):
     bid.hdd_non_return_price = safe_float(data.get("hdd_non_return_price") or data.get("hddreturnable_price"), bid.hdd_non_return_price)
     bid.extra_requirements = data.get("extra_requirements", bid.extra_requirements)
     bid.extra_requirements_price = safe_float(data.get("extra_requirements_price"), bid.extra_requirements_price)
+    bid.graphics_description_price = safe_float(data.get("graphics_description_price"), bid.graphics_description_price)
+    bid.additional_software_price = safe_float(data.get("additional_software_price"), bid.additional_software_price)
     bid.optional_ports = data.get("optional_ports", bid.optional_ports) or ""
     bid.optional_ports_price = safe_float(data.get("optional_ports_price"), bid.optional_ports_price)
     bid.epbg_price = safe_float(data.get("epbg_price"), bid.epbg_price)
@@ -1009,6 +1014,7 @@ def admin_review_workstation_bid(request, bid_id):
             "dvd_price", "warranty_price", "freightInstallation_price",
             "hdd_non_return_price", "extra_requirements_price",
         "epbg_price", "optional_ports_price",
+        "graphics_description_price", "additional_software_price",
         )
         calculated_price = sum(float(getattr(bid, field, 0) or 0) for field in price_fields)
         requested_total = safe_float(data.get("total_price"), 0)
@@ -3646,6 +3652,7 @@ def _workstation_gem_payload(bid, request, account):
         "dvd_price", "warranty_price", "freightInstallation_price",
         "hdd_non_return_price", "extra_requirements_price",
         "epbg_price", "optional_ports_price",
+        "graphics_description_price", "additional_software_price",
     )
     calculated_price = sum(float(getattr(bid, field, 0) or 0) for field in price_fields)
     approved_price = bid.final_amount or bid.total_price or calculated_price
