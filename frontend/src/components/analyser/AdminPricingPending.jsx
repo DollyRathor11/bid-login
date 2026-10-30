@@ -4,7 +4,7 @@ import { useGemBidLinks } from "../../utils/gemBidLinks";
 import { GemBidNo } from "../../utils/GemBidNo";
 
 // The logged-in analyser's own bids that they sent to admin and admin has not
-// priced yet, across the products they work on. Each opens to view or edit.
+// priced yet, across the products they work on. Each opens for editing.
 const API = import.meta.env.VITE_API_URL;
 const token = () => sessionStorage.getItem("token") || localStorage.getItem("token") || "";
 const PAGE_SIZE = 10;
@@ -48,7 +48,7 @@ export default function AdminPricingPending() {
   const counts = Object.fromEntries(PRODUCTS.map(([key]) => [key, bids.filter(bid => bid.productKey === key).length]));
   // Only the products this analyser has bids waiting in.
   const workedProducts = PRODUCTS.filter(([key]) => counts[key] > 0);
-  const openBid = (bid, readOnly) => navigate(`/analyser-dashboard/${bid.productKey}/bid/${bid.id}`, { state: { readOnly } });
+  const editBid = bid => navigate(`/analyser-dashboard/${bid.productKey}/bid/${bid.id}`, { state: { readOnly: false } });
   const query = search.trim().toLowerCase();
   const rows = bids
     .filter(bid => product === "all" || bid.productKey === product)
@@ -75,7 +75,6 @@ export default function AdminPricingPending() {
         <h2 className="text-xl font-bold text-slate-900">Pricing Pending at Admin</h2>
         <p className="mt-1 text-sm text-slate-500">Your bids sent to admin that are still waiting for pricing.</p>
       </div>
-      {!loading && !error && <span className="rounded-full bg-amber-50 px-4 py-2 text-sm font-bold text-amber-700">{bids.length} Pending at Admin</span>}
       <input aria-label="Search bids" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search bid, model, product or department..." className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-amber-500 sm:max-w-sm" />
     </div>
     <div className="flex gap-2 overflow-x-auto bg-slate-50 px-5 py-3">
@@ -96,10 +95,9 @@ export default function AdminPricingPending() {
             <td className="px-4 py-4">{bid.qty ?? "—"}</td>
             <td className="whitespace-nowrap px-4 py-4">{dateLabel(bid.submitted_on)}</td>
             <td className="whitespace-nowrap px-4 py-4">{dateLabel(bid.end_date).split(",")[0]}</td>
-            <td className="px-4 py-4"><div className="flex gap-2">
-              <button type="button" onClick={() => openBid(bid, true)} className="rounded bg-emerald-600 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white hover:bg-emerald-700">View</button>
-              <button type="button" onClick={() => openBid(bid, false)} className="rounded bg-amber-600 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white hover:bg-amber-700">Edit</button>
-            </div></td>
+            <td className="px-4 py-4">
+              <button type="button" onClick={() => editBid(bid)} className="rounded bg-amber-600 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white hover:bg-amber-700">Edit</button>
+            </td>
           </tr>)}
         </tbody>
       </table>
