@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useAnalyserTab } from "../../../utils/analyserTab";
-import PendingAtAdmin, { PendingAtAdminTab } from "../../../components/analyser/PendingAtAdmin";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
 import { GemBidNo } from "../../../utils/GemBidNo";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
@@ -217,8 +216,6 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                     Pending
                 </button>
 
-                <PendingAtAdminTab product={product} active={activeTab === "pending-admin"} onClick={() => setActiveTab("pending-admin")} />
-
                 <button
                     onClick={() => setActiveTab("approved")}
                     className={`py-4 px-2 text-sm font-semibold transition-all flex items-center gap-2
@@ -299,7 +296,6 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                 </div>
             )}
 
-            {activeTab === "pending-admin" ? <PendingAtAdmin product={product} /> : (<>
             <div className="w-full overflow-x-auto">
 
                 <table className={`w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-2 [&_td]:!px-2 ${activeTab === "gem-transfer" ? "min-w-[1000px]" : ""}`}>
@@ -669,7 +665,6 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                 </div>
             )}
 
-            </>)}
         </div>
 
     );

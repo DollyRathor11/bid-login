@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 // The analyser dashboard's section (Pending / Approved / Re-Analyze / Transfer
 // to GeM) survives a refresh and coming Back from a bid: it is kept in the
 // URL (?status=approved) and, as a fallback, in this browser tab's session.
-const TABS = ["pending", "pending-admin", "approved", "re-analyze", "rejected", "gem-transfer"];
+const TABS = ["pending", "approved", "re-analyze", "rejected", "gem-transfer"];
 
 export function useAnalyserTab(product) {
   const key = `analyser_tab_${product}`;
