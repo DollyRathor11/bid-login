@@ -4,9 +4,9 @@ import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   PROCESSORS, RAMS, HDDS, SSDS, OS_OPTIONS, DVDS, WIFIS, MONITORS,
   CABINETS, KEYBOARDS, WARRANTIES, MOTHERBOARDS,
-  getFilteredRams, getPriceFromLocalData, isRamCompatible, isMotherboardCompatible,
+  getFilteredRams, getPriceFromLocalData, isRamCompatible, isMotherboardCompatible, loadLiveRates,
 } from "../User/DesktopConfig";
-import { priceInputValue } from "../../../utils/price";
+import { componentPriceValue, priceInputValue } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -362,6 +362,7 @@ export default function BidDetailView({ product = "desktop" }) {
   const [gemJob, setGemJob] = useState(null);
 
   useEffect(() => {
+    loadLiveRates();
     fetchBid();
   }, []);
 
@@ -467,6 +468,7 @@ export default function BidDetailView({ product = "desktop" }) {
       if (options) {
         next[`${name}_price`] = value === "None" ? "" : getPriceFromLocalData(options, value);
       }
+      if (name === "hddreturnable" && value === "None") next.hddreturnable_price = "";
       if (name === "processor") {
         if (prev.ram && !isRamCompatible(value, prev.ram)) {
           next.ram = "";
@@ -865,7 +867,7 @@ export default function BidDetailView({ product = "desktop" }) {
         {options.map((option) => <option key={option.name} value={option.name}>{option.name}</option>)}
         <option value="None">None</option>
       </select>
-      <input type="text" value={priceInputValue(form?.[`${name}_price`] || "")} readOnly disabled placeholder="Price" className={priceCls} />
+      <input type="text" value={componentPriceValue(form?.[name], form?.[`${name}_price`] || "")} readOnly disabled placeholder="Price" className={priceCls} />
     </div>
   );
 
@@ -1098,7 +1100,7 @@ export default function BidDetailView({ product = "desktop" }) {
                 <option value="Yes">Yes</option>
                 <option value="None">None</option>
               </select>
-              <input type="text" name="hddreturnable_price" value={priceInputValue(form?.hddreturnable_price || "")} onChange={handleChange} disabled={readOnly}
+              <input type="text" name="hddreturnable_price" value={componentPriceValue(form?.hddreturnable, form?.hddreturnable_price || "")} onChange={handleChange} disabled={readOnly} readOnly={form?.hddreturnable === "None"}
                 placeholder="Price" className="w-24 border border-gray-300 rounded-md px-2 py-2 text-sm disabled:bg-gray-100 focus:outline-none focus:border-blue-500 bg-white" />
             </div>
           </VerifiedInputWrapper>

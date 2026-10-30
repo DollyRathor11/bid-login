@@ -12,7 +12,7 @@ import {
   AIO_PROCESSORS, AIO_KEYBOARDS, AIO_MOTHERBOARDS, getFilteredAioRams,
 } from "../User/AioConfig";
 import { fetchComponentRates } from "../../../utils/componentRates";
-import { priceInputValue } from "../../../utils/price";
+import { componentPriceValue, priceInputValue } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -711,7 +711,7 @@ export default function AioBidDetailView() {
           {options.map((option) => <option key={option.name} value={option.name}>{option.name}</option>)}
           {!hideNone && <option value="None">None</option>}
         </select>
-        <input type="text" value={priceInputValue(form[priceField] || "")} readOnly disabled placeholder="Price" className={priceCls} />
+        <input type="text" value={componentPriceValue(form[name], form[priceField] || "")} readOnly disabled placeholder="Price" className={priceCls} />
       </div>
     );
   };

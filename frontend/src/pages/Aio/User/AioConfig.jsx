@@ -5,7 +5,7 @@ import {
   DVDS,
   WARRANTIES,
 } from "../../Desktop/User/DesktopConfig";
-import { priceInputValue } from "../../../utils/price";
+import { componentPriceValue, priceInputValue } from "../../../utils/price";
 
 export const AIO_PROCESSORS = [
   ...PROCESSORS
@@ -353,7 +353,7 @@ export default function AioConfig({ bidData, onNext }) {
         </select>
         <input
           type="text"
-          value={priceInputValue(form[`${name}_price`] === "" || form[`${name}_price`] == null ? "" : form[`${name}_price`])}
+          value={componentPriceValue(form[name], form[`${name}_price`] ?? "")}
           readOnly
           disabled
           placeholder="Price"
@@ -419,7 +419,7 @@ export default function AioConfig({ bidData, onNext }) {
                   </select>
                   <input
                     type="text"
-                    value={priceInputValue(intelProcessors.some((p) => p.name === form.processor) ? form.processor_price : "")}
+                    value={componentPriceValue(getProcessorGroupValue("intel", intelProcessors), intelProcessors.some((p) => p.name === form.processor) ? form.processor_price : "")}
                     readOnly
                     disabled
                     placeholder="Price"
@@ -449,7 +449,7 @@ export default function AioConfig({ bidData, onNext }) {
                   </select>
                   <input
                     type="text"
-                    value={priceInputValue(amdProcessors.some((p) => p.name === form.processor) ? form.processor_price : "")}
+                    value={componentPriceValue(getProcessorGroupValue("amd", amdProcessors), amdProcessors.some((p) => p.name === form.processor) ? form.processor_price : "")}
                     readOnly
                     disabled
                     placeholder="Price"

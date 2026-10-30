@@ -7,9 +7,9 @@ import {
   INTEL_MOTHERBOARDS, INTEL_XEON_MOTHERBOARDS, AMD_MOTHERBOARDS,
   RAMS, REGISTERED_RAMS, SSD1_OPTIONS, HDDS, GRAPHICS_CARDS, CABINETS, KEYBOARDS,
   POWER_SUPPLIES, OS_OPTIONS, MONITORS, WARRANTIES, DVDS, getPriceFromLocalData,
-  getFilteredRams, getFilteredIntelMotherboards, getFilteredAmdMotherboards, optionLabel,
+  getFilteredRams, getFilteredIntelMotherboards, getFilteredAmdMotherboards, optionLabel, loadLiveRates,
 } from "../User/WorkstationConfig";
-import { priceInputValue } from "../../../utils/price";
+import { componentPriceValue, priceInputValue } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 const MATCH_API = (id) => `${API_BASE}/workstation-bids/${id}/match-catalogue/`;
@@ -348,6 +348,10 @@ export default function WorkstationBidDetailView() {
   });
   const [gemStarting, setGemStarting] = useState(false);
   const [gemJob, setGemJob] = useState(null);
+
+  useEffect(() => {
+    loadLiveRates();
+  }, []);
 
   useEffect(() => {
     const loadBid = async () => {
@@ -813,7 +817,7 @@ export default function WorkstationBidDetailView() {
                   </select>
                   <input
                     type="text"
-                    value={priceInputValue(form[priceField] || "")}
+                    value={componentPriceValue(form[name], form[priceField] || "")}
                     readOnly
                     disabled
                     placeholder="Price"

@@ -5,9 +5,9 @@ import {
   INTEL_MOTHERBOARDS, INTEL_XEON_MOTHERBOARDS, AMD_MOTHERBOARDS,
   SSD1_OPTIONS, HDDS, GRAPHICS_CARDS, CABINETS, KEYBOARDS, POWER_SUPPLIES,
   OS_OPTIONS, MONITORS, WARRANTIES, getPriceFromLocalData, getFilteredRams,
-  getFilteredIntelMotherboards, getFilteredAmdMotherboards, optionLabel,
+  getFilteredIntelMotherboards, getFilteredAmdMotherboards, optionLabel, loadLiveRates,
 } from "../User/WorkstationConfig";
-import { priceInputValue } from "../../../utils/price";
+import { componentPriceValue, findUnpricedComponent, priceInputValue } from "../../../utils/price";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
 import { GemBidNo } from "../../../utils/GemBidNo";
 import RejectBidDialog from "../../../components/Admin/RejectBidDialog";
@@ -50,6 +50,15 @@ const optionsFor = (name, form) => ({
   os: OS_OPTIONS, monitor: MONITORS, cabinet: CABINETS, keyboard: KEYBOARDS,
   power_supply: POWER_SUPPLIES, warranty: WARRANTIES,
 }[name] || []);
+
+// Dropdown components with a price box, in the order they are shown.
+const COMPONENTS = [
+  ["processor", "Processor"], ["ram", "RAM"], ["hdd", "Hard Disk Drive"], ["ssd1", "Solid State Drive 1"],
+  ["ssd2", "Solid State Drive 2"], ["graphics", "Graphics Card"], ["motherboard", "Motherboard"], ["os", "OS"],
+  ["monitor", "Monitor"], ["cabinet", "Cabinet"], ["keyboard", "Keyboard & Mouse"], ["power_supply", "Power Supply"],
+  ["warranty", "Warranty"],
+];
+const COMPONENT_PRICE_PAIRS = COMPONENTS.map(([name]) => [name, `${name}_price`]);
 
 const FIELDS = [
   ["bid_no", "Bid Number"], ["model_number", "Model Number"], ["dept_name", "Department"],
@@ -107,8 +116,9 @@ const PriceField = ({ label, name, priceName, form, handleChange, options = [], 
         <input
           type="text"
           name={priceName}
-          value={priceInputValue(form?.[priceName] || "")}
+          value={componentPriceValue(form?.[name], form?.[priceName] || "")}
           onChange={handleChange}
+          readOnly={form?.[name] === "None"}
           autoComplete="off"
           placeholder="Price"
           className="w-20 shrink-0 border border-blue-300 rounded-md px-2 py-2 text-sm text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -440,6 +450,10 @@ export default function WorkstationBidApproval() {
   };
 
   useEffect(() => {
+    loadLiveRates();
+  }, []);
+
+  useEffect(() => {
     fetchBids();
     fetchReAnalyzeCount();
     setCurrentPage(1);
@@ -502,6 +516,7 @@ export default function WorkstationBidApproval() {
     setSelected(bid);
     const next = { ...bid, freightInstallation: bid.freightInstallation || "Yes", hddreturnable: !bid.hddreturnable || bid.hddreturnable === "No" ? "None" : bid.hddreturnable };
     next.freightInstallation_price = next.freightInstallation === "No" ? 0 : next.freightInstallation_price || 1000;
+    if (next.hddreturnable === "None") next.hddreturnable_price = 0;
     next.component_total_price = calculateTotalPrice(next);
     next.total_price = bid.review_status === "approved" ? bid.total_price : "";
     setForm(next);
@@ -537,15 +552,32 @@ export default function WorkstationBidApproval() {
         if (prev.motherboard && !compatibleBoards.some((item) => item.name === prev.motherboard)) { next.motherboard = ""; next.motherboard_price = ""; }
       }
       if (name === "freightInstallation" && value === "No") next.freightInstallation_price = 0;
-      if (name === "hddreturnable" && value === "No") next.hddreturnable_price = 0;
+      if (name === "hddreturnable" && (value === "No" || value === "None")) next.hddreturnable_price = 0;
       if (PRICE_FIELDS.includes(name) || options.length) next.component_total_price = calculateTotalPrice(next);
       if (name === "freightInstallation" || name === "hddreturnable") next.component_total_price = calculateTotalPrice(next);
       return applyMargin(next);
     });
   };
 
+  const focusInvalidField = (fieldName) => {
+    const field = document.querySelector(`[name="${fieldName}"]`);
+    if (!field) return;
+    field.scrollIntoView({ behavior: "smooth", block: "center" });
+    field.focus({ preventScroll: true });
+    field.classList.add("ring-2", "ring-red-500", "border-red-500", "bg-red-50");
+    const clearHighlight = () => field.classList.remove("ring-2", "ring-red-500", "border-red-500", "bg-red-50");
+    field.addEventListener("input", clearHighlight, { once: true });
+    field.addEventListener("change", clearHighlight, { once: true });
+  };
+
   // note: the admin note to save; Reject Bid passes the popup's reason.
   const handleAction = async (status, note = adminNote) => {
+    // A chosen component (anything but "None") must be priced before approval.
+    const unpriced = status === "approved" && findUnpricedComponent(form, COMPONENT_PRICE_PAIRS);
+    if (unpriced) {
+      focusInvalidField(unpriced[1]);
+      return;
+    }
     if (status === "approved" && toPrice(form.total_price) <= 0) {
       setMsg("Please enter a valid Bid Approved Price.");
       document.querySelector('[name="total_price"]')?.focus();
@@ -910,7 +942,7 @@ export default function WorkstationBidApproval() {
                 </div>
               </div>
 
-              {[["processor", "Processor"], ["ram", "RAM"], ["hdd", "Hard Disk Drive"], ["ssd1", "Solid State Drive 1"], ["ssd2", "Solid State Drive 2"], ["graphics", "Graphics Card"], ["motherboard", "Motherboard"], ["os", "OS"], ["monitor", "Monitor"], ["cabinet", "Cabinet"], ["keyboard", "Keyboard & Mouse"], ["power_supply", "Power Supply"], ["warranty", "Warranty"]].map(([name, label]) => (
+              {COMPONENTS.map(([name, label]) => (
                 <PriceField key={name} label={label} name={name} priceName={`${name}_price`} options={optionsFor(name, form)} form={form} handleChange={handleChange} />
               ))}
 
@@ -935,7 +967,7 @@ export default function WorkstationBidApproval() {
                   <select name="hddreturnable" value={form.hddreturnable || "No"} onChange={handleChange} className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm">
                     <option value="Yes">Yes</option><option value="None">None</option>
                   </select>
-                  <input type="number" min="0" step="0.01" required={form.hddreturnable === "Yes"} name="hddreturnable_price" value={priceInputValue(form.hddreturnable_price ?? "")} onChange={handleChange} placeholder="Price" className="w-28 border border-blue-300 rounded-md px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                  <input type="number" min="0" step="0.01" required={form.hddreturnable === "Yes"} name="hddreturnable_price" value={componentPriceValue(form.hddreturnable, form.hddreturnable_price ?? "")} onChange={handleChange} readOnly={form.hddreturnable === "None"} placeholder="Price" className="w-28 border border-blue-300 rounded-md px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                 </div>
               </div>
 

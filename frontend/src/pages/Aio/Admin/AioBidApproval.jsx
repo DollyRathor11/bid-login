@@ -6,7 +6,7 @@ import {
   AIO_RAMS, AIO_SSDS, AIO_HDDS, AIO_OS_OPTIONS, AIO_SCREEN_SIZES, AIO_WIFIS,
   AIO_PROCESSORS, AIO_KEYBOARDS, AIO_MOTHERBOARDS,
 } from "../User/AioConfig";
-import { priceInputValue } from "../../../utils/price";
+import { componentPriceValue, findUnpricedComponent, priceInputValue } from "../../../utils/price";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
 import { GemBidNo } from "../../../utils/GemBidNo";
 import RejectBidDialog from "../../../components/Admin/RejectBidDialog";
@@ -32,6 +32,8 @@ const SPEC_OPTIONS = {
   warranty: WARRANTIES,
   motherboard: AIO_MOTHERBOARDS,
 };
+// Each dropdown component with its price box, in the order they are shown.
+const COMPONENT_PRICE_PAIRS = Object.keys(SPEC_OPTIONS).map((name) => [name, name === "screen_size" ? "screen_price" : `${name}_price`]);
 
 const PRICE_FIELDS = [
   "processor_price", "ram_price", "hdd_price", "ssd_price", "os_price",
@@ -137,8 +139,9 @@ const PriceField = ({ label, name, priceName, form, handleChange, options, isTex
         <input
           type="text"
           name={priceName}
-          value={priceInputValue(form?.[priceName] ?? "")}
+          value={componentPriceValue(form?.[name], form?.[priceName] ?? "")}
           onChange={handleChange}
+          readOnly={form?.[name] === "None"}
           autoComplete="off"
           placeholder="Price"
           className="w-28 border border-blue-300 rounded-md px-2 py-2 text-sm text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -646,6 +649,14 @@ export default function AioBidApproval() {
       const localContentNumber = Number(localContent);
       if (!localContent || !Number.isFinite(localContentNumber) || localContentNumber < 0 || localContentNumber > 100) {
         focusInvalidField("local_content");
+        return;
+      }
+      // The Integrated board comes free with an Embedded processor (AioConfig.jsx),
+      // so its 0 price is not a missing one.
+      const unpriced = findUnpricedComponent(form, COMPONENT_PRICE_PAIRS.filter(([name]) =>
+        !(name === "motherboard" && String(form.motherboard || "").startsWith("Integrated"))));
+      if (unpriced) {
+        focusInvalidField(unpriced[1]);
         return;
       }
       if (form.hddreturnable === "Yes" && toPrice(form.hddreturnable_price) <= 0) {

@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import { FaTrash } from "react-icons/fa";
 import {
   PROCESSORS, RAMS, HDDS, SSDS, OS_OPTIONS, DVDS, WIFIS, MONITORS,
-  CABINETS, KEYBOARDS, WARRANTIES, MOTHERBOARDS, getPriceFromLocalData,
+  CABINETS, KEYBOARDS, WARRANTIES, MOTHERBOARDS, getPriceFromLocalData, loadLiveRates,
 } from "../User/DesktopConfig";
-import { priceInputValue } from "../../../utils/price";
+import { componentPriceValue, findUnpricedComponent, priceInputValue } from "../../../utils/price";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
 import { GemBidNo } from "../../../utils/GemBidNo";
 import RejectBidDialog from "../../../components/Admin/RejectBidDialog";
@@ -26,6 +26,8 @@ const SPEC_OPTIONS = {
   warranty: WARRANTIES,
   motherboard: MOTHERBOARDS,
 };
+// Each dropdown component with its price box, in the order they are shown.
+const COMPONENT_PRICE_PAIRS = Object.keys(SPEC_OPTIONS).map((name) => [name, `${name}_price`]);
 
 const PRICE_FIELDS = [
   "processor_price", "ram_price", "hdd_price", "ssd1_price", "ssd2_price",
@@ -126,8 +128,9 @@ const PriceField = ({ label, name, priceName, form, handleChange, options, isTex
         <input
           type="text"
           name={priceName}
-          value={priceInputValue(form?.[priceName] ?? "")}
+          value={componentPriceValue(form?.[name], form?.[priceName] ?? "")}
           onChange={handleChange}
+          readOnly={form?.[name] === "None"}
           autoComplete="off"
           placeholder="Price"
           className="w-28 border border-blue-300 rounded-md px-2 py-2 text-sm text-center bg-white outline-none focus:ring-2 focus:ring-blue-500"
@@ -468,6 +471,10 @@ export default function DesktopBidApproval() {
   const MAX_PAGE_BTNS = 5;
 
   useEffect(() => {
+    loadLiveRates();
+  }, []);
+
+  useEffect(() => {
     fetchBids();
     fetchReAnalyzeCount();
     setCurrentPage(1);
@@ -640,6 +647,7 @@ export default function DesktopBidApproval() {
       if (options) {
         next[`${name}_price`] = value === "None" ? 0 : getPriceFromLocalData(options, value);
       }
+      if (name === "hddreturnable" && value === "None") next.hddreturnable_price = 0;
 
       if (PRICE_FIELDS.includes(name) || options) {
         next.component_total_price = calculateTotalPrice(next);
@@ -674,6 +682,11 @@ export default function DesktopBidApproval() {
       const localContentNumber = Number(localContent);
       if (!localContent || !Number.isFinite(localContentNumber) || localContentNumber < 0 || localContentNumber > 100) {
         focusInvalidField("local_content");
+        return;
+      }
+      const unpriced = findUnpricedComponent(form, COMPONENT_PRICE_PAIRS);
+      if (unpriced) {
+        focusInvalidField(unpriced[1]);
         return;
       }
       if (form.hddreturnable === "Yes" && toPrice(form.hddreturnable_price) <= 0) {
@@ -1084,7 +1097,7 @@ export default function DesktopBidApproval() {
                       <option value="Yes">Yes</option>
                       <option value="None">None</option>
                     </select>
-                    <input type="number" min="0" step="0.01" required={form?.hddreturnable === "Yes"} name="hddreturnable_price" value={priceInputValue(form?.hddreturnable_price || "")} onChange={handleChange}
+                    <input type="number" min="0" step="0.01" required={form?.hddreturnable === "Yes"} name="hddreturnable_price" value={componentPriceValue(form?.hddreturnable, form?.hddreturnable_price || "")} onChange={handleChange} readOnly={form?.hddreturnable === "None"}
                       placeholder="Price" className="w-28 border border-blue-300 rounded-md px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                   </div>
                 </div>

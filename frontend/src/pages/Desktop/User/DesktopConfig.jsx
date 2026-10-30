@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchComponentRates } from "../../../utils/componentRates";
-import { priceInputValue } from "../../../utils/price";
+import { componentPriceValue, priceInputValue } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -112,6 +112,13 @@ export const MOTHERBOARDS = [
 ];
 
 let liveRateByName = {};
+
+// Loads the admin's current component rates, so a component picked from now on
+// is priced at today's rate; prices already saved on a bid are left as they are.
+export const loadLiveRates = () =>
+  fetchComponentRates("desktop").then((rates) => {
+    liveRateByName = Object.fromEntries(rates.map((rate) => [rate.name, Number(rate.price)]));
+  }).catch((error) => console.error("Component rates:", error));
 
 export const getPriceFromLocalData = (categoryList, value) => {
   const item = categoryList.find((item) => item.name === value);
@@ -237,9 +244,7 @@ const normalizeInitialForm = (source = {}) => {
 export default function DesktopConfig({ bidData, onNext }) {
   const bid_id = bidData?.bid_id;
   useEffect(() => {
-    fetchComponentRates("desktop").then((rates) => {
-      liveRateByName = Object.fromEntries(rates.map((rate) => [rate.name, Number(rate.price)]));
-    }).catch((error) => console.error("Component rates:", error));
+    loadLiveRates();
   }, []);
   const draftKey = useMemo(() => getDraftKey(bid_id), [bid_id]);
 
@@ -421,7 +426,7 @@ export default function DesktopConfig({ bidData, onNext }) {
         </select>
         <input
           type="text"
-          value={priceInputValue(form[`${name}_price`] || "")}
+          value={componentPriceValue(form[name], form[`${name}_price`] || "")}
           readOnly
           disabled
           placeholder="Price"
@@ -432,6 +437,7 @@ export default function DesktopConfig({ bidData, onNext }) {
   );
 
         const getGroupValue = (currentValue, list) => {
+    if (currentValue === "None") return "None";
     if (!currentValue) return "";
     const exists = list.some((item) => item.name === currentValue);
     return exists ? currentValue : "";
@@ -489,7 +495,7 @@ export default function DesktopConfig({ bidData, onNext }) {
                   </select>
                   <input
                     type="text"
-                    value={priceInputValue(intelProcessors.some((p) => p.name === form.processor)
+                    value={componentPriceValue(getProcessorGroupValue("intel", intelProcessors), intelProcessors.some((p) => p.name === form.processor)
                         ? form.processor_price
                         : "")}
                     readOnly
@@ -521,7 +527,7 @@ export default function DesktopConfig({ bidData, onNext }) {
                   </select>
                   <input
                     type="text"
-                    value={priceInputValue(amdProcessors.some((p) => p.name === form.processor)
+                    value={componentPriceValue(getProcessorGroupValue("amd", amdProcessors), amdProcessors.some((p) => p.name === form.processor)
                         ? form.processor_price
                         : "")}
                     readOnly
@@ -648,7 +654,8 @@ export default function DesktopConfig({ bidData, onNext }) {
               <input
                 type="text"
                 name="hddreturnable_price"
-                value={priceInputValue(form.hddreturnable_price)}
+                readOnly={form.hddreturnable === "None"}
+                value={componentPriceValue(form.hddreturnable, form.hddreturnable_price)}
                 onChange={handleChange}
                 placeholder="Price"
                 className="w-24 border border-gray-300 rounded-md px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -692,7 +699,7 @@ export default function DesktopConfig({ bidData, onNext }) {
                   </select>
                   <input
                     type="text"
-                    value={priceInputValue(filteredIntelMotherboards.some((m) => m.name === form.motherboard)
+                    value={componentPriceValue(form.motherboard, filteredIntelMotherboards.some((m) => m.name === form.motherboard)
                         ? form.motherboard_price
                         : "")}
                     readOnly
@@ -734,7 +741,7 @@ export default function DesktopConfig({ bidData, onNext }) {
                   </select>
                   <input
                     type="text"
-                    value={priceInputValue(filteredAmdMotherboards.some((m) => m.name === form.motherboard)
+                    value={componentPriceValue(form.motherboard, filteredAmdMotherboards.some((m) => m.name === form.motherboard)
                         ? form.motherboard_price
                         : "")}
                     readOnly
