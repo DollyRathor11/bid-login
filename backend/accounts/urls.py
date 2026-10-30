@@ -305,5 +305,8 @@ urlpatterns = [
     path("admin/toner-bids/monthly-performance/", product_dashboard.admin_toner_monthly_performance),
     path("admin/toner-bids/daily-activity/", product_dashboard.admin_toner_daily_activity),
     path("admin/toner-bids/stats/", product_dashboard.admin_toner_stats),
+    path("toner-bids/dashboard-years/", product_dashboard.toner_dashboard_years),
+    path("toner-bids/monthly-performance/", product_dashboard.toner_monthly_performance),
+    path("toner-bids/daily-activity/", product_dashboard.toner_daily_activity),
     path("generated-docs/download/", download_generated_pdf, name="download_generated_pdf"),
 ]

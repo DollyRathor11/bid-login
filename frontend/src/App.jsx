@@ -143,7 +143,6 @@ function App() {
           <Route path="add-analyser" element={<AddAnalyser />} />
           <Route path="add-admin" element={<AddAnalyser accountType="admin" />} />
           <Route path="add-management" element={<AddAnalyser accountType="management" />} />
-          <Route path="all-bids-approval" element={<AllBidsApproval />} />
           <Route path="component-rates/:product" element={<ComponentRates />} />
           <Route
             path="add-product"
@@ -155,6 +154,7 @@ function App() {
           />
         </Route>
 
+        <Route path="/admin-dashboard/all-bids-approval" element={<AllBidsApproval />} />
         <Route path="/admin-dashboard/desktop-bid-approval" element={<DesktopBidApproval />} />
         <Route path="/admin-dashboard/aio-bid-approval" element={<AioBidApproval />} />
         <Route path="/admin-dashboard/toner-bid-approval" element={<TonerBidApproval />} />
