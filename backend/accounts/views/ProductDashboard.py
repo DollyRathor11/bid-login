@@ -68,6 +68,8 @@ def _model(product):
 
 
 def _analyser_label(bid):
+    if not hasattr(bid, "review_status"):
+        return {"complete": "pending", "approved": "reviewed", "rejected": "reAnalyze", "re-analyze": "reAnalyze", BID_REJECTED: "rejected"}.get(bid.status)
     if bid.review_status == "pending":
         return "pending"
     if bid.review_status == "re-analyze":
@@ -119,7 +121,9 @@ def admin_person_dashboard(request, product, endpoint):
 
 
 def _base_queryset(product, role, year=None, analyser=None):
-    if product in ("aio", "toner"):
+    if product == "toner" and role == "analyser":
+        queryset = _model(product).objects.filter(status__in=["complete", "approved", "rejected", "re-analyze", BID_REJECTED])
+    elif product in ("aio", "toner"):
         queryset = _model(product).objects.filter(status__in=["analyzed", "approved", "rejected", "re-analyze", BID_REJECTED])
     else:
         queryset = _model(product).objects.filter(status="complete")
@@ -152,6 +156,8 @@ def _monthly(request, product, role):
     analyser = request.GET.get("analyser") if role == "admin" else None
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     status_keys = ["pending", "approved", "rejected"] if role == "admin" else ["pending", "reviewed", "reAnalyze"]
+    if product == "toner" and role == "analyser":
+        status_keys.append("rejected")
     result = [
         {"month": name, "monthNumber": index + 1, "total": 0, **{key: 0 for key in status_keys}}
         for index, name in enumerate(months)
@@ -175,6 +181,8 @@ def _daily(request, product, role):
     sunday = today - timedelta(days=(today.weekday() + 1) % 7)
     days = [sunday + timedelta(days=index) for index in range((today - sunday).days + 1)]
     status_keys = ["pending", "approved", "rejected"] if role == "admin" else ["pending", "reviewed", "reAnalyze"]
+    if product == "toner" and role == "analyser":
+        status_keys.append("rejected")
     result = [
         {
             "date": day.isoformat(),
@@ -297,3 +305,12 @@ def admin_toner_daily_activity(request): return _daily(request, "toner", "admin"
 
 @require_http_methods(["GET"])
 def admin_toner_stats(request): return _stats(request, "toner")
+
+@require_http_methods(["GET"])
+def toner_dashboard_years(request): return _years(request, "toner")
+
+@require_http_methods(["GET"])
+def toner_monthly_performance(request): return _monthly(request, "toner", "analyser")
+
+@require_http_methods(["GET"])
+def toner_daily_activity(request): return _daily(request, "toner", "analyser")
