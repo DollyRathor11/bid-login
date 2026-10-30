@@ -328,6 +328,9 @@ export default function WorkstationBidDetailView() {
   // changes the status and must not move the Assigned Model box.
   const [openedAsPending, setOpenedAsPending] = useState(null);
   const [readOnly] = useState(!!location.state?.readOnly);
+  // Opened from Pricing Pending at Admin: the bid was verified before it went to
+  // admin, so its fields show no ticks and need none to save.
+  const hideTicks = location.state?.hideTicks === true;
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
   const [modelSearching, setModelSearching] = useState(false);
@@ -656,7 +659,7 @@ export default function WorkstationBidDetailView() {
   const handleSave = async () => {
     const conditionalRequired = CONDITIONAL_FIELDS.filter((name) => String(form?.[name] || "").trim());
     const required = [...REQUIRED_FIELDS, ...conditionalRequired];
-    if (!required.every((name) => verifiedFields[name])) {
+    if (!hideTicks && !required.every((name) => verifiedFields[name])) {
       setMsg(`Please verify all required fields (${required.filter((name) => verifiedFields[name]).length}/${required.length}).`);
       return;
     }
@@ -702,7 +705,7 @@ export default function WorkstationBidDetailView() {
   const conditionalRequired = CONDITIONAL_FIELDS.filter((name) => String(form?.[name] || "").trim());
   const activeRequiredFields = [...REQUIRED_FIELDS, ...conditionalRequired];
   const verifiedCount = activeRequiredFields.filter((name) => verifiedFields[name]).length;
-  const allVerified = activeRequiredFields.every((name) => verifiedFields[name]);
+  const allVerified = hideTicks || activeRequiredFields.every((name) => verifiedFields[name]);
 
   return (
     <div className="container mx-auto px-4 mt-4 max-w-6xl pb-10 bg-white">
@@ -743,7 +746,7 @@ export default function WorkstationBidDetailView() {
 
       <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4 ${layoutPending ? "[&_label]:!font-semibold [&_label]:!text-slate-800 [&_input]:!border-blue-300 [&_input]:!text-slate-900 [&_input]:placeholder:!text-slate-500 [&_select]:!border-blue-300 [&_select]:!text-slate-900 [&_textarea]:!border-blue-300 [&_textarea]:!text-slate-900" : ""} ${readOnly && isApproved ? "[&_select]:!appearance-none" : ""}`}>
         {TOP_FIELDS.map(([name, label, type]) => (
-          <VerifiedField key={name} name={name} label={label} required verifiedFields={verifiedFields} readOnly={readOnly} onToggle={toggleVerification}>
+          <VerifiedField key={name} name={name} label={label} required verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} onToggle={toggleVerification}>
             <input
               type={type || "text"}
               name={name}
@@ -758,7 +761,7 @@ export default function WorkstationBidDetailView() {
         <div className="contents">
           {TEXT_FIELDS.filter(([name]) => name === "address" || name === "atc").map(([name, label]) => (
             <div key={name} className="md:col-span-2 lg:col-span-3">
-              <VerifiedField name={name} label={label} required verifiedFields={verifiedFields} readOnly={readOnly} onToggle={toggleVerification}>
+              <VerifiedField name={name} label={label} required verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} onToggle={toggleVerification}>
                 <textarea
                   name={name}
                   value={form[name] || ""}
@@ -800,7 +803,7 @@ export default function WorkstationBidDetailView() {
           const options = optionsFor(name, form);
           const hasSavedCustomValue = form[name] && !options.some((option) => option.name === form[name]);
           return (
-            <VerifiedField key={name} name={name} label={label} required={REQUIRED_FIELDS.includes(name)} verifiedFields={verifiedFields} readOnly={readOnly} onToggle={toggleVerification}>
+            <VerifiedField key={name} name={name} label={label} required={REQUIRED_FIELDS.includes(name)} verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} onToggle={toggleVerification}>
               {priceField ? (
                 <div className="flex gap-3">
                   <select
@@ -838,7 +841,7 @@ export default function WorkstationBidDetailView() {
           );
         })}
 
-        <VerifiedField name="freightInstallation" label="Freight & Installation" required verifiedFields={verifiedFields} readOnly={readOnly} onToggle={toggleVerification}>
+        <VerifiedField name="freightInstallation" label="Freight & Installation" required verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} onToggle={toggleVerification}>
           <div className="flex flex-col gap-1.5 w-full">
             <div className="flex gap-2">
               <select
@@ -876,7 +879,7 @@ export default function WorkstationBidDetailView() {
 
         <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {TEXT_FIELDS.filter(([name]) => name !== "address" && name !== "atc").map(([name, label]) => (
-            <VerifiedField key={name} name={name} label={label} optional required={conditionalRequired.includes(name)} verifiedFields={verifiedFields} readOnly={readOnly} onToggle={toggleVerification}>
+            <VerifiedField key={name} name={name} label={label} optional required={conditionalRequired.includes(name)} verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} onToggle={toggleVerification}>
               <textarea
                 name={name}
                 value={form[name] || ""}

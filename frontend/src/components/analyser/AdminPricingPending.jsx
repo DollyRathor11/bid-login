@@ -31,6 +31,7 @@ export default function AdminPricingPending() {
         if (!response.ok) throw new Error(data.error || "Unable to load bids.");
         const labels = Object.fromEntries(PRODUCTS);
         const time = bid => new Date(bid.submitted_on || 0).getTime() || 0;
+        setError("");
         setBids((data.results || [])
           .map(bid => ({ ...bid, productKey: bid.product, productLabel: labels[bid.product] || bid.product }))
           .sort((a, b) => time(b) - time(a)));
@@ -40,14 +41,22 @@ export default function AdminPricingPending() {
         if (!controller.signal.aborted) setLoading(false);
       }
     };
+    // Reload every 30 seconds and on returning to the tab, so a bid admin has
+    // approved meanwhile drops off the list.
     load();
-    return () => controller.abort();
+    const timer = setInterval(load, 30000);
+    window.addEventListener("focus", load);
+    return () => {
+      controller.abort();
+      clearInterval(timer);
+      window.removeEventListener("focus", load);
+    };
   }, []);
 
   const counts = Object.fromEntries(PRODUCTS.map(([key]) => [key, bids.filter(bid => bid.productKey === key).length]));
   // Only the products this analyser has bids waiting in.
   const workedProducts = PRODUCTS.filter(([key]) => counts[key] > 0);
-  const editBid = bid => navigate(`/analyser-dashboard/${bid.productKey}/bid/${bid.id}`, { state: { readOnly: false } });
+  const editBid = bid => navigate(`/analyser-dashboard/${bid.productKey}/bid/${bid.id}`, { state: { readOnly: false, hideTicks: true } });
   const rows = bids
     .filter(bid => product === "all" || bid.productKey === product);
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));

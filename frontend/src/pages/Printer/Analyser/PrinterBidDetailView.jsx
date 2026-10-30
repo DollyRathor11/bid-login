@@ -364,6 +364,9 @@ export default function PrinterBidDetailView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const readOnly = !!state?.readOnly;
+  // Opened from Pricing Pending at Admin: the bid was verified before it went to
+  // admin, so its fields show no ticks and need none to save.
+  const hideTicks = state?.hideTicks === true;
   const verificationBidId = id || state?.bid?.id || state?.id || state?.bid_id || "unknown";
   const verificationStorageKey = `printer_bid_verified_fields_${verificationBidId}`;
 
@@ -545,7 +548,7 @@ export default function PrinterBidDetailView() {
       return;
     }
 
-    const allVerified = activeRequiredFields.every((field) => !!verifiedFields[field]);
+    const allVerified = hideTicks || activeRequiredFields.every((field) => !!verifiedFields[field]);
     if (!readOnly && !allVerified) {
       setMsg("Please verify all required fields before forwarding.");
       return;
@@ -609,7 +612,7 @@ export default function PrinterBidDetailView() {
       return;
     }
 
-    const allVerified = activeRequiredFields.every((field) => !!verifiedFields[field]);
+    const allVerified = hideTicks || activeRequiredFields.every((field) => !!verifiedFields[field]);
     if (!allVerified) return;
 
     const currentModel = modelInputValue.trim();
@@ -677,7 +680,7 @@ export default function PrinterBidDetailView() {
   const inputCls = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm disabled:bg-gray-100 focus:outline-none focus:border-blue-500 bg-white";
   const textareaCls = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:bg-gray-100 bg-white";
   const requiredVerifiedCount = activeRequiredFields.filter((field) => !!verifiedFields[field]).length;
-  const allVerified = activeRequiredFields.every((field) => !!verifiedFields[field]);
+  const allVerified = hideTicks || activeRequiredFields.every((field) => !!verifiedFields[field]);
 
   return (
     <div className="container mx-auto px-4 mt-4 max-w-6xl pb-10 bg-white">
@@ -740,23 +743,23 @@ export default function PrinterBidDetailView() {
           : ""} ${readOnly ? "[&_select]:!appearance-none" : ""}`}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="bid_no" label="Bid Number">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="bid_no" label="Bid Number">
             <input type="text" name="bid_no" value={form?.bid_no || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="dept_name" label="Department">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="dept_name" label="Department">
             <input type="text" name="dept_name" value={form?.dept_name || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="organization" label="Organization">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="organization" label="Organization">
             <input type="text" name="organization" value={form?.organization || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="qty" label="Quantity">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="qty" label="Quantity">
             <input type="number" name="qty" value={form?.qty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="pincode" label="Buyer Pincode">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="pincode" label="Buyer Pincode">
             <input type="text" name="pincode" value={form?.pincode || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
@@ -770,13 +773,13 @@ export default function PrinterBidDetailView() {
           )}
 
           <div className="md:col-span-2 lg:col-span-3">
-            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="address" label="Address">
+            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="address" label="Address">
               <input type="text" name="address" value={form?.address || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
             </VerifiedInputWrapper>
           </div>
 
           <div className="md:col-span-2 lg:col-span-3">
-            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="atc" label="ATC (Additional Terms & Conditions)">
+            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="atc" label="ATC (Additional Terms & Conditions)">
               <textarea name="atc" value={form?.atc || ""} onChange={handleChange} disabled={readOnly} rows={4} className={textareaCls} />
             </VerifiedInputWrapper>
           </div>
@@ -795,96 +798,96 @@ export default function PrinterBidDetailView() {
             </div>
           </div>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="cartridge_technology" label="Cartridge Technology">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="cartridge_technology" label="Cartridge Technology">
             <input type="text" name="cartridge_technology" value={form?.cartridge_technology || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="printing_technology" label="Printing Technology">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="printing_technology" label="Printing Technology">
             <input type="text" name="printing_technology" value={form?.printing_technology || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="type_of_printing" label="Type of Printing">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="type_of_printing" label="Type of Printing">
             <input type="text" name="type_of_printing" value={form?.type_of_printing || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
           {isMultifunctionBid && (
-            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="fax_availability" label="Availability of Fax">
+            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="fax_availability" label="Availability of Fax">
               <input type="text" name="fax_availability" value={form?.fax_availability || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
             </VerifiedInputWrapper>
           )}
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="operating_system_compatibility" label="Operating System Compatibility">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="operating_system_compatibility" label="Operating System Compatibility">
             <input type="text" name="operating_system_compatibility" value={form?.operating_system_compatibility || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="mono_print_speed_ppm" label="Minimum Print Speed A4 Monochrome (Black) (PPM) - Laser/LED MFPs">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="mono_print_speed_ppm" label="Minimum Print Speed A4 Monochrome (Black) (PPM) - Laser/LED MFPs">
             <input type="text" name="mono_print_speed_ppm" value={form?.mono_print_speed_ppm || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="colour_print_speed_ppm" label="Minimum Print Speed A4 Colour (PPM) - Laser/LED MFPs">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="colour_print_speed_ppm" label="Minimum Print Speed A4 Colour (PPM) - Laser/LED MFPs">
             <input type="text" name="colour_print_speed_ppm" value={form?.colour_print_speed_ppm || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="auto_duplexing" label="Auto Duplexing Printing/Copying (2-sided Feature)">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="auto_duplexing" label="Auto Duplexing Printing/Copying (2-sided Feature)">
             <input type="text" name="auto_duplexing" value={form?.auto_duplexing || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
           {isMultifunctionBid && (
-            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="reduction_enlarge_features" label="Reduction and Enlarge Features">
+            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="reduction_enlarge_features" label="Reduction and Enlarge Features">
               <input type="text" name="reduction_enlarge_features" value={form?.reduction_enlarge_features || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
             </VerifiedInputWrapper>
           )}
 
           {isMultifunctionBid && (
             <>
-              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="max_scan_area" label="Maximum Scan Area (Platen/ADF)">
+              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="max_scan_area" label="Maximum Scan Area (Platen/ADF)">
                 <input type="text" name="max_scan_area" value={form?.max_scan_area || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
-              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="a4_scan_speed_colour" label="A4 Scan Speed Colour (Image Per Minute) @ 200 x 200 DPI">
+              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="a4_scan_speed_colour" label="A4 Scan Speed Colour (Image Per Minute) @ 200 x 200 DPI">
                 <input type="text" name="a4_scan_speed_colour" value={form?.a4_scan_speed_colour || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
-              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="scan_to_functions" label="Scan To Functions">
+              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="scan_to_functions" label="Scan To Functions">
                 <input type="text" name="scan_to_functions" value={form?.scan_to_functions || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
-              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="document_feeder_type" label="Original Document Feeder Type (For Scanning and Copying)">
+              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="document_feeder_type" label="Original Document Feeder Type (For Scanning and Copying)">
                 <input type="text" name="document_feeder_type" value={form?.document_feeder_type || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
-              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="feeder_capacity" label="Feeder Capacity (Number of Sheets)">
+              <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="feeder_capacity" label="Feeder Capacity (Number of Sheets)">
                 <input type="text" name="feeder_capacity" value={form?.feeder_capacity || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
             </>
           )}
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="main_paper_tray_count" label="Number of Main Paper Tray">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="main_paper_tray_count" label="Number of Main Paper Tray">
             <input type="text" name="main_paper_tray_count" value={form?.main_paper_tray_count || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="total_paper_tray_capacity" label="Total Main Paper Tray Combined Capacity (75 GSM)">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="total_paper_tray_capacity" label="Total Main Paper Tray Combined Capacity (75 GSM)">
             <input type="text" name="total_paper_tray_capacity" value={form?.total_paper_tray_capacity || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="bypass_tray_facility" label="Bypass Tray Facility">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="bypass_tray_facility" label="Bypass Tray Facility">
             <input type="text" name="bypass_tray_facility" value={form?.bypass_tray_facility || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="bypass_tray_capacity" label="Bypass Tray Capacity (75 GSM)">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="bypass_tray_capacity" label="Bypass Tray Capacity (75 GSM)">
             <input type="text" name="bypass_tray_capacity" value={form?.bypass_tray_capacity || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="connectivity" label="Connectivity">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="connectivity" label="Connectivity">
             <input type="text" name="connectivity" value={form?.connectivity || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="duty_cycle" label="Duty Cycle (Prints/Month)">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="duty_cycle" label="Duty Cycle (Prints/Month)">
             <input type="text" name="duty_cycle" value={form?.duty_cycle || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="onsite_warranty" label="On Site Warranty (In Year)">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="onsite_warranty" label="On Site Warranty (In Year)">
             <input type="text" name="onsite_warranty" value={form?.onsite_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
 
           {(!readOnly || printerView) && (
-            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
+            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
               <input type="text" name="extended_warranty" value={form?.extended_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
             </VerifiedInputWrapper>
           )}
@@ -893,10 +896,10 @@ export default function PrinterBidDetailView() {
               row has no empty cells (the MFP-only fields shift the grid). */}
           {datesBesideWarranty && (
             <>
-              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
                 <input type="date" name="start_date" value={form?.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
-              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="date" label="Bid End Date">
                 <input type="date" name="date" value={form?.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
             </>
@@ -904,22 +907,22 @@ export default function PrinterBidDetailView() {
 
           <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
             {readOnly && !printerView && (
-              <VerifiedInputWrapper alignTwoLineLabel verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
+              <VerifiedInputWrapper alignTwoLineLabel verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="extended_warranty" label="Extended Warranty (in Years) over and above standard warranty">
                 <input type="text" name="extended_warranty" value={form?.extended_warranty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
             )}
             {!datesBesideWarranty && (
               <>
-                <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
+                <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
                   <input type="date" name="start_date" value={form?.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
                 </VerifiedInputWrapper>
-                <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
+                <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="date" label="Bid End Date">
                   <input type="date" name="date" value={form?.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
                 </VerifiedInputWrapper>
               </>
             )}
 
-            <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="freightInstallation" label="Freight and Installation">
+            <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="freightInstallation" label="Freight and Installation">
               <select name="freightInstallation" value={form?.freightInstallation ?? "Yes"} onChange={handleChange} disabled={readOnly} className={inputCls}>
                 <option value="Yes">Yes</option>
                 <option value="No">No</option>
@@ -929,7 +932,7 @@ export default function PrinterBidDetailView() {
             {/* EPBG sits beside Freight and Installation (the approved Printer
                 view puts it beside Extra Requirements instead). */}
             {!printerView && (
-              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
+              <VerifiedInputWrapper alignTwoLineLabel={readOnly} verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
                 <input type="text" name="epbg" value={form?.epbg || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
               </VerifiedInputWrapper>
             )}
@@ -940,11 +943,11 @@ export default function PrinterBidDetailView() {
 
         <div className="mt-6 mb-4 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           {printerView && (
-            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
+            <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
               <input type="text" name="epbg" value={form?.epbg || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
             </VerifiedInputWrapper>
           )}
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="extra_requirements" label="Extra Requirements" optional>
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="extra_requirements" label="Extra Requirements" optional>
             <textarea name="extra_requirements" value={form?.extra_requirements || ""} onChange={handleChange} disabled={readOnly} rows={readOnly ? 1 : 2} className={textareaCls} />
           </VerifiedInputWrapper>
 
