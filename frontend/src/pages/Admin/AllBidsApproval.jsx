@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useGemBidLinks } from "../../utils/gemBidLinks";
-import { GemBidNo } from "../../utils/GemBidNo";
 
 const API = import.meta.env.VITE_API_URL;
 const PAGE_SIZE = 10;
@@ -23,6 +22,37 @@ export default function AllBidsApproval() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [documentError, setDocumentError] = useState("");
+  const [downloadingBid, setDownloadingBid] = useState(null);
+
+  const downloadBidDocument = async (bid, url) => {
+    setDocumentError("");
+    if (!url) {
+      setDocumentError(`Bid ${bid.bid_no}: no GeM PDF link or uploaded bid document is saved.`);
+      return;
+    }
+    const key = `${bid.productKey}-${bid.id}`;
+    setDownloadingBid(key);
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error("Document unavailable");
+      const blob = await response.blob();
+      if (blob.type.includes("text/html") || blob.type.includes("application/json")) throw new Error("Invalid document response");
+      const objectUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = objectUrl;
+      const extension = new URL(url, window.location.href).pathname.match(/\.[a-z0-9]{2,5}$/i)?.[0] || ".pdf";
+      link.download = `${String(bid.bid_no || "bid-document").replace(/[\\/:*?"<>|]/g, "_")}${extension}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch {
+      setDocumentError("Direct download is unavailable. Use the document link to open the file and download it from the viewer.");
+    } finally {
+      setDownloadingBid(null);
+    }
+  };
 
   useEffect(() => {
     if ((sessionStorage.getItem("role") || localStorage.getItem("role")) !== "admin") {
@@ -88,6 +118,7 @@ export default function AllBidsApproval() {
       {TABS.map(tab => <button type="button" role="tab" aria-selected={activeTab.key === tab.key} key={tab.key} onClick={() => { setParams({ status: tab.key }); setPage(1); }} className={`whitespace-nowrap border-b-2 px-5 py-4 text-sm font-semibold ${activeTab.key === tab.key ? `rounded-t-xl border-current bg-white shadow-sm ${tab.color}` : "border-transparent text-slate-500 hover:bg-white"}`}><span aria-hidden="true" className="mr-2">{tab.icon}</span>{tab.label}</button>)}
     </div>
     {error && <div role="alert" className="m-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+    {documentError && <div role="alert" className="m-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{documentError}</div>}
     <div className="overflow-x-auto">
       <table className="w-full min-w-[900px] text-left text-sm">
         <thead className="bg-slate-800 text-xs uppercase text-white"><tr>{["S.No.", "Product", "Analyser", "Department", "Bid No.", "Model", "Submitted On", "Status", "Action"].map(label => <th key={label} className="px-4 py-4">{label}</th>)}</tr></thead>
@@ -97,7 +128,10 @@ export default function AllBidsApproval() {
             <td className="px-4 py-4"><span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{bid.productLabel}</span></td>
             <td className="px-4 py-4">{bid.analyser_username || bid.analyser_name || bid.analyser || bid.analyzed_by || "—"}</td>
             <td className="max-w-48 break-words px-4 py-4">{bid.dept_name || "—"}</td>
-            <td className="max-w-60 break-words px-4 py-4 font-semibold text-blue-600"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} fallback="—" /></td>
+            <td className="max-w-60 break-words px-4 py-4 font-semibold text-blue-600">
+              <button type="button" disabled={downloadingBid !== null} onClick={() => downloadBidDocument(bid, gemBidLinks[bid.bid_no] || bid.upload_document)} title="Download bid document" className="text-left underline decoration-blue-300 underline-offset-2 hover:text-blue-800 disabled:opacity-50">{downloadingBid === `${bid.productKey}-${bid.id}` ? "Downloading..." : bid.bid_no || "—"}</button>
+              {(gemBidLinks[bid.bid_no] || bid.upload_document) && <a href={gemBidLinks[bid.bid_no] || bid.upload_document} target="_blank" rel="noreferrer" className="mt-1 block text-xs font-normal text-slate-500 underline">Open document</a>}
+            </td>
             <td className="max-w-48 break-words px-4 py-4">{bid.model_number || bid.model || bid.model_no || "—"}</td>
             <td className="whitespace-nowrap px-4 py-4">{dateLabel(bid.created_at)}</td>
             <td className="px-4 py-4"><span className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${activeTab.badge}`}>{activeTab.label}</span></td>
