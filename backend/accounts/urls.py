@@ -2,6 +2,7 @@ from django.urls import path
 from .views.GemFinancialRanking import financial_rankings, delete_financial_ranking
 from .views.GemProductSpecs import import_gem_product_specs, replace_from_gem_market, save_gem_category_excel
 from . import views
+from .views.PendingAtAdmin import pending_at_admin
 from .views.generated_download import download_generated_pdf
 from .views.special_document import (
     desktop_special_document,
@@ -174,6 +175,7 @@ urlpatterns = [
     path("gem/bid-opportunities/", views.gem_bid_opportunities, name="gem_bid_opportunities"),
     path("gem/bid-opportunities/parse-pdf/", views.parse_gem_bid_pdf, name="parse_gem_bid_pdf"),
     path("gem/bid-links/", views.gem_bid_links, name="gem_bid_links"),
+    path("analyser/pending-at-admin/", pending_at_admin, name="pending_at_admin"),
     path("gem/bid-assignments/", views.gem_bid_assignments, name="gem_bid_assignments"),
     path("desktop-bids/<int:bid_id>/gem-jobs/", views.create_gem_upload_job, name="create_gem_upload_job"),
     path("printer-bids/<int:bid_id>/gem-jobs/", views.create_printer_gem_upload_job, name="create_printer_gem_upload_job"),

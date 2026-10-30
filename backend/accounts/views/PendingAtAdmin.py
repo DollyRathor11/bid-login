@@ -1,0 +1,60 @@
+"""Analyser dashboard's "Pending at Admin" section: the logged-in analyser's
+own bids of one product that they sent to Admin and Admin has not priced
+(approved) yet."""
+from django.http import JsonResponse
+from django.views.decorators.http import require_http_methods
+
+from ..auth_identity import STAFF_ROLES, request_user
+from ..models import DesktopBid, PrinterBid, WorkstationBid
+
+
+def _pending_bids(product):
+    """Bids waiting for Admin, per product, as each Admin approval list
+    defines its Pending tab."""
+    if product == "desktop":
+        return DesktopBid.objects.filter(status="complete", review_status="reviewed")
+    if product == "workstation":
+        return WorkstationBid.objects.filter(status="complete", review_status="reviewed")
+    if product == "printer":
+        return PrinterBid.objects.filter(status="complete", review_status="reviewed")
+    if product == "aio":
+        from .Aio import AioBid, _ensure_table
+        _ensure_table()
+        return AioBid.objects.filter(status="analyzed")
+    if product == "toner":
+        from .Toner import TonerBid, _ensure_table
+        _ensure_table()
+        return TonerBid.objects.filter(status="analyzed")
+    return None
+
+
+def _model(bid, product):
+    if product in ("aio", "toner"):
+        return f"{bid.model_no or ''}{bid.model or ''}".strip()
+    return bid.model_number or ""
+
+
+@require_http_methods(["GET"])
+def pending_at_admin(request):
+    user = request_user(request)
+    if not user:
+        return JsonResponse({"error": "Authentication required."}, status=401)
+    if user.role not in STAFF_ROLES:
+        return JsonResponse({"error": "You are not authorized for this action."}, status=403)
+    product = (request.GET.get("product") or "").strip().lower()
+    bids = _pending_bids(product)
+    if bids is None:
+        return JsonResponse({"error": "Unknown product."}, status=400)
+    rows = [
+        {
+            "id": bid.id,
+            "bid_no": bid.bid_no or "",
+            "dept_name": bid.dept_name or "",
+            "model": _model(bid, product),
+            "qty": bid.qty,
+            "end_date": bid.date.isoformat() if bid.date else "",
+            "submitted_on": bid.updated_at.isoformat() if bid.updated_at else "",
+        }
+        for bid in bids.filter(analyser_username__iexact=user.username).order_by("date", "-updated_at")
+    ]
+    return JsonResponse({"results": rows})

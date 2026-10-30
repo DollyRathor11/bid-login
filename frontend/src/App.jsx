@@ -21,6 +21,7 @@ import WorkstationApprovedBiddingDetails from "./pages/Workstation/Analyser/Work
 import WorkstationBidApproval from "./pages/Workstation/Admin/WorkstationBidApproval";
 
 import AnalyserNavbar from "./components/analyser/AnalyserNavbar";
+import AdminPricingPending from "./components/analyser/AdminPricingPending";
 import AnalyserDashboard from "./pages/Desktop/Analyser/AnalyserDashboard";
 import BidDetailView from "./pages/Desktop/Analyser/BidDetailView";
 import ApprovedBidDownloads from "./pages/Desktop/Analyser/ApprovedBidDownloads";
@@ -104,6 +105,7 @@ function App() {
 
         <Route path="/analyser-dashboard" element={<AnalyserNavbar />}>
           <Route index element={null} />
+          <Route path="pricing-pending" element={<AdminPricingPending />} />
           <Route path="desktop" element={<AnalyserDashboard product="desktop" />} />
           <Route path="desktop/bid/:id/downloads" element={<ApprovedBidDownloads />} />
           <Route path="desktop/bid/:id/approved-details" element={<ApprovedBiddingDetails />} />

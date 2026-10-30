@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAnalyserTab } from "../../../utils/analyserTab";
+import PendingAtAdmin, { PendingAtAdminTab } from "../../../components/analyser/PendingAtAdmin";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
 import { GemBidNo } from "../../../utils/GemBidNo";
 import { useNavigate } from "react-router-dom";
@@ -158,6 +159,8 @@ export default function AnalyserPrinterDashboard() {
           Pending
         </button>
 
+        <PendingAtAdminTab product="printer" active={activeTab === "pending-admin"} onClick={() => handleTabChange("pending-admin")} />
+
         <button
           onClick={() => handleTabChange("approved")}
           className={`py-4 px-2 text-sm font-semibold transition-all flex items-center gap-2 outline-none focus:outline-none focus-visible:outline-none ${
@@ -207,6 +210,7 @@ export default function AnalyserPrinterDashboard() {
         </div>
       )}
 
+      {activeTab === "pending-admin" ? <PendingAtAdmin product="printer" /> : (<>
       <div className="w-full overflow-hidden">
         <table className="w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-1.5 [&_th]:!text-xs [&_tbody_span]:!text-sm [&_tbody_td]:!px-1.5 [&_tbody_td]:!text-sm [&_tbody_button]:!text-xs">
           <thead>
@@ -422,6 +426,7 @@ export default function AnalyserPrinterDashboard() {
           </button>
         </div>
       )}
+      </>)}
     </div>
   );
 }

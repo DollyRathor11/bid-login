@@ -17,6 +17,7 @@ import {
   FaBan,
   FaChartLine,
   FaTachometerAlt,
+  FaHourglassHalf,
 } from "react-icons/fa";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -377,6 +378,18 @@ const AnalyserNavbar = () => {
           >
             <span className="text-lg" style={{ color: "#ec4899" }}><FaBox /></span>
             <span className="text-sm font-medium">Product</span>
+          </div>
+
+          <div
+            onClick={() => navigate("/analyser-dashboard/pricing-pending")}
+            className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 mb-2 focus:outline-none focus:ring-0 no-highlight select-none ${
+              isActive("/analyser-dashboard/pricing-pending")
+                ? "bg-gray-700/50 text-white"
+                : "hover:bg-gray-700/50 text-gray-200"
+            }`}
+          >
+            <span className="text-lg text-amber-400"><FaHourglassHalf /></span>
+            <span className="text-sm font-medium">Pricing Pending at Admin</span>
           </div>
 
           {}
