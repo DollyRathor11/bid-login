@@ -282,9 +282,6 @@ export default function AioBidDetailView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const readOnly = state?.readOnly || false;
-  // Opened from Pricing Pending at Admin: the bid was verified before it went to
-  // admin, so its fields show no ticks and need none to save.
-  const hideTicks = state?.hideTicks === true;
   const showGemUpload = state?.showGemUpload === true;
 
   const [form, setForm] = useState(null);
@@ -584,9 +581,7 @@ export default function AioBidDetailView() {
   );
   const activeRequiredFields = [...REQUIRED_FIELDS, ...conditionalRequiredFields];
   const requiredVerifiedCount = activeRequiredFields.filter((field) => !!verifiedFields[field]).length;
-  const allVerified = hideTicks || activeRequiredFields.every((field) => !!verifiedFields[field]);
-  // From Pricing Pending at Admin, an assigned model cannot be changed.
-  const modelLocked = hideTicks && !!String(form?.model_number || "").trim();
+  const allVerified = activeRequiredFields.every((field) => !!verifiedFields[field]);
 
   // Same to same as Desktop's handleNextClick (BidDetailView.jsx): saves the
   // verified model number, then hands the bid off to the Step 2/2 "General
@@ -757,34 +752,34 @@ export default function AioBidDetailView() {
           : ""} ${readOnly && isApproved ? "[&_select]:!appearance-none" : ""}`}
       >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="bid_no" label="Bid Number">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="bid_no" label="Bid Number">
           <input type="text" name="bid_no" value={form.bid_no || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="dept_name" label="Department">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="dept_name" label="Department">
           <input type="text" name="dept_name" value={form.dept_name || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="organization" label="Organization">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="organization" label="Organization">
           <input type="text" name="organization" value={form.organization || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="qty" label="Quantity">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="qty" label="Quantity">
           <input type="number" name="qty" value={form.qty || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="pincode" label="Buyer Pincode">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="pincode" label="Buyer Pincode">
           <input type="text" name="pincode" value={form.pincode || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
         <div className="md:col-span-2 lg:col-span-3">
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="address" label="Address">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="address" label="Address">
             <input type="text" name="address" value={form.address || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
         </div>
 
         <div className="md:col-span-2 lg:col-span-3">
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="atc" label="ATC (Additional Terms & Conditions)">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="atc" label="ATC (Additional Terms & Conditions)">
             <textarea name="atc" value={form.atc || ""} onChange={handleChange} disabled={readOnly} rows={4} className={textareaCls} />
           </VerifiedInputWrapper>
         </div>
@@ -812,78 +807,78 @@ export default function AioBidDetailView() {
           </div>
         </div>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="processor" label="Processor">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="processor" label="Processor">
           <PriceSelect name="processor" options={AIO_PROCESSORS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="ram" label="RAM">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="ram" label="RAM">
           <PriceSelect name="ram" options={getFilteredAioRams(form.processor)} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="hdd" label="Hard Disk Drive">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="hdd" label="Hard Disk Drive">
           <PriceSelect name="hdd" options={AIO_HDDS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="ssd" label="Solid State Drive">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="ssd" label="Solid State Drive">
           <PriceSelect name="ssd" options={AIO_SSDS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="os" label="Operating System">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="os" label="Operating System">
           <PriceSelect name="os" options={AIO_OS_OPTIONS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="dvd" label="DVD">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="dvd" label="DVD">
           <PriceSelect name="dvd" options={DVDS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="wifi" label="WiFi Bluetooth">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="wifi" label="WiFi Bluetooth">
           <PriceSelect name="wifi" options={AIO_WIFIS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="screen_size" label="Screen Size">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="screen_size" label="Screen Size">
           <PriceSelect name="screen_size" options={AIO_SCREEN_SIZES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="keyboard" label="Keyboard & Mouse">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="keyboard" label="Keyboard & Mouse">
           <PriceSelect name="keyboard" options={AIO_KEYBOARDS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="warranty" label="Warranty">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="warranty" label="Warranty">
           <PriceSelect name="warranty" options={WARRANTIES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="motherboard" label="Motherboard">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="motherboard" label="Motherboard">
           <PriceSelect name="motherboard" options={AIO_MOTHERBOARDS} hideNone />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="pro_descp" label="Processor Description" optional required={conditionalRequiredFields.includes("pro_descp")}>
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="pro_descp" label="Processor Description" optional required={conditionalRequiredFields.includes("pro_descp")}>
           <textarea name="pro_descp" value={form.pro_descp || ""} onChange={handleChange} disabled={readOnly} rows={2} className={textareaCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="software1" label="Additional Software" optional required={conditionalRequiredFields.includes("software1")}>
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="software1" label="Additional Software" optional required={conditionalRequiredFields.includes("software1")}>
           <textarea name="software1" value={form.software1 || ""} onChange={handleChange} disabled={readOnly} rows={2} className={textareaCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="gp" label="Graphics Description" optional required={conditionalRequiredFields.includes("gp")}>
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="gp" label="Graphics Description" optional required={conditionalRequiredFields.includes("gp")}>
           <textarea name="gp" value={form.gp || ""} onChange={handleChange} disabled={readOnly} rows={2} className={textareaCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="motherboard_descp" label="Motherboard Description" optional required={conditionalRequiredFields.includes("motherboard_descp")}>
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="motherboard_descp" label="Motherboard Description" optional required={conditionalRequiredFields.includes("motherboard_descp")}>
           <textarea name="motherboard_descp" value={form.motherboard_descp || ""} onChange={handleChange} disabled={readOnly} rows={2} className={textareaCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
           <input type="date" name="start_date" value={form.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="date" label="Bid End Date">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
           <input type="date" name="date" value={form.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="epbg" label="EPBG (%)">
           <input type="text" name="epbg" value={form.epbg ?? ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="freightInstallation" label="Freight & Installation">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="freightInstallation" label="Freight & Installation">
           <div className="flex flex-col gap-1.5 w-full">
             <div className="flex gap-2">
               <select
@@ -919,7 +914,7 @@ export default function AioBidDetailView() {
           </div>
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="hddreturnable" label="HDD Return Option">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="hddreturnable" label="HDD Return Option">
           <div className="flex gap-2">
             <select name="hddreturnable" value={form.hddreturnable || "Yes"} onChange={handleChange} disabled={readOnly} className={inputCls}>
               <option>Yes</option>
@@ -987,12 +982,12 @@ export default function AioBidDetailView() {
                 value={modelInputValue}
                 onChange={handleModelInputChange}
                 placeholder={readOnly ? "No model assigned" : noMatchFound ? "Enter model number manually..." : "Search model..."}
-                disabled={readOnly || modelLocked || modelSearching || showModelResult}
+                disabled={readOnly || modelSearching || showModelResult}
                 className={`rounded border px-3 py-1.5 text-sm outline-none w-full min-w-0 font-semibold focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${layoutPending ? "border-blue-300 bg-white text-slate-900 placeholder:text-slate-500" : "border-gray-300 text-gray-800"}`}
               />
             </div>
 
-            {!readOnly && !modelLocked && (
+            {!readOnly && (
               <button
                 type="button"
                 onClick={noMatchFound ? handleCreateNewModel : handleFindModel}

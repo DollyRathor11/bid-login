@@ -379,9 +379,6 @@ export default function TonerBidDetailView() {
   const { id } = useParams();
   const navigate = useNavigate();
   const readOnly = state?.readOnly || false;
-  // Opened from Pricing Pending at Admin: the bid was verified before it went to
-  // admin, so its fields show no ticks and need none to save.
-  const hideTicks = state?.hideTicks === true;
   const showGemUpload = state?.showGemUpload === true;
 
   const [form, setForm] = useState(null);
@@ -477,7 +474,7 @@ export default function TonerBidDetailView() {
   };
 
   const requiredVerifiedCount = REQUIRED_FIELDS.filter((field) => !!verifiedFields[field]).length;
-  const allVerified = hideTicks || REQUIRED_FIELDS.every((field) => !!verifiedFields[field]);
+  const allVerified = REQUIRED_FIELDS.every((field) => !!verifiedFields[field]);
 
   const handleNextClick = () => {
     if (!allVerified) return;
@@ -620,34 +617,34 @@ export default function TonerBidDetailView() {
           : ""} ${readOnly && isApproved ? "[&_select]:!appearance-none" : ""}`}
       >
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="bid_no" label="Bid Number">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="bid_no" label="Bid Number">
           <input type="text" name="bid_no" value={form.bid_no || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="dept_name" label="Department">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="dept_name" label="Department">
           <input type="text" name="dept_name" value={form.dept_name || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="organization" label="Organization">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="organization" label="Organization">
           <input type="text" name="organization" value={form.organization || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="qty" label="Quantity">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="qty" label="Quantity">
           <input type="number" name="qty" value={form.qty || ""} onChange={handleChange} disabled={readOnly} className={`${inputCls} [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none`} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="pincode" label="Buyer Pincode">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="pincode" label="Buyer Pincode">
           <input type="text" name="pincode" value={form.pincode || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
         <div className="md:col-span-2 lg:col-span-3">
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="address" label="Address">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="address" label="Address">
             <input type="text" name="address" value={form.address || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
           </VerifiedInputWrapper>
         </div>
 
         <div className="md:col-span-2 lg:col-span-3">
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="atc" label="ATC (Additional Terms & Conditions)">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="atc" label="ATC (Additional Terms & Conditions)">
             <textarea name="atc" value={form.atc || ""} onChange={handleChange} disabled={readOnly} rows={4} className={textareaCls} />
           </VerifiedInputWrapper>
         </div>
@@ -676,15 +673,15 @@ export default function TonerBidDetailView() {
           </div>
         </div>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="brand" label="Brand">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="brand" label="Brand">
           <TonerBrands value={form.brand} disabled={readOnly} onChange={(brand) => setForm((prev) => ({ ...prev, brand }))} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="cartridge_type" label="Type of Cartridge">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="cartridge_type" label="Type of Cartridge">
           <Select name="cartridge_type" options={CARTRIDGE_TYPES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="colour" label="Colour of Ink">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="colour" label="Colour of Ink">
           <Select name="colour" options={COLOURS} />
         </VerifiedInputWrapper>
 
@@ -696,59 +693,59 @@ export default function TonerBidDetailView() {
 
 
         <div className="md:col-span-2 lg:col-span-3">
-          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="compatibility" label="Compatible Printer Models">
+          <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="compatibility" label="Compatible Printer Models">
             <CompatiblePrinterModels value={form.compatibility} disabled={readOnly} onChange={(compatibility) => setForm((prev) => ({ ...prev, compatibility }))} />
           </VerifiedInputWrapper>
         </div>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="technology" label="Technology">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="technology" label="Technology">
           <Select name="technology" options={TECHNOLOGIES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="page_yield" label="Page Yield">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="page_yield" label="Page Yield">
           <Select name="page_yield" options={PAGE_YIELDS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="chip" label="Chip">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="chip" label="Chip">
           <Select name="chip" options={CHIPS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="print_coverage" label="Print Coverage" optional>
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="print_coverage" label="Print Coverage" optional>
           <Select name="print_coverage" options={PRINT_COVERAGES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="warranty" label="Warranty">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="warranty" label="Warranty">
           <Select name="warranty" options={WARRANTIES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="warranty_type" label="Warranty Type">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="warranty_type" label="Warranty Type">
           <Select name="warranty_type" options={WARRANTY_TYPES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="refillable" label="Refillable">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="refillable" label="Refillable">
           <Select name="refillable" options={YES_NO} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="qty_per_pack" label="Quantity per Pack">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="qty_per_pack" label="Quantity per Pack">
           <Select name="qty_per_pack" options={QTY_PER_PACKS} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="hsn_code" label="HSN Code">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="hsn_code" label="HSN Code">
           <input type="text" name="hsn_code" value={form.hsn_code || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="compliance" label="Compliance" optional>
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="compliance" label="Compliance" optional>
           <Select name="compliance" options={COMPLIANCES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="replacement_policy" label="Replacement Policy">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="replacement_policy" label="Replacement Policy">
           <Select name="replacement_policy" options={REPLACEMENT_POLICIES} />
         </VerifiedInputWrapper>
 
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="start_date" label="Bid Start Date">
           <input type="date" name="start_date" value={form.start_date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
-        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly || hideTicks} toggleVerification={toggleVerification} name="date" label="Bid End Date">
+        <VerifiedInputWrapper verifiedFields={verifiedFields} readOnly={readOnly} toggleVerification={toggleVerification} name="date" label="Bid End Date">
           <input type="date" name="date" value={form.date || ""} onChange={handleChange} disabled={readOnly} className={inputCls} />
         </VerifiedInputWrapper>
 

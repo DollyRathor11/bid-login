@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { useGemBidLinks } from "../../utils/gemBidLinks";
 import { GemBidNo } from "../../utils/GemBidNo";
 
 // The logged-in analyser's own bids that they sent to admin and admin has not
-// priced yet, across the products they work on. Each opens for editing.
+// priced yet, across the products they work on.
 const API = import.meta.env.VITE_API_URL;
 const token = () => sessionStorage.getItem("token") || localStorage.getItem("token") || "";
 const PAGE_SIZE = 10;
 const PRODUCTS = [["desktop", "Desktop"], ["aio", "AIO"], ["workstation", "Workstation"], ["printer", "Printer"], ["toner", "Toner"]];
 
 export default function AdminPricingPending() {
-  const navigate = useNavigate();
   const [bids, setBids] = useState([]);
   const gemBidLinks = useGemBidLinks(bids);
   const [loading, setLoading] = useState(true);
@@ -56,7 +54,6 @@ export default function AdminPricingPending() {
   const counts = Object.fromEntries(PRODUCTS.map(([key]) => [key, bids.filter(bid => bid.productKey === key).length]));
   // Only the products this analyser has bids waiting in.
   const workedProducts = PRODUCTS.filter(([key]) => counts[key] > 0);
-  const editBid = bid => navigate(`/analyser-dashboard/${bid.productKey}/bid/${bid.id}`, { state: { readOnly: false, hideTicks: true } });
   const rows = bids
     .filter(bid => product === "all" || bid.productKey === product);
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
@@ -83,9 +80,9 @@ export default function AdminPricingPending() {
     {error && <div role="alert" className="m-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
     <div className="overflow-x-auto">
       <table className="w-full min-w-[900px] text-left text-sm">
-        <thead className="bg-slate-800 text-xs uppercase text-white"><tr>{["S.No.", "Product", "Department", "Bid No.", "Model", "Qty", "Sent to Admin", "End Date", "Action"].map(label => <th key={label} className="px-4 py-4">{label}</th>)}</tr></thead>
+        <thead className="bg-slate-800 text-xs uppercase text-white"><tr>{["S.No.", "Product", "Department", "Bid No.", "Model", "Qty", "Sent to Admin", "End Date"].map(label => <th key={label} className="px-4 py-4">{label}</th>)}</tr></thead>
         <tbody className="divide-y divide-slate-100">
-          {loading ? <tr><td colSpan={9} className="p-12 text-center text-slate-400">Loading bids...</td></tr> : !error && rows.length === 0 ? <tr><td colSpan={9} className="p-12 text-center text-slate-400">No bids are waiting for admin pricing.</td></tr> : !error && visibleRows.map((bid, index) => <tr key={`${bid.productKey}-${bid.id}`} className="hover:bg-slate-50">
+          {loading ? <tr><td colSpan={8} className="p-12 text-center text-slate-400">Loading bids...</td></tr> : !error && rows.length === 0 ? <tr><td colSpan={8} className="p-12 text-center text-slate-400">No bids are waiting for admin pricing.</td></tr> : !error && visibleRows.map((bid, index) => <tr key={`${bid.productKey}-${bid.id}`} className="hover:bg-slate-50">
             <td className="px-4 py-4">{offset + index + 1}</td>
             <td className="px-4 py-4"><span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">{bid.productLabel}</span></td>
             <td className="max-w-48 break-words px-4 py-4">{bid.dept_name || "—"}</td>
@@ -94,9 +91,6 @@ export default function AdminPricingPending() {
             <td className="px-4 py-4">{bid.qty ?? "—"}</td>
             <td className="whitespace-nowrap px-4 py-4">{dateLabel(bid.submitted_on)}</td>
             <td className="whitespace-nowrap px-4 py-4">{dateLabel(bid.end_date).split(",")[0]}</td>
-            <td className="px-4 py-4">
-              <button type="button" onClick={() => editBid(bid)} className="rounded bg-amber-600 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white hover:bg-amber-700">Edit</button>
-            </td>
           </tr>)}
         </tbody>
       </table>
