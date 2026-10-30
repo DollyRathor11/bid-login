@@ -34,7 +34,7 @@ export default function AdminPricingPending() {
         const time = bid => new Date(bid.submitted_on || 0).getTime() || 0;
         setBids((data.results || [])
           .map(bid => ({ ...bid, productKey: bid.product, productLabel: labels[bid.product] || bid.product }))
-          .sort((a, b) => time(a) - time(b)));
+          .sort((a, b) => time(b) - time(a)));
       } catch (err) {
         if (err.name !== "AbortError") setError(err.message || "Unable to load bids.");
       } finally {
