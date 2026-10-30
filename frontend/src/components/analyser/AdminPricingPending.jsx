@@ -16,7 +16,6 @@ export default function AdminPricingPending() {
   const gemBidLinks = useGemBidLinks(bids);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
   const [product, setProduct] = useState("all");
   const [page, setPage] = useState(1);
 
@@ -49,10 +48,8 @@ export default function AdminPricingPending() {
   // Only the products this analyser has bids waiting in.
   const workedProducts = PRODUCTS.filter(([key]) => counts[key] > 0);
   const editBid = bid => navigate(`/analyser-dashboard/${bid.productKey}/bid/${bid.id}`, { state: { readOnly: false } });
-  const query = search.trim().toLowerCase();
   const rows = bids
-    .filter(bid => product === "all" || bid.productKey === product)
-    .filter(bid => [bid.bid_no, bid.dept_name, bid.productLabel, bid.model].some(value => String(value || "").toLowerCase().includes(query)));
+    .filter(bid => product === "all" || bid.productKey === product);
   const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const offset = (currentPage - 1) * PAGE_SIZE;
@@ -70,13 +67,6 @@ export default function AdminPricingPending() {
   </button>;
 
   return <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-100 p-6">
-      <div>
-        <h2 className="text-xl font-bold text-slate-900">Pricing Pending at Admin</h2>
-        <p className="mt-1 text-sm text-slate-500">Your bids sent to admin that are still waiting for pricing.</p>
-      </div>
-      <input aria-label="Search bids" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search bid, model, product or department..." className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-amber-500 sm:max-w-sm" />
-    </div>
     <div className="flex gap-2 overflow-x-auto bg-slate-50 px-5 py-3">
       {chip("all", "All", bids.length)}
       {workedProducts.map(([key, label]) => chip(key, label, counts[key]))}
