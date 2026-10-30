@@ -706,6 +706,8 @@ export default function WorkstationBidDetailView() {
   const activeRequiredFields = [...REQUIRED_FIELDS, ...conditionalRequired];
   const verifiedCount = activeRequiredFields.filter((name) => verifiedFields[name]).length;
   const allVerified = hideTicks || activeRequiredFields.every((name) => verifiedFields[name]);
+  // From Pricing Pending at Admin, an assigned model cannot be changed.
+  const modelLocked = hideTicks && !!String(form?.model_number || "").trim();
 
   return (
     <div className="container mx-auto px-4 mt-4 max-w-6xl pb-10 bg-white">
@@ -932,12 +934,12 @@ export default function WorkstationBidDetailView() {
               value={modelInputValue}
               onChange={handleModelInputChange}
               placeholder={readOnly ? "No model assigned" : noMatchFound ? "Enter model number manually..." : "Search model..."}
-              disabled={readOnly || modelSearching || showModelResult}
+              disabled={readOnly || modelLocked || modelSearching || showModelResult}
               className="border border-blue-300 rounded px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none w-64 font-semibold text-slate-900 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500"
             />
           </div>
 
-          {!readOnly && (
+          {!readOnly && !modelLocked && (
             <button
               type="button"
               onClick={noMatchFound ? handleCreateNewModel : handleFindModel}

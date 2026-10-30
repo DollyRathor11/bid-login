@@ -681,6 +681,8 @@ export default function PrinterBidDetailView() {
   const textareaCls = "w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:bg-gray-100 bg-white";
   const requiredVerifiedCount = activeRequiredFields.filter((field) => !!verifiedFields[field]).length;
   const allVerified = hideTicks || activeRequiredFields.every((field) => !!verifiedFields[field]);
+  // From Pricing Pending at Admin, an assigned model cannot be changed.
+  const modelLocked = hideTicks && !!String(form?.model_number || "").trim();
 
   return (
     <div className="container mx-auto px-4 mt-4 max-w-6xl pb-10 bg-white">
@@ -992,7 +994,7 @@ export default function PrinterBidDetailView() {
               </div>
             )}
 
-            {!readOnly && (
+            {!readOnly && !modelLocked && (
               <button
                 type="button"
                 onClick={handleFindModel}

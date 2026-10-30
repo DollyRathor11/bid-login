@@ -585,6 +585,8 @@ export default function AioBidDetailView() {
   const activeRequiredFields = [...REQUIRED_FIELDS, ...conditionalRequiredFields];
   const requiredVerifiedCount = activeRequiredFields.filter((field) => !!verifiedFields[field]).length;
   const allVerified = hideTicks || activeRequiredFields.every((field) => !!verifiedFields[field]);
+  // From Pricing Pending at Admin, an assigned model cannot be changed.
+  const modelLocked = hideTicks && !!String(form?.model_number || "").trim();
 
   // Same to same as Desktop's handleNextClick (BidDetailView.jsx): saves the
   // verified model number, then hands the bid off to the Step 2/2 "General
@@ -985,12 +987,12 @@ export default function AioBidDetailView() {
                 value={modelInputValue}
                 onChange={handleModelInputChange}
                 placeholder={readOnly ? "No model assigned" : noMatchFound ? "Enter model number manually..." : "Search model..."}
-                disabled={readOnly || modelSearching || showModelResult}
+                disabled={readOnly || modelLocked || modelSearching || showModelResult}
                 className={`rounded border px-3 py-1.5 text-sm outline-none w-full min-w-0 font-semibold focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 ${layoutPending ? "border-blue-300 bg-white text-slate-900 placeholder:text-slate-500" : "border-gray-300 text-gray-800"}`}
               />
             </div>
 
-            {!readOnly && (
+            {!readOnly && !modelLocked && (
               <button
                 type="button"
                 onClick={noMatchFound ? handleCreateNewModel : handleFindModel}
