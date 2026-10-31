@@ -5,8 +5,8 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
-from ..models import GemBidAssignment
 from .Gem import _require_role
+from .GemAssignments import user_visible_assignments
 from .ProductDashboard import _model, _dashboard_admin_label
 
 
@@ -42,5 +42,5 @@ def user_dashboard(request):
                     daily[day]["total"] += 1
                     daily[day][label] += 1
     # Assigned opportunities are separate from the bids the user has filled.
-    assigned = GemBidAssignment.objects.filter(assigned_to_id=user.id, hidden_for_user=False).count()
+    assigned = len(user_visible_assignments(user))
     return JsonResponse({"stats": stats, "assigned": assigned, "daily": list(daily.values())})

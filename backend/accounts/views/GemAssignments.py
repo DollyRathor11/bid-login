@@ -47,6 +47,45 @@ def complete_user_assignment_for_bid(bid_no, user=None):
     return len(rows)
 
 
+def _approved_bid_nos(bid_nos):
+    """Of these bid numbers, the ones admin has approved in any product,
+    upper-cased and stripped so spacing or case never hides a match."""
+    from ..models import DesktopBid, PrinterBid, WorkstationBid
+    from .Aio import AioBid, _ensure_table as ensure_aio_table
+    from .Toner import TonerBid, _ensure_table as ensure_toner_table
+
+    wanted = {str(value or "").strip() for value in bid_nos} - {""}
+    if not wanted:
+        return set()
+    ensure_aio_table()
+    ensure_toner_table()
+    approved = set()
+    for queryset in (
+        DesktopBid.objects.filter(review_status="approved"),
+        WorkstationBid.objects.filter(review_status="approved"),
+        PrinterBid.objects.filter(review_status="approved"),
+        AioBid.objects.filter(status="approved"),
+        TonerBid.objects.filter(status="approved"),
+    ):
+        approved.update(
+            str(value).strip().upper()
+            for value in queryset.filter(bid_no__in=wanted).values_list("bid_no", flat=True)
+        )
+    return approved
+
+
+def user_visible_assignments(user):
+    """A user's Bid To Be Participated: their assignments whose End Date has
+    not passed and which admin has not approved in any product yet."""
+    rows = list(
+        GemBidAssignment.objects.select_related("opportunity", "assigned_to", "assigned_by")
+        .filter(assigned_to=user, hidden_for_user=False, opportunity__end_date__gt=timezone.now())
+        .exclude(status="skipped")
+    )
+    approved = _approved_bid_nos(row.opportunity.bid_no for row in rows)
+    return [row for row in rows if row.opportunity.bid_no.strip().upper() not in approved]
+
+
 def _category(value):
     item = str(value or "").lower()
     matches = {
@@ -93,6 +132,11 @@ def gem_bid_assignments(request):
         return error
 
     if request.method == "GET":
+        if user.role == "user" and not request.GET.get("status"):
+            return JsonResponse({
+                "employees": [],
+                "results": [_assignment_data(row) for row in user_visible_assignments(user)],
+            })
         assignments = GemBidAssignment.objects.select_related("opportunity", "assigned_to", "assigned_by")
         if user.role == "user":
             assignments = assignments.filter(assigned_to=user, hidden_for_user=False)
