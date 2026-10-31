@@ -291,6 +291,10 @@ def admin_review_toner_bid(r,bid_id):
         try:b.total_price=float(d.get("total_price") or 0)
         except (TypeError,ValueError):pass
     b.status=status;b.admin_note=d.get("admin_note","");b.admin_username=actor_name(r,d.get("admin_username",""));b.save()
+    if status=="approved":
+        # An approved bid leaves its assignee's Bid To Be Participated list.
+        from .GemAssignments import complete_user_assignment_for_bid
+        complete_user_assignment_for_bid(b.bid_no)
     return JsonResponse({"message":"Admin review saved","bid":_json(b,r)})
 
 @csrf_exempt

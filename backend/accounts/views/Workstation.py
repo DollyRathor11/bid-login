@@ -1026,6 +1026,10 @@ def admin_review_workstation_bid(request, bid_id):
         bid.admin_note = data.get("admin_note", "").strip()
         bid.admin_username = actor_name(request, data.get("admin_username", ""))
         bid.save()
+        if action == "approved":
+            # An approved bid leaves its assignee's Bid To Be Participated list.
+            from .GemAssignments import complete_user_assignment_for_bid
+            complete_user_assignment_for_bid(bid.bid_no)
         return JsonResponse({"success": True, "bid_id": bid.id, "review_status": bid.review_status})
     except WorkstationBid.DoesNotExist:
         return JsonResponse({"error": "Bid not found"}, status=404)
