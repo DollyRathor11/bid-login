@@ -10,7 +10,7 @@
 }
 
 .user-dashboard-cards > .user-dashboard-card-bottom {
-  grid-column: span 3;
+  grid-column: span 2;
 }
 
 @media (max-width: 639px) {

@@ -11,14 +11,18 @@ from ..models import DesktopBid, PrinterBid, WorkstationBid
 
 @require_http_methods(["GET"])
 def admin_post_bid_summary(request):
+    from ..dashboard_metrics import dashboard_assignments, PRODUCTS
     from .Gem import _require_role
-    from ..models import GemBidAssignment, User
+    from ..models import User
     from django.db.models import Count
 
     _, error = _require_role(request, {"admin"})
     if error:
         return error
-    assignments = GemBidAssignment.objects.filter(hidden_for_admin=False)
+    product = request.GET.get("product", "all")
+    if product != "all" and product not in PRODUCTS:
+        return JsonResponse({"error": "Unknown product"}, status=400)
+    assignments = dashboard_assignments(product)
     counts = list(assignments.values("assigned_to__username").annotate(total=Count("id")))
     return JsonResponse({
         "management_count": User.objects.filter(role="management").count(),
@@ -118,6 +122,47 @@ def admin_person_dashboard(request, product, endpoint):
     if endpoint not in handlers:
         return JsonResponse({"error": "Unknown dashboard endpoint"}, status=404)
     return handlers[endpoint](request, product)
+
+
+@require_http_methods(["GET"])
+def admin_dashboard_bids(request, product):
+    from .Gem import _require_role
+    from ..dashboard_metrics import dashboard_status
+    _, error = _require_role(request, {"admin"})
+    if error:
+        return error
+    if product not in ("desktop", "aio", "workstation", "printer", "toner"):
+        return JsonResponse({"error": "Unknown product"}, status=404)
+    status = request.GET.get("status", "all")
+    label = {"re-analyze": "reAnalyze"}.get(status, status)
+    if label not in ("all", "pending", "approved", "reAnalyze", "rejected"):
+        return JsonResponse({"error": "Unknown status"}, status=400)
+    serializer = None
+    if request.GET.get("detail") == "1":
+        from .Desktop import _bid_data
+        from .Workstation import _workstation_bid_data
+        from .Printer import _printer_bid_data
+        from .Aio import _json as aio_data
+        from .Toner import _json as toner_data
+        serializer = {"desktop": _bid_data, "workstation": _workstation_bid_data, "printer": _printer_bid_data, "aio": aio_data, "toner": toner_data}[product]
+    rows = []
+    for bid in _admin_dashboard_queryset(request, product).order_by("-created_at"):
+        if label != "all" and dashboard_status(bid) != label:
+            continue
+        row = {
+            "id": bid.id, "bid_no": bid.bid_no, "dept_name": bid.dept_name,
+            "model_number": getattr(bid, "model_number", "") or getattr(bid, "model", "") or getattr(bid, "model_no", ""),
+            "analyser_username": bid.analyser_username,
+            "created_at": bid.created_at, "updated_at": bid.updated_at,
+            "dashboard_status": dashboard_status(bid),
+            "can_review": bool(getattr(bid, "review_status", "") in ("reviewed", "approved", "re-analyze", BID_REJECTED) or bid.status in ("analyzed", "approved", "rejected", "re-analyze", BID_REJECTED)),
+            "upload_document": request.build_absolute_uri(bid.upload_document.url) if getattr(bid, "upload_document", None) else "",
+        }
+        if serializer:
+            row = {**serializer(bid, request), **row}
+            row["status"] = "bid_rejected" if dashboard_status(bid) == "rejected" else "re-analyze" if dashboard_status(bid) == "reAnalyze" else dashboard_status(bid)
+        rows.append(row)
+    return JsonResponse(rows, safe=False)
 
 
 def _base_queryset(product, role, year=None, analyser=None):

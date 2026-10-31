@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { priceInputValue } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -53,7 +52,7 @@ const INITIAL_FORM = {
   page_yield: "", yield_standard: "", chip: "", print_coverage: "",
   warranty: "", warranty_type: "", refillable: "", qty_per_pack: "",
   hsn_code: "", compliance: "", replacement_policy: "",
-  date: "", start_date: "", unit_price: "", toner_models: [],
+  date: "", start_date: "", toner_models: [],
 };
 
 const getDraftKey = (bidId) => `toner_config_draft_${bidId || "new"}`;
@@ -400,6 +399,7 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
     setMsg("");
     try {
       const payload = { ...form, toner_models: JSON.stringify(form.toner_models) };
+      delete payload.unit_price;
       const res = await fetch(`${API_BASE}/toner-bids/${bid_id}/update/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -724,18 +724,6 @@ export default function TonerConfig({ bidData, onBack, onNext }) {
               onChange={handleChange}
               required
               placeholder="Applicable HSN Code"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          <div className="col-span-1">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Unit Price</label>
-            <input
-              type="text"
-              name="unit_price"
-              value={priceInputValue(form.unit_price)}
-              onChange={handleChange}
-              placeholder="Price"
               className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

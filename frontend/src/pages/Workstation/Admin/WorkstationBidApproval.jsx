@@ -1,3 +1,5 @@
+import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { FaTrash } from "react-icons/fa";
 import {
@@ -429,7 +431,7 @@ export default function WorkstationBidApproval() {
   const fetchBids = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/workstation-bids/list/?status=${activeTab}&role=admin`);
+      const res = await fetchApprovalBids("workstation", activeTab);
       setBids(res.ok ? await res.json() : []);
     } catch {
       setBids([]);
@@ -440,7 +442,7 @@ export default function WorkstationBidApproval() {
 
   const fetchReAnalyzeCount = async () => {
     try {
-      const res = await fetch(`${API_BASE}/workstation-bids/list/?status=re-analyze&role=admin`);
+      const res = await fetchApprovalBids("workstation", "re-analyze");
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       setReAnalyzeCount(Array.isArray(data) ? data.length : 0);
@@ -502,6 +504,7 @@ export default function WorkstationBidApproval() {
     }
   };
 
+  const returnToCombinedList = useNavigate();
   const linkedBidOpened = useRef(false);
   useEffect(() => {
     const linkedId = new URLSearchParams(window.location.search).get("bid");
@@ -525,6 +528,13 @@ export default function WorkstationBidApproval() {
   };
 
   const closeModal = () => {
+    const sourceParams = new URLSearchParams(window.location.search);
+    if (sourceParams.get("from") === "all-bids") {
+      const status = sourceParams.get("status") || "pending";
+      const returnFilters = sourceParams.get("returnFilters") || `status=${encodeURIComponent(status)}`;
+      returnToCombinedList(`/admin-dashboard/all-bids-approval?${returnFilters}`, { replace: true });
+      return;
+    }
     setSelected(null);
     setForm({});
     setAdminNote("");

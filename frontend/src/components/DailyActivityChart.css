@@ -1,0 +1,12 @@
+.daily-activity-chart { width: 100%; min-width: 0; }
+.daily-activity-message { min-height: 280px; display: flex; align-items: center; justify-content: center; padding: 24px; color: #64748b; font-size: 13px; text-align: center; }
+.daily-activity-empty { margin: 0; text-align: center; color: #64748b; font-size: 12px; }
+.daily-activity-chart .recharts-surface:focus { outline: none; }
+.daily-activity-chart .recharts-surface:focus-visible { outline: 2px solid #93c5fd; outline-offset: 2px; border-radius: 8px; }
+.daily-activity-legend { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 10px; padding-top: 12px; font-size: 14px; }
+.daily-activity-legend span, .daily-activity-tooltip span { display: inline-flex; align-items: center; gap: 6px; }
+.daily-activity-legend i { display: inline-block; width: 12px; height: 10px; flex-shrink: 0; }
+.daily-activity-tooltip { min-width: 132px; padding: 10px; border: 1px solid #ccc; border-radius: 0; background: white; font-size: 14px; }
+.daily-activity-tooltip p { margin: 0 0 8px; color: #0f172a; font-weight: 400; }
+.daily-activity-tooltip > div { margin-top: 10px; }
+.daily-activity-tooltip strong { color: #0f172a; font-variant-numeric: tabular-nums; }

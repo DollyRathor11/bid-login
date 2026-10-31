@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import DailyActivityChart from "../DailyActivityChart";
+import useDailyActivity from "../../hooks/useDailyActivity";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import useOutsideClick from "../../hooks/useOutsideClick";
 import { connectGemExtension } from "../../utils/connectGemExtension";
@@ -97,6 +99,12 @@ const PIE_COLORS = ["#f59e0b", "#10b981", "#ef4444", "#7f1d1d"];
 const fetchDashboard = async (product, endpoint, params = "", options = {}) => {
   const keys = product === "all" ? Object.keys(ADMIN_DASHBOARD_API_MAP) : [product];
   const data = await Promise.all(keys.map(async key => {
+    if (endpoint === "daily") {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+      const response = await fetch(`${API_BASE}/dashboard/daily-activity/?product=${key}&${params}`, { ...options, headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error("Unable to load daily activity");
+      return response.json();
+    }
     const personView = ["stats", "monthly", "daily"].includes(endpoint) && (new URLSearchParams(params).get("user") || new URLSearchParams(params).get("analyser"));
     const url = personView ? `${ADMIN_API}/dashboard/${key}/person/${endpoint}/` : endpoint === "participants"
       ? `${ADMIN_API}/dashboard/${key}/participants/`
@@ -118,9 +126,9 @@ const fetchDashboard = async (product, endpoint, params = "", options = {}) => {
   const rows = new Map();
   for (const item of data.flat()) {
     const key = endpoint === "monthly" ? item.monthNumber : item.date;
-    if (!rows.has(key)) rows.set(key, { ...item, total: 0, pending: 0, approved: 0, rejected: 0 });
+    if (!rows.has(key)) rows.set(key, { ...item, total: 0, pending: 0, approved: 0, reAnalyze: 0, rejected: 0 });
     const row = rows.get(key);
-    for (const field of ["total", "pending", "approved", "rejected"]) row[field] += Number(item[field] || 0);
+    for (const field of ["total", "pending", "approved", "reAnalyze", "rejected"]) row[field] += Number(item[field] || 0);
   }
   return [...rows.values()].sort((a, b) => endpoint === "monthly"
     ? a.monthNumber - b.monthNumber : a.date.localeCompare(b.date));
@@ -143,6 +151,7 @@ const normalizeDailyData = (data = []) =>
     pending:  Number(item.pending  ?? 0),
     approved: Number(item.approved ?? 0),
     rejected: Number(item.rejected ?? 0),
+    reAnalyze: Number(item.reAnalyze ?? 0),
     total:    Number(item.total    ?? 0),
   }));
 
@@ -182,6 +191,7 @@ const AdminHome = () => {
   const [selectedAnalyser, setSelectedAnalyser] = useState(null);
   const [bidUsers, setBidUsers] = useState([]);
   const [selectedUser, setSelectedUser] = useState("");
+  const activity = useDailyActivity(selectedProduct.key, selectedUser, selectedAnalyser);
   const [analyserDropOpen, setAnalyserDropOpen] = useState(false);
   const analyserDropdownRef = useRef(null);
   
@@ -196,14 +206,26 @@ const AdminHome = () => {
   const [accountsLoading, setAccountsLoading] = useState(true);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [yearOptions, setYearOptions] = useState([new Date().getFullYear()]);
-  const [dailyData, setDailyData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [chartsLoading, setChartsLoading] = useState(true);
 
   useOutsideClick(productDropdownRef, () => setDropOpen(false), dropOpen);
   useOutsideClick(analyserDropdownRef, () => setAnalyserDropOpen(false), analyserDropOpen);
 
-  const approvalPath = `/admin-dashboard/${selectedProduct.key}-bid-approval`;
+  const openDashboardBids = (status) => {
+    const params = new URLSearchParams({ status, product: selectedProduct.key });
+    if (selectedUser) params.set("user", selectedUser);
+    if (selectedAnalyser) params.set("analyser", selectedAnalyser);
+    if (selectedProduct.key === "all") {
+      navigate(`/admin-dashboard/all-bids-approval?${params}`);
+    } else {
+      params.set("dashboard", "1");
+      navigate(`/admin-dashboard/${selectedProduct.key}-bid-approval?${params}`);
+    }
+  };
+  const statsRequest = useRef(0);
+  const chartRequest = useRef(0);
+  const yearsRequest = useRef(0);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -211,7 +233,7 @@ const AdminHome = () => {
       setPostBidLoading(true);
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
-        const response = await fetch(`${ADMIN_API}/dashboard/post-bid-summary/`, {
+        const response = await fetch(`${ADMIN_API}/dashboard/post-bid-summary/?product=${selectedProduct.key}`, {
           headers: { Authorization: `Bearer ${token}` },
           signal: controller.signal,
         });
@@ -227,7 +249,7 @@ const AdminHome = () => {
     loadPostBidSummary();
     const interval = setInterval(loadPostBidSummary, 60000);
     return () => { controller.abort(); clearInterval(interval); };
-  }, []);
+  }, [selectedProduct.key]);
 
   const fetchAccountCounts = useCallback(async () => {
     setAccountsLoading(true);
@@ -252,6 +274,7 @@ const AdminHome = () => {
   }, [navigate]);
 
   const fetchStats = useCallback(async () => {
+    const requestId = ++statsRequest.current;
     if (!selectedProduct.ready) {
       setStats({ totalBids: 0, pending: 0, approved: 0, reAnalyze: 0, rejected: 0 });
       setStatsLoading(false);
@@ -263,6 +286,7 @@ const AdminHome = () => {
       if (selectedAnalyser) params.set("analyser", selectedAnalyser);
       if (selectedUser) params.set("user", selectedUser);
       const d = await fetchDashboard(selectedProduct.key, "stats", params);
+      if (requestId !== statsRequest.current) return;
         setStats({
           totalBids: d.total ?? null,
           pending: d.pending ?? null,
@@ -271,17 +295,20 @@ const AdminHome = () => {
           rejected: d.rejected ?? null,
         });
     } catch (err) {
+      if (requestId !== statsRequest.current) return;
       setStats({ totalBids: null, pending: null, approved: null, reAnalyze: null });
       console.error("Admin stats error:", err);
     } finally {
-      setStatsLoading(false);
+      if (requestId === statsRequest.current) setStatsLoading(false);
     }
   }, [selectedProduct, selectedAnalyser, selectedUser]);
 
   const fetchYears = useCallback(async () => {
+    const requestId = ++yearsRequest.current;
     if (!selectedProduct.ready) return;
     try {
       const data = await fetchDashboard(selectedProduct.key, "years");
+      if (requestId !== yearsRequest.current) return;
       if (Array.isArray(data) && data.length > 0) {
         setYearOptions(data);
         const currentYear = new Date().getFullYear();
@@ -291,8 +318,8 @@ const AdminHome = () => {
   }, [selectedProduct]);
 
   const fetchChartData = useCallback(async () => {
+    const requestId = ++chartRequest.current;
     if (!selectedProduct.ready) {
-      setDailyData([]);
       setMonthlyData([]);
       setChartsLoading(false);
       return;
@@ -302,17 +329,14 @@ const AdminHome = () => {
       const params = new URLSearchParams();
       if (selectedAnalyser) params.set("analyser", selectedAnalyser);
       if (selectedUser) params.set("user", selectedUser);
-      const [monthly, daily] = await Promise.all([
-        fetchDashboard(selectedProduct.key, "monthly", `year=${selectedYear}&${params}`),
-        fetchDashboard(selectedProduct.key, "daily", params),
-      ]);
+      const monthly = await fetchDashboard(selectedProduct.key, "monthly", `year=${selectedYear}&${params}`);
+      if (requestId !== chartRequest.current) return;
       setMonthlyData(normalizeMonthlyData(monthly));
-      setDailyData(normalizeDailyData(daily));
     } catch {
+      if (requestId !== chartRequest.current) return;
       setMonthlyData([]);
-      setDailyData([]);
     } finally {
-      setChartsLoading(false);
+      if (requestId === chartRequest.current) setChartsLoading(false);
     }
   }, [selectedProduct, selectedYear, selectedAnalyser, selectedUser]);
 
@@ -373,7 +397,7 @@ const AdminHome = () => {
               {BID_PRODUCTS.map((p) => (
                 <div
                   key={p.key}
-                  onClick={() => { setSelectedProduct(p); setSelectedUser(""); setSelectedAnalyser(null); setAnalyserDropOpen(false); setDropOpen(false); }}
+                  onClick={() => { setSelectedProduct(p); setAnalyserDropOpen(false); setDropOpen(false); }}
                   className="flex items-center gap-3 px-4 py-2.5 hover:bg-blue-50 cursor-pointer font-bold text-slate-600 text-sm transition-colors focus:outline-none select-none"
                 >
                   <span style={{ color: p.color }}>{p.icon}</span>
@@ -397,7 +421,7 @@ const AdminHome = () => {
           className="bg-white border-2 border-slate-200 px-4 py-2.5 rounded-xl font-black text-slate-700 text-sm shadow-sm hover:border-blue-500 min-w-[190px]"
         >
           <option value="">All Users</option>
-          {[...new Set([...bidUsers, ...Object.keys(postBidSummary?.assigned_by_user || {})])].sort().map(name => <option key={name} value={name}>{name}</option>)}
+          {[...new Set([...bidUsers, ...Object.keys(postBidSummary?.assigned_by_user || {}), ...(selectedUser ? [selectedUser] : [])])].sort().map(name => <option key={name} value={name}>{name}</option>)}
         </select>
         <div ref={analyserDropdownRef} className="relative">
           <button
@@ -442,10 +466,10 @@ const AdminHome = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard icon={<FaFileInvoiceDollar className="text-blue-600" />} num={stats.totalBids} label="Total Bids" gradient="bg-gradient-to-br from-blue-500 to-blue-600" iconBg="bg-blue-100" loading={statsLoading} />
 
-        <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=pending`)} icon={<FaHourglassHalf className="text-amber-500" />} num={stats.pending} label={selectedUser || selectedAnalyser ? "Pending Bids" : "Pending Review"} gradient="bg-gradient-to-br from-amber-400 to-amber-500" iconBg="bg-amber-100" loading={statsLoading} />
-        <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=approved`)} icon={<FaThumbsUp className="text-emerald-600" />} num={stats.approved} label="Approved Bids" gradient="bg-gradient-to-br from-emerald-500 to-emerald-600" iconBg="bg-emerald-100" loading={statsLoading} />
-        <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=re-analyze`)} icon={<FaThumbsDown className="text-rose-600" />} num={stats.reAnalyze} label="Re-Analyze" gradient="bg-gradient-to-br from-rose-500 to-rose-600" iconBg="bg-rose-100" loading={statsLoading} />
-        <MetricCard onClick={(selectedProduct.key === "all" || selectedUser || selectedAnalyser) ? undefined : () => navigate(`${approvalPath}?status=rejected`)} icon={<FaBan className="text-red-800" />} num={stats.rejected} label="Rejected Bids" gradient="bg-gradient-to-br from-red-800 to-red-950" iconBg="bg-red-100" loading={statsLoading} />
+        <MetricCard onClick={() => openDashboardBids("pending")} icon={<FaHourglassHalf className="text-amber-500" />} num={stats.pending} label={selectedUser || selectedAnalyser ? "Pending Bids" : "Pending Review"} gradient="bg-gradient-to-br from-amber-400 to-amber-500" iconBg="bg-amber-100" loading={statsLoading} />
+        <MetricCard onClick={() => openDashboardBids("approved")} icon={<FaThumbsUp className="text-emerald-600" />} num={stats.approved} label="Approved Bids" gradient="bg-gradient-to-br from-emerald-500 to-emerald-600" iconBg="bg-emerald-100" loading={statsLoading} />
+        <MetricCard onClick={() => openDashboardBids("re-analyze")} icon={<FaThumbsDown className="text-rose-600" />} num={stats.reAnalyze} label="Re-Analyze" gradient="bg-gradient-to-br from-rose-500 to-rose-600" iconBg="bg-rose-100" loading={statsLoading} />
+        <MetricCard onClick={() => openDashboardBids("rejected")} icon={<FaBan className="text-red-800" />} num={stats.rejected} label="Rejected Bids" gradient="bg-gradient-to-br from-red-800 to-red-950" iconBg="bg-red-100" loading={statsLoading} />
 
         <MetricCard onClick={() => navigate("/admin-dashboard/add-user")} icon={<FaUsers className="text-violet-600" />} num={userCount} label="Total Users Registered" gradient="bg-gradient-to-br from-violet-500 to-violet-600" iconBg="bg-violet-100" loading={accountsLoading} />
         <MetricCard onClick={() => navigate("/admin-dashboard/add-analyser")} icon={<FaUserTie className="text-cyan-600" />} num={analyserCount} label="Total Analysers Registered" gradient="bg-gradient-to-br from-cyan-500 to-cyan-600" iconBg="bg-cyan-100" loading={accountsLoading} />
@@ -460,15 +484,7 @@ const AdminHome = () => {
             <div className="w-1 h-6 bg-blue-600 rounded-full" />
             Daily Activity {(selectedUser || selectedAnalyser) && <span className="text-xs text-blue-600 normal-case font-bold">({selectedUser || selectedAnalyser})</span>}
           </h3>
-          <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={dailyData} barCategoryGap="32%">
-              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontWeight: 700, fontSize: 11, fill: "#64748b" }} />
-              <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontWeight: 600, fontSize: 10, fill: "#94a3b8" }} />
-              <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }} />
-              <Bar dataKey="bids" name="Total Bids" fill="#2563eb" radius={[6, 6, 0, 0]} maxBarSize={45} />
-            </BarChart>
-          </ResponsiveContainer>
+          <DailyActivityChart {...activity} />
         </div>
         <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm flex flex-col items-center">
           <h3 className="w-full text-base font-black text-slate-800 mb-2 flex items-center gap-3 uppercase tracking-tight">
@@ -523,8 +539,8 @@ const AdminHome = () => {
 
 const AdminNavbar = () => {
   const [openBid, setOpenBid] = useState(true);
-  const [openAdmin, setOpenAdmin] = useState(false);
   const [openRates, setOpenRates] = useState(false);
+  const [openAdmin, setOpenAdmin] = useState(false);
   const [username, setUsername] = useState("");
   const navigate = useNavigate();
   const location = useLocation();
@@ -640,6 +656,7 @@ const AdminNavbar = () => {
             </div>
           )}
 
+          {}
           <div className="mt-3">
             <button
               onClick={() => setOpenRates(!openRates)}
@@ -650,15 +667,14 @@ const AdminNavbar = () => {
             </button>
             {openRates && (
               <div className="mt-3 space-y-1.5 ml-2">
-                {[{ key: "desktop", label: "Desktop", ready: true }, { key: "workstation", label: "Workstation", ready: true }, { key: "aio", label: "AIO", ready: true }, { key: "toner", label: "Toner", ready: true }].map((item) => {
+                {[{ key: "desktop", label: "Desktop" }, { key: "workstation", label: "Workstation" }, { key: "aio", label: "AIO" }].map((item) => {
                   const path = `/admin-dashboard/component-rates/${item.key}`;
-                  return <div key={item.key} onClick={() => item.ready && navigate(path)} className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 no-highlight select-none ${!item.ready ? "cursor-not-allowed text-gray-500 opacity-70" : isActive(path) ? "cursor-pointer bg-gray-700/70 text-white" : "cursor-pointer hover:bg-gray-700/50 text-gray-200"}`}><FaDesktop className={item.ready ? "text-emerald-400" : "text-gray-500"} /><span className="text-sm font-medium">{item.label}</span>{!item.ready && <span className="ml-auto rounded-full bg-gray-600 px-2 py-0.5 text-[10px] text-gray-300">Coming Soon</span>}</div>;
+                  return <div key={item.key} onClick={() => navigate(path)} className={`flex items-center gap-3 px-4 py-3 rounded-xl cursor-pointer transition-all duration-200 no-highlight select-none ${isActive(path) ? "bg-gray-700/70 text-white" : "hover:bg-gray-700/50 text-gray-200"}`}><FaDesktop className="text-emerald-400" /><span className="text-sm font-medium">{item.label}</span></div>;
                 })}
               </div>
             )}
           </div>
 
-          {}
           <div className="mt-3">
             <button
               onClick={() => setOpenBid(!openBid)}

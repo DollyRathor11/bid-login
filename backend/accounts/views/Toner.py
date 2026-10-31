@@ -185,6 +185,7 @@ def _json(b,r=None):
     if model_number:
         cp=CatalogueProduct.objects.only("extra_specs").filter(model_no__iexact=model_number,category__iexact="toner").first()
         if cp:is_new_product=_catalogue_extra_specs(cp).get("_source")=="toner_bid"
+    out["total_value"]=out["unit_price"]
     submitted_by=b.user.username if b.user and b.user.role=="user" else b.username
     out.update(model_number=model_number,submitted_by=submitted_by,user_name=submitted_by,is_new_product=is_new_product)
     return out
@@ -259,6 +260,10 @@ def admin_review_toner_bid(r,bid_id):
         b.save(update_fields=["status","admin_note","admin_username","updated_at"])
         return JsonResponse({"message":"Bid rejected","bid":_json(b,r)})
     if status not in ("approved","rejected","re-analyze"):return JsonResponse({"error":"Invalid admin status"},status=400)
+    # Total Value uses the existing amount column to preserve saved bids.
+    if "total_value" in d:
+        d=d.copy()
+        d["unit_price"]=d["total_value"]
     if "margin" in d:
         margin_text=str(d.get("margin") if d.get("margin") is not None else "").strip()
         try:
@@ -815,6 +820,40 @@ def _fill_toner_data_sheet_page(page,fitz,page_index,b):
         y+=3
     return y
 
+def _build_toner_experience_pdf(source_path,output_path,fitz):
+    """Keep the established index layout, followed only by toner evidence."""
+    template_path=os.path.join(settings.MEDIA_ROOT,"templates","Aioexp.pdf")
+    with fitz.open(template_path) as template, fitz.open(source_path) as evidence:
+        document=fitz.open()
+        try:
+            document.insert_pdf(template,from_page=0,to_page=0)
+            page=document[0]
+            page.add_redact_annot(fitz.Rect(40,125,575,375),fill=(1,1,1))
+            page.apply_redactions(images=0,graphics=2)
+            page.insert_textbox(fitz.Rect(55,130,560,177),
+                "Details of a few Toner orders supplied in the\nprevious 2 years (CRAC)",
+                fontsize=14,fontname="hebo",align=1)
+            columns=[44,78,200,388,465,509,568]
+            rows=[
+                ["Sr.no","Contract No","Department","Financial Year","QTY","Page No"],
+                ["1","GEMC-\n511687793585614","State Election Commission,\nUttar Pradesh","20-21","1","2 to 5"],
+                ["2","GEMC-\n511687745771238","Department of Defence","19-20","30",f"6 to {len(evidence)+1}"],
+            ]
+            y=197
+            for index,row in enumerate(rows):
+                height=24 if index==0 else 38
+                for col,value in enumerate(row):
+                    rect=fitz.Rect(columns[col],y,columns[col+1],y+height)
+                    page.draw_rect(rect,color=(0,0,0),width=0.5)
+                    page.insert_textbox(rect+(3,5,-3,-2),value,fontsize=8,
+                        fontname="hebo" if index==0 else "helv",align=1)
+                y+=height
+            document.insert_pdf(evidence)
+            document.save(output_path,garbage=3,deflate=True)
+        finally:
+            document.close()
+
+
 @csrf_exempt
 def generate_toner_documents(r,bid_id):
     if r.method!="POST":return JsonResponse({"error":"POST required"},status=405)
@@ -822,10 +861,7 @@ def generate_toner_documents(r,bid_id):
     if not b:return JsonResponse({"error":"Toner bid not found"},status=404)
     req_data=_data(r);typ=req_data.get("doc_type","");ranges={"manufacturer_auth":(2,4),"make_in_india":(5,5),"warranty":(6,6),"bidder_financial":(7,7),"non_obsolete":(8,8),"non_malicious":(16,16),"non_return_hdd":(17,17),"technical_compliance":(18,18),"non_blacklisting":(20,20),"ipv6":(21,21),"preloaded_os":(22,22),"service_support":(25,30),"data_sheet":(31,32)}
     static={"experience_certificate":"experience_certificate.pdf","past_performance":"past_performance.pdf","oem_annual_turnover":"oem_annual_turnover.pdf","atc_acceptance_letter":"atc_acceptance_letter.pdf"}
-    # experience_certificate/past_performance use Acxxel's own real GeM
-    # contract history export (Aioexp.pdf) — same file AIO points at, same
-    # explicit reuse (the company's contract history is not product-specific).
-    toner_static_overrides={"experience_certificate":"Aioexp.pdf","past_performance":"Aioexp.pdf"}
+    toner_static_overrides={"experience_certificate":"TONER EXPERIENCE.pdf","past_performance":"TONER EXPERIENCE.pdf"}
     if typ in ("approved_all_documents","approved_atc_documents") and b.status!="approved":
         return JsonResponse({"error":"Only approved bids can be downloaded"},status=403)
     try:
@@ -836,7 +872,9 @@ def generate_toner_documents(r,bid_id):
         if typ in static:
             src=(os.path.join(settings.MEDIA_ROOT,"templates",toner_static_overrides[typ]) if typ in toner_static_overrides
                  else os.path.join(settings.MEDIA_ROOT,"templates","static_documents",static[typ]))
-            if typ!="atc_acceptance_letter":shutil.copyfile(src,path)
+            if typ in ("experience_certificate","past_performance"):
+                _build_toner_experience_pdf(src,path,fitz)
+            elif typ!="atc_acceptance_letter":shutil.copyfile(src,path)
             else:
                 d=fitz.open(src);p=d[0];p.add_redact_annot(fitz.Rect(65,96,535,235),fill=(1,1,1));p.apply_redactions()
                 atc_rect=fitz.Rect(72,102,525,235);atc_fontsize=11;atc_line_height=15

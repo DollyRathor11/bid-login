@@ -1,3 +1,5 @@
+import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { FaTrash } from "react-icons/fa";
 import {
@@ -505,7 +507,7 @@ export default function DesktopBidApproval() {
   const fetchBids = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/desktop-bids/list/?status=${activeTab}&role=admin`);
+      const res = await fetchApprovalBids("desktop", activeTab);
       if (!res.ok) throw new Error(`Failed with status ${res.status}`);
       const data = await res.json();
       const normalized = data.map((bid) => ({
@@ -529,7 +531,7 @@ export default function DesktopBidApproval() {
 
   const fetchReAnalyzeCount = async () => {
     try {
-      const res = await fetch(`${API_BASE}/desktop-bids/list/?status=re-analyze&role=admin`);
+      const res = await fetchApprovalBids("desktop", "re-analyze");
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       setReAnalyzeCount(Array.isArray(data) ? data.length : 0);
@@ -593,6 +595,7 @@ export default function DesktopBidApproval() {
     }
   };
 
+  const returnToCombinedList = useNavigate();
   const linkedBidOpened = useRef(false);
   useEffect(() => {
     const linkedId = new URLSearchParams(window.location.search).get("bid");
@@ -624,6 +627,13 @@ export default function DesktopBidApproval() {
   };
 
   const closeModal = () => {
+    const sourceParams = new URLSearchParams(window.location.search);
+    if (sourceParams.get("from") === "all-bids") {
+      const status = sourceParams.get("status") || "pending";
+      const returnFilters = sourceParams.get("returnFilters") || `status=${encodeURIComponent(status)}`;
+      returnToCombinedList(`/admin-dashboard/all-bids-approval?${returnFilters}`, { replace: true });
+      return;
+    }
     setSelected(null);
     setForm({});
     setAdminNote("");

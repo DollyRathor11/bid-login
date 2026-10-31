@@ -5,9 +5,9 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
+from ..dashboard_metrics import dashboard_assignments, dashboard_status
 from .Gem import _require_role
-from .GemAssignments import user_visible_assignments
-from .ProductDashboard import _model, _dashboard_admin_label
+from .ProductDashboard import _model
 
 
 @require_GET
@@ -22,10 +22,10 @@ def user_dashboard(request):
     today = timezone.localdate()
     sunday = today - timedelta(days=(today.weekday() + 1) % 7)
     daily = {}
-    for index in range((today - sunday).days + 1):
+    for index in range(7):
         day = sunday + timedelta(days=index)
-        daily[day.isoformat()] = {"date": day.isoformat(), "day": day.strftime("%a"), "total": 0, "pending": 0, "approved": 0, "rejected": 0}
-    stats = {"total": 0, "pending": 0, "approved": 0, "rejected": 0}
+        daily[day.isoformat()] = {"date": day.isoformat(), "day": day.strftime("%a"), "total": 0, "pending": 0, "approved": 0, "reAnalyze": 0, "rejected": 0}
+    stats = {"total": 0, "pending": 0, "approved": 0, "reAnalyze": 0, "rejected": 0}
     for key in products if product == "all" else (product,):
         model = _model(key)
         ownership = Q(user_id=user.id)
@@ -33,14 +33,15 @@ def user_dashboard(request):
             ownership |= Q(user__isnull=True, username=user.username)
         bids = model.objects.filter(ownership).exclude(status="draft")
         for bid in bids.iterator():
-            label = _dashboard_admin_label(bid)
+            label = dashboard_status(bid)
             stats["total"] += 1
             stats[label] += 1
-            if bid.created_at:
-                day = timezone.localtime(bid.created_at).date().isoformat()
+            activity_at = bid.updated_at or bid.created_at
+            if activity_at:
+                day = timezone.localtime(activity_at).date().isoformat()
                 if day in daily:
                     daily[day]["total"] += 1
                     daily[day][label] += 1
     # Assigned opportunities are separate from the bids the user has filled.
-    assigned = len(user_visible_assignments(user))
+    assigned = dashboard_assignments(product).filter(assigned_to_id=user.id).count()
     return JsonResponse({"stats": stats, "assigned": assigned, "daily": list(daily.values())})

@@ -16,6 +16,9 @@ export default function AllBidsApproval() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const activeTab = TABS.find(tab => tab.key === params.get("status")) || TABS[0];
+  const productFilter = params.get("product") || "all";
+  const userFilter = params.get("user") || "";
+  const analyserFilter = params.get("analyser") || "";
   const [bids, setBids] = useState([]);
   const gemBidLinks = useGemBidLinks(bids);
   const [loading, setLoading] = useState(true);
@@ -48,7 +51,7 @@ export default function AllBidsApproval() {
       link.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     } catch {
-      setDocumentError("Direct download is unavailable. Use the document link to open the file and download it from the viewer.");
+      setDocumentError("Unable to download the bid document. Please try again or check that the saved document is available.");
     } finally {
       setDownloadingBid(null);
     }
@@ -68,8 +71,13 @@ export default function AllBidsApproval() {
       setBids([]);
       try {
         const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
-        const lists = await Promise.all(PRODUCTS.map(async ([key, label]) => {
-          const response = await fetch(`${API}/${key}-bids/list/?status=${activeTab.key}&role=admin`, {
+        const lists = await Promise.all(PRODUCTS.filter(([key]) => productFilter === "all" || productFilter === key).map(async ([key, label]) => {
+          const filters = new URLSearchParams({ status: activeTab.key });
+          if (userFilter) filters.set("user", userFilter);
+          if (analyserFilter) filters.set("analyser", analyserFilter);
+          const filtered = userFilter || analyserFilter || activeTab.key === "all";
+          const url = filtered ? `${API}/admin/dashboard/${key}/bids/?${filters}` : `${API}/${key}-bids/list/?status=${activeTab.key}&role=admin`;
+          const response = await fetch(url, {
             signal: controller.signal, headers: { Authorization: `Bearer ${token}` },
           });
           if (!response.ok) throw new Error(`Unable to load ${activeTab.label} ${label} bids.`);
@@ -88,7 +96,7 @@ export default function AllBidsApproval() {
     };
     load();
     return () => controller.abort();
-  }, [activeTab.key]);
+  }, [activeTab.key, productFilter, userFilter, analyserFilter]);
 
   const query = search.trim().toLowerCase();
   const rows = bids.filter(bid => [bid.bid_no, bid.dept_name, bid.productLabel, bid.model_number, bid.model, bid.analyser_username, bid.analyser_name, bid.analyser].some(value => String(value || "").toLowerCase().includes(query)));
@@ -111,11 +119,12 @@ export default function AllBidsApproval() {
       <div>
         <h2 className="text-xl font-bold text-slate-900">All Bids Products Approval</h2>
         <p className="mt-1 text-sm text-slate-500">Desktop, AIO, Workstation, Printer and Toner bids in one place.</p>
+        {(userFilter || analyserFilter || productFilter !== "all") && <p className="mt-2 text-sm font-semibold text-blue-600">{PRODUCTS.find(([key]) => key === productFilter)?.[1] || "All products"}{userFilter ? ` · User: ${userFilter}` : analyserFilter ? ` · Analyser: ${analyserFilter}` : ""}</p>}
       </div>
       <input aria-label="Search bids" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} placeholder="Search bid, model, product or analyser..." className="w-full rounded-xl border border-slate-200 px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 sm:max-w-sm" />
     </div>
     <div role="tablist" aria-label="Bid approval status" className="flex gap-2 overflow-x-auto bg-slate-50 px-5 pt-3">
-      {TABS.map(tab => <button type="button" role="tab" aria-selected={activeTab.key === tab.key} key={tab.key} onClick={() => { setParams({ status: tab.key }); setPage(1); }} className={`whitespace-nowrap border-b-2 px-5 py-4 text-sm font-semibold ${activeTab.key === tab.key ? `rounded-t-xl border-current bg-white shadow-sm ${tab.color}` : "border-transparent text-slate-500 hover:bg-white"}`}><span aria-hidden="true" className="mr-2">{tab.icon}</span>{tab.label}</button>)}
+      {TABS.map(tab => <button type="button" role="tab" aria-selected={activeTab.key === tab.key} key={tab.key} onClick={() => { const next = new URLSearchParams(params); next.set("status", tab.key); setParams(next); setPage(1); }} className={`whitespace-nowrap border-b-2 px-5 py-4 text-sm font-semibold ${activeTab.key === tab.key ? `rounded-t-xl border-current bg-white shadow-sm ${tab.color}` : "border-transparent text-slate-500 hover:bg-white"}`}><span aria-hidden="true" className="mr-2">{tab.icon}</span>{tab.label}</button>)}
     </div>
     {error && <div role="alert" className="m-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
     {documentError && <div role="alert" className="m-5 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">{documentError}</div>}
@@ -130,12 +139,11 @@ export default function AllBidsApproval() {
             <td className="max-w-48 break-words px-4 py-4">{bid.dept_name || "—"}</td>
             <td className="max-w-60 break-words px-4 py-4 font-semibold text-blue-600">
               <button type="button" disabled={downloadingBid !== null} onClick={() => downloadBidDocument(bid, gemBidLinks[bid.bid_no] || bid.upload_document)} title="Download bid document" className="text-left underline decoration-blue-300 underline-offset-2 hover:text-blue-800 disabled:opacity-50">{downloadingBid === `${bid.productKey}-${bid.id}` ? "Downloading..." : bid.bid_no || "—"}</button>
-              {(gemBidLinks[bid.bid_no] || bid.upload_document) && <a href={gemBidLinks[bid.bid_no] || bid.upload_document} target="_blank" rel="noreferrer" className="mt-1 block text-xs font-normal text-slate-500 underline">Open document</a>}
             </td>
             <td className="max-w-48 break-words px-4 py-4">{bid.model_number || bid.model || bid.model_no || "—"}</td>
             <td className="whitespace-nowrap px-4 py-4">{dateLabel(bid.created_at)}</td>
-            <td className="px-4 py-4"><span className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${activeTab.badge}`}>{activeTab.label}</span></td>
-            <td className="px-4 py-4"><button type="button" onClick={() => navigate(`/admin-dashboard/${bid.productKey}-bid-approval?status=${activeTab.key}&bid=${bid.id}`)} className="rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700">View</button></td>
+            <td className="px-4 py-4"><span className={`whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ${(TABS.find(tab => tab.key === (bid.dashboard_status === "reAnalyze" ? "re-analyze" : bid.dashboard_status)) || activeTab).badge}`}>{(TABS.find(tab => tab.key === (bid.dashboard_status === "reAnalyze" ? "re-analyze" : bid.dashboard_status)) || activeTab).label}</span></td>
+            <td className="px-4 py-4">{bid.can_review === false ? <span className="text-xs text-slate-500">Awaiting analysis</span> : <button type="button" onClick={() => { const status = bid.dashboard_status === "reAnalyze" ? "re-analyze" : bid.dashboard_status || activeTab.key; navigate(`/admin-dashboard/${bid.productKey}-bid-approval?status=${status}&bid=${bid.id}&from=all-bids&returnFilters=${encodeURIComponent(params.toString())}`); }} className="rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white hover:bg-blue-700">View</button>}</td>
           </tr>)}
         </tbody>
       </table>
