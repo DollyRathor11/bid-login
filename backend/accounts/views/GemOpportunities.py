@@ -8,7 +8,7 @@ from django.utils.dateparse import parse_datetime
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
-from ..models import GemBidAssignment, GemBidOpportunity
+from ..models import GemBidOpportunity
 from .Gem import _request_user
 from .GemOpportunityCleanup import (
     MAX_DAYS,
@@ -80,19 +80,6 @@ def _corrigendum_fields(existing, item):
     return {}
 
 
-# Assignments still being worked on go back to the unassigned "Bid To Be
-# Participated" list when GeM issues a corrigendum, so the admin can review the
-# changed bid and assign it again. Finished ones (participated / skipped) stay.
-RELEASE_ON_CORRIGENDUM_STATUSES = ("assigned", "in_progress")
-
-
-def _release_assignment_for_corrigendum(opportunity_id):
-    released, _ = GemBidAssignment.objects.filter(
-        opportunity_id=opportunity_id, status__in=RELEASE_ON_CORRIGENDUM_STATUSES,
-    ).delete()
-    return bool(released)
-
-
 def _corrigendum_date_fields(item, now):
     """Current Start/End Date read from the GeM card alongside a corrigendum;
     only applied when they are valid, so a bad read never wipes good dates."""
@@ -145,7 +132,6 @@ def gem_bid_opportunities(request):
         items = [item for item in body.get("bids") or [] if isinstance(item, dict)]
         items += [{"bid_no": value} for value in body.get("bid_nos") or []]
         updated = 0
-        released = 0
         for item in items:
             bid_no = str(item.get("bid_no") or "").strip()
             row = GemBidOpportunity.objects.filter(
@@ -158,8 +144,10 @@ def gem_bid_opportunities(request):
                 **_corrigendum_date_fields(item, now),
             )
             updated += 1
-            released += int(_release_assignment_for_corrigendum(row.id))
-        return JsonResponse({"updated": updated, "released": released})
+        # An assigned bid stays with its assignee, who sees the corrigendum and
+        # the new dates; it never returns to Bid To Be Participated. "released"
+        # stays in the reply for extension versions that read it.
+        return JsonResponse({"updated": updated, "released": 0})
     if body.get("action") == "delete":
         if user.role not in OPPORTUNITY_MANAGEMENT_ROLES:
             return JsonResponse({"error": "You are not authorized for this action."}, status=403)
@@ -225,18 +213,15 @@ def gem_bid_opportunities(request):
         corrigendum = _corrigendum_fields(existing, item)
         if existing and GemBidOpportunity.objects.filter(id=existing.id, assignment__isnull=False).exists():
             new_corrigendum = corrigendum.get("has_corrigendum") is True and not existing.has_corrigendum
-            # A new corrigendum sends an in-progress assignment back to the
-            # unassigned list; the update below then refreshes its dates.
-            if not (new_corrigendum and _release_assignment_for_corrigendum(existing.id)):
-                # Otherwise assigned bids stay frozen, but the assignee still
-                # sees the corrigendum and its changed dates.
-                if corrigendum:
-                    GemBidOpportunity.objects.filter(id=existing.id).update(
-                        **corrigendum,
-                        **(_corrigendum_date_fields(item, now) if new_corrigendum else {}),
-                    )
-                rejections.append({"bid_no": bid_no, "reason": "already_assigned"})
-                continue
+            # Assigned bids stay with their assignee, even after a corrigendum,
+            # who still sees the corrigendum and its changed dates.
+            if corrigendum:
+                GemBidOpportunity.objects.filter(id=existing.id).update(
+                    **corrigendum,
+                    **(_corrigendum_date_fields(item, now) if new_corrigendum else {}),
+                )
+            rejections.append({"bid_no": bid_no, "reason": "already_assigned"})
+            continue
         row, was_created = GemBidOpportunity.objects.update_or_create(
             bid_no=bid_no,
             defaults={
