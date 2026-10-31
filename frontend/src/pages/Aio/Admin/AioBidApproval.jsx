@@ -1,3 +1,5 @@
+import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
 import { DVDS, WARRANTIES } from "../../Desktop/User/DesktopConfig";
 // AIO-native RAM/SSD/HDD/OS/screen-size/WiFi/keyboard/motherboard vocabulary —
@@ -477,7 +479,7 @@ export default function AioBidApproval() {
   const fetchBids = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/aio-bids/list/?status=${activeTab}&role=admin`);
+      const res = await fetchApprovalBids("aio", activeTab);
       if (!res.ok) throw new Error(`Failed with status ${res.status}`);
       const data = await res.json();
       const normalized = (Array.isArray(data) ? data : data.bids || []).map((bid) => ({
@@ -496,7 +498,7 @@ export default function AioBidApproval() {
 
   const fetchReAnalyzeCount = async () => {
     try {
-      const res = await fetch(`${API_BASE}/aio-bids/list/?status=re-analyze&role=admin`);
+      const res = await fetchApprovalBids("aio", "re-analyze");
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       setReAnalyzeCount(Array.isArray(data) ? data.length : 0);
@@ -579,6 +581,7 @@ export default function AioBidApproval() {
     }
   };
 
+  const returnToCombinedList = useNavigate();
   const linkedBidOpened = useRef(false);
   useEffect(() => {
     const linkedId = new URLSearchParams(window.location.search).get("bid");
@@ -604,6 +607,13 @@ export default function AioBidApproval() {
   };
 
   const closeModal = () => {
+    const sourceParams = new URLSearchParams(window.location.search);
+    if (sourceParams.get("from") === "all-bids") {
+      const status = sourceParams.get("status") || "pending";
+      const returnFilters = sourceParams.get("returnFilters") || `status=${encodeURIComponent(status)}`;
+      returnToCombinedList(`/admin-dashboard/all-bids-approval?${returnFilters}`, { replace: true });
+      return;
+    }
     setSelected(null);
     setForm({});
     setAdminNote("");

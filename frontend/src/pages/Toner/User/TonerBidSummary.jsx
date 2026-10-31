@@ -26,7 +26,6 @@ const CONFIG_FIELDS = [
 const OTHER_FIELDS = [
   { key: "start_date", label: "Bid Start Date" },
   { key: "date", label: "Bid End Date" },
-  { key: "unit_price", label: "Unit Price" },
 ];
 
 const formatValue = (val) => {

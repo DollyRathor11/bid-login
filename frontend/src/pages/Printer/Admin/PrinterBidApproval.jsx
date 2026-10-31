@@ -1,3 +1,5 @@
+import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
+import { useNavigate } from "react-router-dom";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { priceInputValue } from "../../../utils/price";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
@@ -254,7 +256,7 @@ export default function PrinterBidApproval() {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${API_BASE}/printer-bids/list/?status=${activeTab}&role=admin`);
+      const response = await fetchApprovalBids("printer", activeTab);
       const data = await response.json().catch(() => []);
       if (!response.ok) throw new Error(data.error || "Printer bids could not be loaded.");
       setBids(Array.isArray(data) ? data : []);
@@ -268,7 +270,7 @@ export default function PrinterBidApproval() {
 
   const fetchReAnalyzeCount = async () => {
     try {
-      const response = await fetch(`${API_BASE}/printer-bids/list/?status=re-analyze&role=admin`);
+      const response = await fetchApprovalBids("printer", "re-analyze");
       const data = await response.json().catch(() => []);
       setReAnalyzeCount(response.ok && Array.isArray(data) ? data.length : 0);
     } catch { setReAnalyzeCount(0); }
@@ -285,9 +287,17 @@ export default function PrinterBidApproval() {
   ), [bids]);
 
   const closeModal = () => {
+    const sourceParams = new URLSearchParams(window.location.search);
+    if (sourceParams.get("from") === "all-bids") {
+      const status = sourceParams.get("status") || "pending";
+      const returnFilters = sourceParams.get("returnFilters") || `status=${encodeURIComponent(status)}`;
+      returnToCombinedList(`/admin-dashboard/all-bids-approval?${returnFilters}`, { replace: true });
+      return;
+    }
     setSelected(null); setForm({}); setAdminNote(""); setMessage("");
   };
 
+  const returnToCombinedList = useNavigate();
   const linkedBidOpened = useRef(false);
   useEffect(() => {
     const linkedId = new URLSearchParams(window.location.search).get("bid");

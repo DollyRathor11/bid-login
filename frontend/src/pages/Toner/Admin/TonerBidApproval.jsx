@@ -1,3 +1,5 @@
+import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
+import { useNavigate } from "react-router-dom";
 import { TonerModels, TonerBrands, CompatiblePrinterModels } from "../ReviewFields";
 import { useEffect, useRef, useState } from "react";
 // Toner-native dropdown vocabulary — same source used at the User config
@@ -46,11 +48,6 @@ const YIELD_STANDARD_DOCS = YIELD_STANDARDS.map((label) => ({
 const toPrice = (value) => {
   const parsed = Number(String(value ?? "").replace(/,/g, "").trim());
   return Number.isFinite(parsed) ? parsed : 0;
-};
-
-const applyTonerMargin = (values) => {
-  if (values.margin == null || String(values.margin).trim() === "") return values;
-  return { ...values, total_price: String(Math.round(toPrice(values.unit_price) + toPrice(values.margin))) };
 };
 
 const TABS = [
@@ -551,7 +548,7 @@ export default function TonerBidApproval() {
   const fetchBids = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/toner-bids/list/?status=${activeTab}&role=admin`);
+      const res = await fetchApprovalBids("toner", activeTab);
       if (!res.ok) throw new Error(`Failed with status ${res.status}`);
       const data = await res.json();
       setBids(sortBids(Array.isArray(data) ? data : data.bids || []));
@@ -565,7 +562,7 @@ export default function TonerBidApproval() {
 
   const fetchReAnalyzeCount = async () => {
     try {
-      const res = await fetch(`${API_BASE}/toner-bids/list/?status=re-analyze&role=admin`);
+      const res = await fetchApprovalBids("toner", "re-analyze");
       if (!res.ok) throw new Error("Failed");
       const data = await res.json();
       setReAnalyzeCount(Array.isArray(data) ? data.length : 0);
@@ -646,6 +643,7 @@ export default function TonerBidApproval() {
     }
   };
 
+  const returnToCombinedList = useNavigate();
   const linkedBidOpened = useRef(false);
   useEffect(() => {
     const linkedId = new URLSearchParams(window.location.search).get("bid");
@@ -657,7 +655,7 @@ export default function TonerBidApproval() {
     }
   }, [bids]);
   const openModal = (bid) => {
-    const formattedBid = bid.status === "approved" ? { ...bid } : applyTonerMargin({ ...bid, total_price: "" });
+    const formattedBid = { ...bid, total_price: bid.status === "approved" ? bid.total_price : "" };
     setSelected(formattedBid);
     setForm({ ...formattedBid });
     setAdminNote(formattedBid.admin_note || "");
@@ -665,6 +663,13 @@ export default function TonerBidApproval() {
   };
 
   const closeModal = () => {
+    const sourceParams = new URLSearchParams(window.location.search);
+    if (sourceParams.get("from") === "all-bids") {
+      const status = sourceParams.get("status") || "pending";
+      const returnFilters = sourceParams.get("returnFilters") || `status=${encodeURIComponent(status)}`;
+      returnToCombinedList(`/admin-dashboard/all-bids-approval?${returnFilters}`, { replace: true });
+      return;
+    }
     setSelected(null);
     setForm({});
     setAdminNote("");
@@ -673,14 +678,7 @@ export default function TonerBidApproval() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setForm((prev) => {
-      if (name === "margin") {
-        const margin = String(value).replace(/\D/g, "");
-        return margin === "" ? { ...prev, margin: "", total_price: "" } : applyTonerMargin({ ...prev, margin });
-      }
-      const next = { ...prev, [name]: value };
-      return name === "unit_price" || name === "qty" ? applyTonerMargin(next) : next;
-    });
+    setForm((prev) => ({ ...prev, [name]: name === "total_price" ? String(value).replace(/\D/g, "") : value }));
   };
 
   const focusInvalidField = (fieldName) => {
@@ -716,6 +714,7 @@ export default function TonerBidApproval() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...form,
+          margin: "",
           status: action,
           admin_note: note,
           admin_username: localStorage.getItem("admin_username") || localStorage.getItem("username") || "",
@@ -1061,36 +1060,13 @@ export default function TonerBidApproval() {
                 <SpecField label="Compliance" name="compliance" options={SPEC_OPTIONS.compliance} optional form={form} handleChange={handleChange} />
                 <SpecField label="Replacement Policy" name="replacement_policy" options={SPEC_OPTIONS.replacement_policy} form={form} handleChange={handleChange} />
 
-                <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border border-slate-300 bg-slate-50 p-3">
-                    <div className="flex flex-col gap-2">
-                      <label className="block text-sm font-semibold text-slate-800">Total Value</label>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="font-semibold text-slate-700">₹</span>
-                        <input type="number" min="0" step="0.01" name="unit_price" placeholder="Price" value={priceInputValue(form?.unit_price ?? "")} onChange={handleChange}
-                          className="w-full min-w-0 rounded-md border border-slate-300 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-800 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="rounded-lg border border-amber-300 bg-amber-50 p-3">
-                    <label htmlFor="toner-admin-margin" className="block text-sm font-semibold text-amber-900 mb-2">Margin (Rs.)</label>
-                    <input id="toner-admin-margin" type="text" inputMode="numeric" name="margin" value={form.margin ?? ""} onChange={handleChange} placeholder="Enter margin"
-                      className="w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-right text-sm font-semibold outline-none focus:ring-2 focus:ring-amber-200 disabled:bg-slate-100" />
-                  </div>
-                  <div className="rounded-lg border border-emerald-300 bg-emerald-50 p-3">
-                    <div className="flex flex-col gap-2">
-                      <label className="block text-sm font-semibold text-emerald-900">
-                        Bid Approved Price <span className="text-red-600">*</span>
-                      </label>
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span className="font-semibold text-emerald-800">₹</span>
-                        <input type="number" min="0" step="0.01" name="total_price" value={priceInputValue(form?.total_price ?? "")} onChange={handleChange} required
-                          placeholder="Enter approved price"
-                          readOnly={(form.margin != null && String(form.margin) !== "")}
-                          className="w-full min-w-0 rounded-md border border-emerald-300 bg-white px-3 py-2 text-right text-sm font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-700 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
-                      </div>
-                    </div>
+                <div className="rounded-md border-2 border-emerald-300 bg-emerald-50 p-4 shadow-sm">
+                  <label htmlFor="toner-approved-price" className="mb-1 block text-sm font-bold text-emerald-800">Bid Approved Price <span className="text-red-600">*</span></label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-sm font-bold text-emerald-700">Rs.</span>
+                    <input id="toner-approved-price" name="total_price" type="number" min="0" step="1" required
+                      value={priceInputValue(form.total_price ?? "")} onChange={handleChange}
+                      className="w-full rounded-md border-2 border-emerald-500 bg-white py-2.5 pl-11 pr-3 text-base font-bold text-emerald-900 outline-none focus:border-emerald-700 focus:ring-2 focus:ring-emerald-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                   </div>
                 </div>
 

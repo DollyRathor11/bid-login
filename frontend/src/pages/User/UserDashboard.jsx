@@ -1,7 +1,9 @@
+import useDailyActivity from "../../hooks/useDailyActivity";
 import { useEffect, useState } from "react";
+import DailyActivityChart from "../../components/DailyActivityChart";
 import "./UserDashboard.css";
 import { useNavigate } from "react-router-dom";
-import { FaFileInvoiceDollar, FaHourglassHalf, FaThumbsUp, FaThumbsDown, FaClipboardList } from "react-icons/fa";
+import { FaFileInvoiceDollar, FaHourglassHalf, FaThumbsUp, FaThumbsDown, FaClipboardList, FaBan } from "react-icons/fa";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from "recharts";
 
 const API = import.meta.env.VITE_API_URL;
@@ -9,6 +11,7 @@ const PRODUCTS = [["all", "All Bids"], ["desktop", "Desktop"], ["aio", "AIO"], [
 
 export default function UserDashboard() {
   const [product, setProduct] = useState("all");
+  const activity = useDailyActivity(product);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -27,7 +30,7 @@ export default function UserDashboard() {
         if (!response.ok) throw new Error(result.error || "Unable to load your dashboard.");
         if (!controller.signal.aborted) { setData(result); setError(""); }
       } catch (err) {
-        if (err.name !== "AbortError") { setError(err.message); setData(null); }
+        if (!controller.signal.aborted && err.name !== "AbortError") { setError(err.message); setData(null); }
       } finally {
         if (!controller.signal.aborted) setLoading(false);
       }
@@ -42,13 +45,15 @@ export default function UserDashboard() {
     { label: "Total Bids", value: stats?.total, Icon: FaFileInvoiceDollar, color: "from-blue-500 to-blue-600" },
     { label: "Pending Bids", value: stats?.pending, Icon: FaHourglassHalf, color: "from-amber-400 to-amber-500" },
     { label: "Approved Bids", value: stats?.approved, Icon: FaThumbsUp, color: "from-emerald-500 to-emerald-600" },
-    { label: "Re-Analyze", value: stats?.rejected, Icon: FaThumbsDown, color: "from-rose-500 to-rose-600" },
-    { label: "Bids Assigned to You", value: data?.assigned, Icon: FaClipboardList, color: "from-teal-500 to-teal-600", onClick: () => navigate("/user/bid-to-be-participated") },
+    { label: "Re-Analyze", value: stats?.reAnalyze, Icon: FaThumbsDown, color: "from-rose-500 to-rose-600" },
+    { label: "Rejected Bids", value: stats?.rejected, Icon: FaBan, color: "from-red-800 to-red-950" },
+    { label: "Bids Assigned to User", value: data?.assigned, Icon: FaClipboardList, color: "from-teal-500 to-teal-600", onClick: () => navigate("/user/bid-to-be-participated") },
   ];
   const ratio = [
     { name: "Pending", value: stats?.pending || 0, color: "#f59e0b" },
     { name: "Approved", value: stats?.approved || 0, color: "#10b981" },
-    { name: "Re-Analyze", value: stats?.rejected || 0, color: "#f43f5e" },
+    { name: "Re-Analyze", value: stats?.reAnalyze || 0, color: "#f43f5e" },
+    { name: "Rejected", value: stats?.rejected || 0, color: "#7f1d1d" },
   ];
 
   return <div className="space-y-6">
@@ -72,12 +77,7 @@ export default function UserDashboard() {
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <section className="min-w-0 rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-sm">
         <h2 className="mb-6 border-l-4 border-blue-600 pl-3 text-base font-extrabold uppercase text-slate-800">Daily Activity</h2>
-        {loading ? <div className="flex h-72 items-center justify-center text-sm text-slate-400">Loading your activity...</div> : error ? <p className="py-24 text-center text-slate-400">Activity unavailable</p> : <div className="h-72">
-          <ResponsiveContainer width="100%" height="100%"><BarChart data={data?.daily || []}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eef2f7" /><XAxis dataKey="day" tick={{ fontSize: 12 }} axisLine={false} tickLine={false} /><YAxis allowDecimals={false} tick={{ fontSize: 12 }} axisLine={false} tickLine={false} /><Tooltip labelFormatter={(_, rows) => rows?.[0]?.payload?.date || ""} /><Legend />
-            <Bar dataKey="pending" name="Pending" stackId="bids" fill="#f59e0b" /><Bar dataKey="approved" name="Approved" stackId="bids" fill="#10b981" /><Bar dataKey="rejected" name="Re-Analyze" stackId="bids" fill="#f43f5e" />
-          </BarChart></ResponsiveContainer>
-        </div>}
+        <DailyActivityChart {...activity} />
       </section>
       <section className="min-w-0 rounded-2xl border-2 border-slate-100 bg-white p-6 shadow-sm">
         <h2 className="mb-6 border-l-4 border-indigo-600 pl-3 text-base font-extrabold uppercase text-slate-800">Status Ratio</h2>

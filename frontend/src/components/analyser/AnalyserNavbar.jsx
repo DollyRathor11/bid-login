@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import DailyActivityChart from "../DailyActivityChart";
+import useDailyActivity from "../../hooks/useDailyActivity";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import useOutsideClick from "../../hooks/useOutsideClick";
 import { connectGemExtension } from "../../utils/connectGemExtension";
@@ -77,9 +79,10 @@ const normalizeDailyData = (data = []) =>
     fullDay: item.fullDay || item.day,
     date: item.date,
     bids: Number(item.total ?? 0),
-    approved: Number(item.approved ?? item.reviewed ?? 0),
+    approved: Number(item.approved ?? 0),
     pending: Number(item.pending ?? 0),
-    rejected: Number(item.rejected ?? item.reAnalyze ?? 0),
+    rejected: Number(item.rejected ?? 0),
+    reAnalyze: Number(item.reAnalyze ?? 0),
     total: Number(item.total ?? 0),
   }));
 
@@ -106,12 +109,12 @@ const StatCard = ({ label, value, Icon, gradient, loading, onClick }) => (
 const AnalyserHome = () => {
   const navigate = useNavigate();
   const [selectedProduct, setSelectedProduct] = useState(PRODUCTS[0]);
+  const activity = useDailyActivity(selectedProduct.key);
   const [dropOpen, setDropOpen] = useState(false);
   const productDropdownRef = useRef(null);
   const [selectedYear, setSelectedYear] = useState(2026);
   const [yearOptions, setYearOptions] = useState([2026, 2027, 2028]);
   const [stats, setStats] = useState({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
-  const [dailyData, setDailyData] = useState([]);
   const [monthlyData, setMonthlyData] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -138,7 +141,6 @@ const AnalyserHome = () => {
   const fetchDashboardData = useCallback(async () => {
     if (!selectedProduct.ready) {
       setStats({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
-      setDailyData([]);
       setMonthlyData([]);
       setLoading(false);
       return;
@@ -146,16 +148,14 @@ const AnalyserHome = () => {
     setLoading(true);
     try {
       const api = DASHBOARD_API_MAP[selectedProduct.key];
-      const [monthlyRes, dailyRes, pendingRes, reviewedRes, reAnalyzeRes, rejectedRes] = await Promise.all([
+      const [monthlyRes, pendingRes, reviewedRes, reAnalyzeRes, rejectedRes] = await Promise.all([
         fetch(`${api.monthly}?year=${selectedYear}`),
-        fetch(api.daily),
         fetch(`${api.list}?status=pending&role=analyser&year=${selectedYear}`),
         fetch(`${api.list}?status=${["desktop", "toner"].includes(selectedProduct.key) ? "approved" : "reviewed"}&role=analyser&year=${selectedYear}`),
         fetch(`${api.list}?status=re-analyze&role=analyser&year=${selectedYear}`),
         fetch(`${api.list}?status=rejected&role=analyser&year=${selectedYear}`),
       ]);
       const monthlyJson = monthlyRes.ok ? await monthlyRes.json() : [];
-      const dailyJson = dailyRes.ok ? await dailyRes.json() : [];
       const pendingJson = pendingRes.ok ? await pendingRes.json() : [];
       const reviewedJson = reviewedRes.ok ? await reviewedRes.json() : [];
       const reAnalyzeJson = reAnalyzeRes.ok ? await reAnalyzeRes.json() : [];
@@ -166,10 +166,8 @@ const AnalyserHome = () => {
       const rejected = Array.isArray(rejectedJson) ? rejectedJson.length : 0;
       setStats({ pending, reviewed, reAnalyze, rejected, total: pending + reviewed + reAnalyze + rejected });
       setMonthlyData(normalizeMonthlyData(monthlyJson));
-      setDailyData(normalizeDailyData(dailyJson));
     } catch {
       setStats({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
-      setDailyData([]);
       setMonthlyData([]);
     } finally {
       setLoading(false);
@@ -228,15 +226,7 @@ const AnalyserHome = () => {
             <div className="w-1 h-6 bg-blue-600 rounded-full" />
             Daily Activity
           </h3>
-          <ResponsiveContainer width="100%" height={230}>
-            <BarChart data={dailyData}>
-              <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
-              <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontWeight: 700, fontSize: 11, fill: "#64748b" }} />
-              <YAxis allowDecimals={false} axisLine={false} tickLine={false} tick={{ fontWeight: 600, fontSize: 10, fill: "#94a3b8" }} />
-              <Tooltip cursor={{ fill: "#f8fafc" }} contentStyle={{ borderRadius: 10, border: "none", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }} />
-              <Bar dataKey="bids" name="Total Bids" fill="#2563eb" radius={[6, 6, 0, 0]} barSize={28} />
-            </BarChart>
-          </ResponsiveContainer>
+          <DailyActivityChart {...activity} />
         </div>
         <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm flex flex-col items-center">
           <h3 className="w-full text-base font-black text-slate-800 mb-2 flex items-center gap-3 uppercase tracking-tight">
