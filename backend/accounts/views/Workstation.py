@@ -998,6 +998,24 @@ def admin_review_workstation_bid(request, bid_id):
         action = data.get("status", "")
         if action not in ("approved", "re-analyze"):
             return JsonResponse({"error": "Invalid status."}, status=400)
+        if action == "approved":
+            from decimal import Decimal, InvalidOperation
+            local_content = str(data.get("local_content") if data.get("local_content") is not None else "").strip().removesuffix("%").strip()
+            try:
+                content = Decimal(local_content)
+                if not content.is_finite() or not 0 <= content <= 100:
+                    raise InvalidOperation
+            except (InvalidOperation, ValueError):
+                return JsonResponse({"error": "Please enter Local Content between 0 and 100%."}, status=400)
+            hdd_option = data.get("hddreturnable", data.get("hdd_non_return", bid.hdd_non_return))
+            if str(hdd_option).strip().lower() == "yes":
+                price_value = data.get("hddreturnable_price", data.get("hdd_non_return_price", bid.hdd_non_return_price))
+                try:
+                    price = Decimal(str(price_value))
+                    if not price.is_finite() or price <= 0:
+                        raise InvalidOperation
+                except (InvalidOperation, ValueError):
+                    return JsonResponse({"error": "Please enter a valid HDD Return Option price greater than 0."}, status=400)
         from .model_duplicates import guard_new_model
         blocked = guard_new_model(
             match_workstation_catalogue_models, request, bid_id,
