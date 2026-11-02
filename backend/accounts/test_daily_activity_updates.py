@@ -19,7 +19,7 @@ class DailyActivityUpdateTests(SimpleTestCase):
         queryset = model.objects.exclude.return_value
         queryset.filter.return_value = bids
         for role in ("admin", "analyser", "user"):
-            with self.subTest(role=role), patch("accounts.views.DailyActivity._require_role", return_value=(SimpleNamespace(role=role, username="test"), None)), patch("accounts.views.DailyActivity._model", return_value=model), patch("accounts.views.DailyActivity._filter_user", return_value=queryset):
+            with self.subTest(role=role), patch("accounts.views.DailyActivity._require_role", return_value=(SimpleNamespace(role=role, username="test"), None)), patch("accounts.views.DailyActivity._model", return_value=model), patch("accounts.views.DailyActivity._filter_user", return_value=queryset), patch("accounts.views.DailyActivity.analyser_dashboard_bids", return_value=queryset):
                 response = daily_activity(RequestFactory().get("/", {"product": "desktop"}))
                 self.assertEqual(response.status_code, 200)
                 rows = json.loads(response.content)

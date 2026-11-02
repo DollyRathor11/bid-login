@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import DailyActivityChart from "../DailyActivityChart";
 import useDailyActivity from "../../hooks/useDailyActivity";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
@@ -36,55 +36,7 @@ const BID_PRODUCTS = [
 ];
 const PRODUCTS = BID_PRODUCTS;
 const NAV_ENABLED_KEYS = new Set(["desktop", "aio", "workstation", "printer", "toner"]);
-const DASHBOARD_API_MAP = {
-  toner: {
-    years: `${API_BASE}/toner-bids/dashboard-years/`,
-    monthly: `${API_BASE}/toner-bids/monthly-performance/`,
-    daily: `${API_BASE}/toner-bids/daily-activity/`,
-    list: `${API_BASE}/toner-bids/list/`,
-  },
-  desktop: {
-    years: `${API_BASE}/desktop-bids/dashboard-years/`,
-    monthly: `${API_BASE}/desktop-bids/monthly-performance/`,
-    daily: `${API_BASE}/desktop-bids/daily-activity/`,
-    list: `${API_BASE}/desktop-bids/list/`,
-  },
-  workstation: {
-    years: `${API_BASE}/workstation-bids/dashboard-years/`,
-    monthly: `${API_BASE}/workstation-bids/monthly-performance/`,
-    daily: `${API_BASE}/workstation-bids/daily-activity/`,
-    list: `${API_BASE}/workstation-bids/list/`,
-  },
-  printer: {
-    years: `${API_BASE}/printer-bids/dashboard-years/`,
-    monthly: `${API_BASE}/printer-bids/monthly-performance/`,
-    daily: `${API_BASE}/printer-bids/daily-activity/`,
-    list: `${API_BASE}/printer-bids/list/`,
-  },
-};
 const STATUS_COLORS = { approved: "#10b981", pending: "#f59e0b", rejected: "#ef4444" };
-
-const normalizeMonthlyData = (data = []) =>
-  data.map((item) => ({
-    month: item.month,
-    approved: Number(item.approved ?? item.reviewed ?? 0),
-    pending: Number(item.pending ?? 0),
-    rejected: Number(item.rejected ?? item.reAnalyze ?? 0),
-    total: Number(item.total ?? 0),
-  }));
-
-const normalizeDailyData = (data = []) =>
-  data.map((item) => ({
-    day: item.shortDay || item.day || item.fullDay,
-    fullDay: item.fullDay || item.day,
-    date: item.date,
-    bids: Number(item.total ?? 0),
-    approved: Number(item.approved ?? 0),
-    pending: Number(item.pending ?? 0),
-    rejected: Number(item.rejected ?? 0),
-    reAnalyze: Number(item.reAnalyze ?? 0),
-    total: Number(item.total ?? 0),
-  }));
 
 const StatCard = ({ label, value, Icon, gradient, loading, onClick }) => (
   <div
@@ -112,71 +64,49 @@ const AnalyserHome = () => {
   const activity = useDailyActivity(selectedProduct.key);
   const [dropOpen, setDropOpen] = useState(false);
   const productDropdownRef = useRef(null);
-  const [selectedYear, setSelectedYear] = useState(2026);
-  const [yearOptions, setYearOptions] = useState([2026, 2027, 2028]);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [yearOptions, setYearOptions] = useState([new Date().getFullYear()]);
   const [stats, setStats] = useState({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
   const [monthlyData, setMonthlyData] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useOutsideClick(productDropdownRef, () => setDropOpen(false), dropOpen);
 
-  const fetchYears = useCallback(async () => {
-    if (!selectedProduct.ready) return;
-    try {
-      const api = DASHBOARD_API_MAP[selectedProduct.key];
-      const res = await fetch(api.years);
-      if (!res.ok) return;
-      const data = await res.json();
-      if (Array.isArray(data) && data.length > 0) {
-        setYearOptions(data);
-        const currentYear = new Date().getFullYear();
-        setSelectedYear(data.includes(currentYear) ? currentYear : data[0]);
+  const [dashboardError, setDashboardError] = useState("");
+  useEffect(() => {
+    const controller = new AbortController();
+    let latestRequest = 0;
+    const load = async () => {
+      const requestId = ++latestRequest;
+      setLoading(true);
+      try {
+        const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+        const params = new URLSearchParams({ product: selectedProduct.key, year: String(selectedYear) });
+        const response = await fetch(`${API_BASE}/analyser/dashboard/?${params}`, {
+          headers: { Authorization: `Bearer ${token}` }, signal: controller.signal,
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to load your dashboard.");
+        if (controller.signal.aborted || requestId !== latestRequest) return;
+        setStats({ ...data.stats, reviewed: data.stats.approved });
+        setMonthlyData(data.monthly);
+        setYearOptions(data.years);
+        setDashboardError("");
+      } catch (error) {
+        if (controller.signal.aborted || requestId !== latestRequest) return;
+        setDashboardError(error.message);
+        setStats({ pending: null, reviewed: null, reAnalyze: null, rejected: null, total: null });
+        setMonthlyData([]);
+      } finally {
+        if (!controller.signal.aborted && requestId === latestRequest) setLoading(false);
       }
-    } catch {
-      setYearOptions([2026, 2027, 2028]);
-      setSelectedYear(2026);
-    }
-  }, [selectedProduct]);
-
-  const fetchDashboardData = useCallback(async () => {
-    if (!selectedProduct.ready) {
-      setStats({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
-      setMonthlyData([]);
-      setLoading(false);
-      return;
-    }
-    setLoading(true);
-    try {
-      const api = DASHBOARD_API_MAP[selectedProduct.key];
-      const [monthlyRes, pendingRes, reviewedRes, reAnalyzeRes, rejectedRes] = await Promise.all([
-        fetch(`${api.monthly}?year=${selectedYear}`),
-        fetch(`${api.list}?status=pending&role=analyser&year=${selectedYear}`),
-        fetch(`${api.list}?status=${["desktop", "toner"].includes(selectedProduct.key) ? "approved" : "reviewed"}&role=analyser&year=${selectedYear}`),
-        fetch(`${api.list}?status=re-analyze&role=analyser&year=${selectedYear}`),
-        fetch(`${api.list}?status=rejected&role=analyser&year=${selectedYear}`),
-      ]);
-      const monthlyJson = monthlyRes.ok ? await monthlyRes.json() : [];
-      const pendingJson = pendingRes.ok ? await pendingRes.json() : [];
-      const reviewedJson = reviewedRes.ok ? await reviewedRes.json() : [];
-      const reAnalyzeJson = reAnalyzeRes.ok ? await reAnalyzeRes.json() : [];
-      const rejectedJson = rejectedRes.ok ? await rejectedRes.json() : [];
-      const pending = Array.isArray(pendingJson) ? pendingJson.length : 0;
-      const reviewed = Array.isArray(reviewedJson) ? reviewedJson.length : 0;
-      const reAnalyze = Array.isArray(reAnalyzeJson) ? reAnalyzeJson.length : 0;
-      const rejected = Array.isArray(rejectedJson) ? rejectedJson.length : 0;
-      setStats({ pending, reviewed, reAnalyze, rejected, total: pending + reviewed + reAnalyze + rejected });
-      setMonthlyData(normalizeMonthlyData(monthlyJson));
-    } catch {
-      setStats({ pending: 0, reviewed: 0, reAnalyze: 0, rejected: 0, total: 0 });
-      setMonthlyData([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [selectedProduct, selectedYear]);
-
-  useEffect(() => { fetchYears(); }, [fetchYears]);
-  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
-
+    };
+    const refresh = () => { if (document.visibilityState === "visible") load(); };
+    load();
+    const timer = setInterval(refresh, 15000);
+    window.addEventListener("focus", refresh);
+    return () => { controller.abort(); clearInterval(timer); window.removeEventListener("focus", refresh); };
+  }, [selectedProduct.key, selectedYear]);
   const pieData = [
     { name: "Approved", value: stats.reviewed, fill: STATUS_COLORS.approved },
     { name: "Pending", value: stats.pending, fill: STATUS_COLORS.pending },
@@ -186,6 +116,7 @@ const AnalyserHome = () => {
 
   return (
     <div className="space-y-6 pb-8">
+      {dashboardError && <div role="alert" className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{dashboardError}</div>}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div ref={productDropdownRef} className="relative">
           <button
@@ -267,7 +198,8 @@ const AnalyserHome = () => {
             <Legend verticalAlign="top" align="right" wrapperStyle={{ paddingBottom: 10, fontSize: "11px", fontWeight: "bold" }} />
             <Bar dataKey="approved" name="Approved" fill="#10b981" radius={[6, 6, 0, 0]} />
             <Bar dataKey="pending" name="Pending" fill="#f59e0b" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="rejected" name="Rejected" fill="#ef4444" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="reAnalyze" name="Re-Analyze" fill="#f43f5e" radius={[6, 6, 0, 0]} />
+            <Bar dataKey="rejected" name="Rejected" fill="#7f1d1d" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
       </div>

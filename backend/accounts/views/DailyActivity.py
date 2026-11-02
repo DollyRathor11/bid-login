@@ -4,7 +4,7 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
-from ..dashboard_metrics import PRODUCTS, dashboard_status
+from ..dashboard_metrics import PRODUCTS, dashboard_status, analyser_dashboard_bids
 from .Gem import _require_role
 from .ProductDashboard import _filter_user, _model
 
@@ -33,7 +33,7 @@ def daily_activity(request):
         elif actor.role == "user":
             bids = _filter_user(_model(key).objects.exclude(status="draft"), actor.username)
         else:
-            bids = _model(key).objects.exclude(status="draft")
+            bids = analyser_dashboard_bids(_model(key), actor)
         for bid in bids.filter(updated_at__date__gte=sunday, updated_at__date__lte=today):
             date = timezone.localtime(bid.updated_at).date().isoformat()
             if date in rows:

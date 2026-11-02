@@ -4,6 +4,10 @@ from .models import GemBidAssignment
 PRODUCTS = ("desktop", "aio", "workstation", "printer", "toner")
 
 
+def analyser_dashboard_bids(model, actor):
+    return model.objects.exclude(status="draft").filter(analyser_username=actor.username)
+
+
 def dashboard_assignments(product="all"):
     """Total assignments include completed and hidden rows, in both dashboards."""
     rows = GemBidAssignment.objects.all()
