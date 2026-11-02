@@ -44,6 +44,7 @@ from .views.Printer import (
 from .views import ProductDashboard as product_dashboard
 from .views.UserDashboard import user_dashboard
 from .views.DailyActivity import daily_activity
+from .views.AnalyserDashboard import analyser_dashboard
 from .views.Aio import (
     create_aio_bid,
     update_aio_bid,
@@ -111,6 +112,7 @@ urlpatterns = [
     path("delete-admin/<int:id>/", views.delete_admin),
     path("management-list/", views.management_list),
     path("user/dashboard/", user_dashboard),
+    path("analyser/dashboard/", analyser_dashboard),
     path("dashboard/daily-activity/", daily_activity),
     path("register-management/", views.register_management),
     path("delete-management/<int:id>/", views.delete_management),
