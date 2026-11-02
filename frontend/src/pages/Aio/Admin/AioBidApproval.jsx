@@ -597,6 +597,7 @@ export default function AioBidApproval() {
       ...bid,
       freightInstallation: bid.freightInstallation || "Yes",
       freightInstallation_price: (bid.freightInstallation || "Yes") === "No" ? 0 : bid.freightInstallation_price || 1000,
+      hddreturnable_price: ["No", "None"].includes(bid.hddreturnable) ? 0 : bid.hddreturnable_price,
     };
     formattedBid.component_total_price = calculateTotalPrice(formattedBid);
     formattedBid.total_price = bid.status === "approved" ? bid.total_price : "";
@@ -632,6 +633,7 @@ export default function AioBidApproval() {
       }
       if (name === "total_price") return { ...prev, total_price: wholeRupees(value) };
       const next = { ...prev, [name]: value };
+      if (name === "hddreturnable" && ["No", "None"].includes(value)) next.hddreturnable_price = 0;
       const options = SPEC_OPTIONS[name];
       const priceField = name === "screen_size" ? "screen_price" : `${name}_price`;
       if (options) next[priceField] = value === "None" ? 0 : getPrice(options, value);
@@ -646,7 +648,14 @@ export default function AioBidApproval() {
     field.scrollIntoView({ behavior: "smooth", block: "center" });
     field.focus({ preventScroll: true });
     field.classList.add("ring-2", "ring-red-500", "border-red-500", "bg-red-50");
-    const clearHighlight = () => field.classList.remove("ring-2", "ring-red-500", "border-red-500", "bg-red-50");
+    const previousBackground = field.style.backgroundColor;
+    field.style.backgroundColor = "#fef2f2";
+    const clearHighlight = () => {
+      field.classList.remove("ring-2", "ring-red-500", "border-red-500", "bg-red-50");
+      field.style.backgroundColor = previousBackground;
+      field.removeEventListener("input", clearHighlight);
+      field.removeEventListener("change", clearHighlight);
+    };
     field.addEventListener("input", clearHighlight, { once: true });
     field.addEventListener("change", clearHighlight, { once: true });
   };
@@ -655,9 +664,10 @@ export default function AioBidApproval() {
   const handleAction = async (action, note = adminNote) => {
     setMsg("");
     if (action === "approved") {
-      const localContent = String(form.local_content || "").trim().replace(/%$/, "");
+      const localContent = String(form.local_content ?? "").trim().replace(/%$/, "").trim();
       const localContentNumber = Number(localContent);
       if (!localContent || !Number.isFinite(localContentNumber) || localContentNumber < 0 || localContentNumber > 100) {
+        setMsg("Please enter Local Content between 0 and 100%.");
         focusInvalidField("local_content");
         return;
       }
@@ -666,14 +676,17 @@ export default function AioBidApproval() {
       const unpriced = findUnpricedComponent(form, COMPONENT_PRICE_PAIRS.filter(([name]) =>
         !(name === "motherboard" && String(form.motherboard || "").startsWith("Integrated"))));
       if (unpriced) {
+        setMsg("Please enter a valid price for the selected component.");
         focusInvalidField(unpriced[1]);
         return;
       }
       if (form.hddreturnable === "Yes" && toPrice(form.hddreturnable_price) <= 0) {
+        setMsg("Please enter a valid HDD Return Option price greater than 0.");
         focusInvalidField("hddreturnable_price");
         return;
       }
       if (!String(form.total_price ?? "").trim() || toPrice(form.total_price) <= 0) {
+        setMsg("Please enter a valid Bid Approved Price.");
         focusInvalidField("total_price");
         return;
       }
@@ -1054,7 +1067,7 @@ export default function AioBidApproval() {
                       <option value="Yes">Yes</option>
                       <option value="No">No</option>
                     </select>
-                    <input type="number" min="0" step="0.01" required={form?.hddreturnable === "Yes"} name="hddreturnable_price" value={priceInputValue(form?.hddreturnable_price || "")} onChange={handleChange}
+                    <input type="number" min="0" step="0.01" required={form?.hddreturnable === "Yes"} name="hddreturnable_price" value={["No", "None"].includes(form?.hddreturnable) ? "00" : priceInputValue(form?.hddreturnable_price ?? "")} readOnly={["No", "None"].includes(form?.hddreturnable)} onChange={handleChange}
                       placeholder="Price" className="w-28 border border-blue-300 rounded-md px-2 py-2 text-sm text-center outline-none focus:ring-2 focus:ring-blue-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
                   </div>
                 </div>

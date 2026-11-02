@@ -575,22 +575,44 @@ export default function WorkstationBidApproval() {
     field.scrollIntoView({ behavior: "smooth", block: "center" });
     field.focus({ preventScroll: true });
     field.classList.add("ring-2", "ring-red-500", "border-red-500", "bg-red-50");
-    const clearHighlight = () => field.classList.remove("ring-2", "ring-red-500", "border-red-500", "bg-red-50");
+    const previousBackground = field.style.backgroundColor;
+    field.style.backgroundColor = "#fef2f2";
+    const clearHighlight = () => {
+      field.classList.remove("ring-2", "ring-red-500", "border-red-500", "bg-red-50");
+      field.style.backgroundColor = previousBackground;
+      field.removeEventListener("input", clearHighlight);
+      field.removeEventListener("change", clearHighlight);
+    };
     field.addEventListener("input", clearHighlight, { once: true });
     field.addEventListener("change", clearHighlight, { once: true });
   };
 
   // note: the admin note to save; Reject Bid passes the popup's reason.
   const handleAction = async (status, note = adminNote) => {
+    setMsg("");
+    if (status === "approved") {
+      const localContent = String(form.local_content ?? "").trim().replace(/%$/, "").trim();
+      if (!localContent || !Number.isFinite(Number(localContent)) || Number(localContent) < 0 || Number(localContent) > 100) {
+        setMsg("Please enter Local Content between 0 and 100%.");
+        focusInvalidField("local_content");
+        return;
+      }
+      if (form.hddreturnable === "Yes" && toPrice(form.hddreturnable_price) <= 0) {
+        setMsg("Please enter a valid HDD Return Option price greater than 0.");
+        focusInvalidField("hddreturnable_price");
+        return;
+      }
+    }
     // A chosen component (anything but "None") must be priced before approval.
     const unpriced = status === "approved" && findUnpricedComponent(form, COMPONENT_PRICE_PAIRS);
     if (unpriced) {
+      setMsg("Please enter a valid price for the selected component.");
       focusInvalidField(unpriced[1]);
       return;
     }
-    if (status === "approved" && toPrice(form.total_price) <= 0) {
+    if (status === "approved" && (!String(form.total_price ?? "").trim() || toPrice(form.total_price) <= 0)) {
       setMsg("Please enter a valid Bid Approved Price.");
-      document.querySelector('[name="total_price"]')?.focus();
+      focusInvalidField("total_price");
       return;
     }
     setSubmitting(true);
@@ -925,7 +947,8 @@ export default function WorkstationBidApproval() {
                   type="text"
                   inputMode="decimal"
                   name="local_content"
-                  value={form.local_content || ""}
+                  value={form.local_content ?? ""}
+                  required
                   onChange={handleChange}
                   placeholder="Enter Local Content"
                   className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
