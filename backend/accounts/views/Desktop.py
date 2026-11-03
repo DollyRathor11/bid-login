@@ -5498,8 +5498,6 @@ def review_desktop_bid(request, bid_id):
         bid.status = "complete"
         bid.review_status = "pending"
         bid.save()
-        from .GemAssignments import complete_user_assignment_for_bid
-        complete_user_assignment_for_bid(bid.bid_no, bid.user)
 
         return JsonResponse({
             "success": True,

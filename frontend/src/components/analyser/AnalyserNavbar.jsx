@@ -14,6 +14,7 @@ import {
   FaChevronDown,
   FaUserCircle,
   FaClipboardList,
+  FaFileInvoiceDollar,
   FaCheckCircle,
   FaExclamationTriangle,
   FaBan,
@@ -145,9 +146,12 @@ const AnalyserHome = () => {
           )}
         </div>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <StatCard label="Total Bids" value={stats.total} Icon={FaFileInvoiceDollar} gradient="bg-gradient-to-br from-blue-500 to-blue-600" loading={loading} />
         <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=pending`)} label="Pending Bids" value={stats.pending} Icon={FaClipboardList} gradient="bg-gradient-to-br from-amber-400 to-orange-500" loading={loading} />
         <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=approved`)} label="Approved Bids" value={stats.reviewed} Icon={FaCheckCircle} gradient="bg-gradient-to-br from-emerald-400 to-emerald-600" loading={loading} />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=re-analyze`)} label="Re-Analyze Bids" value={stats.reAnalyze} Icon={FaExclamationTriangle} gradient="bg-gradient-to-br from-rose-500 to-rose-700" loading={loading} />
         <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=rejected`)} label="Rejected Bids" value={stats.rejected} Icon={FaBan} gradient="bg-gradient-to-br from-red-800 to-red-950" loading={loading} />
       </div>
