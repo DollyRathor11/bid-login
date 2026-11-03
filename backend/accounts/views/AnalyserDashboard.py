@@ -15,6 +15,23 @@ def analyser_dashboard(request):
     product = request.GET.get("product", "desktop")
     if product not in PRODUCTS:
         return JsonResponse({"error": "Unknown product"}, status=400)
+    if request.GET.get("rows") == "1":
+        status = request.GET.get("status", "all")
+        wanted = {"re-analyze": "reAnalyze"}.get(status, status)
+        if wanted not in ("all", "pending", "approved", "reAnalyze", "rejected"):
+            return JsonResponse({"error": "Invalid status"}, status=400)
+        from .Desktop import _bid_data
+        from .Workstation import _workstation_bid_data
+        from .Printer import _printer_bid_data
+        from .Aio import _json as aio_data
+        from .Toner import _json as toner_data
+        serializer = {"desktop": _bid_data, "workstation": _workstation_bid_data, "printer": _printer_bid_data, "aio": aio_data, "toner": toner_data}[product]
+        rows = []
+        for bid in analyser_dashboard_bids(_model(product), actor).iterator():
+            label = dashboard_status(bid)
+            if wanted == "all" or label == wanted:
+                rows.append({**serializer(bid, request), "dashboard_status": label})
+        return JsonResponse({"bids": rows})
     try:
         year = int(request.GET.get("year") or timezone.localdate().year)
         if not 1 <= year <= 9999:

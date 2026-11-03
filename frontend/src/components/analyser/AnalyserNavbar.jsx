@@ -147,13 +147,13 @@ const AnalyserHome = () => {
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard label="Total Bids" value={stats.total} Icon={FaFileInvoiceDollar} gradient="bg-gradient-to-br from-blue-500 to-blue-600" loading={loading} />
-        <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=pending`)} label="Pending Bids" value={stats.pending} Icon={FaClipboardList} gradient="bg-gradient-to-br from-amber-400 to-orange-500" loading={loading} />
-        <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=approved`)} label="Approved Bids" value={stats.reviewed} Icon={FaCheckCircle} gradient="bg-gradient-to-br from-emerald-400 to-emerald-600" loading={loading} />
+        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=all&product=${selectedProduct.key}`)} label="Total Bids" value={stats.total} Icon={FaFileInvoiceDollar} gradient="bg-gradient-to-br from-blue-500 to-blue-600" loading={loading} />
+        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=pending&product=${selectedProduct.key}`)} label="Pending Bids" value={stats.pending} Icon={FaClipboardList} gradient="bg-gradient-to-br from-amber-400 to-orange-500" loading={loading} />
+        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=approved&product=${selectedProduct.key}`)} label="Approved Bids" value={stats.reviewed} Icon={FaCheckCircle} gradient="bg-gradient-to-br from-emerald-400 to-emerald-600" loading={loading} />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=re-analyze`)} label="Re-Analyze Bids" value={stats.reAnalyze} Icon={FaExclamationTriangle} gradient="bg-gradient-to-br from-rose-500 to-rose-700" loading={loading} />
-        <StatCard onClick={() => navigate(`/analyser-dashboard/${selectedProduct.key}?status=rejected`)} label="Rejected Bids" value={stats.rejected} Icon={FaBan} gradient="bg-gradient-to-br from-red-800 to-red-950" loading={loading} />
+        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=re-analyze&product=${selectedProduct.key}`)} label="Re-Analyze Bids" value={stats.reAnalyze} Icon={FaExclamationTriangle} gradient="bg-gradient-to-br from-rose-500 to-rose-700" loading={loading} />
+        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=rejected&product=${selectedProduct.key}`)} label="Rejected Bids" value={stats.rejected} Icon={FaBan} gradient="bg-gradient-to-br from-red-800 to-red-950" loading={loading} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm">
@@ -209,6 +209,50 @@ const AnalyserHome = () => {
       </div>
     </div>
   );
+};
+
+const AnalyserCardBids = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const product = params.get("product") || "desktop";
+  const status = params.get("cardStatus") || "all";
+  const labels = { all: "Total Bids", pending: "Pending Bids", approved: "Approved Bids", "re-analyze": "Re-Analyze Bids", rejected: "Rejected Bids" };
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [page, setPage] = useState(1);
+  useEffect(() => {
+    const controller = new AbortController();
+    setLoading(true); setError(""); setRows([]); setPage(1);
+    const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+    const query = new URLSearchParams({ product, status, rows: "1" });
+    fetch(`${API_BASE}/analyser/dashboard/?${query}`, { signal: controller.signal, headers: { Authorization: `Bearer ${token}` } })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || "Unable to load your bids.");
+        if (!controller.signal.aborted) setRows(data.bids || []);
+      })
+      .catch(error => { if (!controller.signal.aborted) setError(error.message); })
+      .finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    return () => controller.abort();
+  }, [product, status]);
+  const pages = Math.max(1, Math.ceil(rows.length / 10));
+  return <section className="space-y-4">
+    <button type="button" onClick={() => navigate("/analyser-dashboard")} className="rounded-lg border bg-white px-4 py-2 text-sm text-slate-700">← Back</button>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between gap-3 p-5"><h2 className="text-lg font-bold text-slate-800">{PRODUCTS.find(item => item.key === product)?.label} · {labels[status]}</h2><span className="text-sm text-slate-500">{loading ? "Loading..." : `${rows.length} bids`}</span></div>
+      {error && <p role="alert" className="px-5 pb-4 text-sm text-red-600">{error}</p>}
+      <div className="overflow-x-auto"><table className="w-full min-w-[700px] text-left text-sm">
+        <thead className="bg-slate-800 text-xs uppercase text-white"><tr>{["S.No.", "Bid No.", "Department", "Model", "Status", "Action"].map(label => <th key={label} className="px-4 py-4">{label}</th>)}</tr></thead>
+        <tbody className="divide-y divide-slate-100">{rows.slice((page - 1) * 10, page * 10).map((bid, index) => <tr key={bid.id} className="hover:bg-slate-50">
+          <td className="px-4 py-4">{(page - 1) * 10 + index + 1}</td><td className="px-4 py-4 font-semibold text-blue-600">{bid.bid_no}</td><td className="px-4 py-4">{bid.dept_name}</td><td className="px-4 py-4">{bid.model_number || bid.model || bid.model_no || "—"}</td><td className="px-4 py-4">{{ pending: "Pending", approved: "Approved", reAnalyze: "Re-Analyze", rejected: "Rejected" }[bid.dashboard_status]}</td>
+          <td className="px-4 py-4"><button type="button" onClick={() => navigate(`/analyser-dashboard/${product}/bid/${bid.id}`, { state: { bid, readOnly: bid.dashboard_status === "approved" || bid.dashboard_status === "rejected" } })} className="rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white">View</button></td>
+        </tr>)}{!loading && !error && rows.length === 0 && <tr><td colSpan={6} className="p-10 text-center text-slate-400">No bids for this selection.</td></tr>}</tbody>
+      </table></div>
+      {rows.length > 10 && <nav aria-label="Your bid pages" className="flex justify-center gap-3 border-t p-4"><button type="button" disabled={page === 1} onClick={() => setPage(page - 1)} className="rounded border px-3 py-2 disabled:opacity-40">Prev</button><span className="px-3 py-2">{page} / {pages}</span><button type="button" disabled={page === pages} onClick={() => setPage(page + 1)} className="rounded border px-3 py-2 disabled:opacity-40">Next</button></nav>}
+    </div>
+  </section>;
 };
 
 const AnalyserNavbar = () => {
@@ -393,7 +437,7 @@ const AnalyserNavbar = () => {
           </div>
         </div>
         <div className="flex-1 overflow-auto p-6 bg-gray-50">
-          {isDashboard ? <AnalyserHome /> : <Outlet />}
+          {isDashboard ? (new URLSearchParams(location.search).has("cardStatus") ? <AnalyserCardBids /> : <AnalyserHome />) : <Outlet />}
         </div>
       </div>
     </div>
