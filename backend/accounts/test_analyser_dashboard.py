@@ -1,4 +1,5 @@
 import json
+from contextlib import ExitStack
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -64,6 +65,26 @@ class AnalyserDashboardTests(SimpleTestCase):
     def test_analyser_role_is_required(self):
         response = analyser_dashboard(RequestFactory().get("/", {"product": "desktop"}))
         self.assertEqual(response.status_code, 401)
+
+    def test_card_rows_match_own_counts_and_ignore_other_analyser_in_url(self):
+        serializers = ("Desktop._bid_data", "Workstation._workstation_bid_data", "Printer._printer_bid_data", "Aio._json", "Toner._json")
+        with ExitStack() as stack:
+            for path in serializers:
+                stack.enter_context(patch("accounts.views." + path, side_effect=lambda bid, request: {"analyser_username": bid.analyser_username}))
+            stack.enter_context(patch("accounts.views.AnalyserDashboard._require_role", return_value=(self.actor, None)))
+            stack.enter_context(patch("accounts.views.AnalyserDashboard._model", return_value=self.model))
+            for product in ("desktop", "aio", "workstation", "printer", "toner"):
+                for username, total in (("first", 4), ("second", 1)):
+                    self.actor.username = username
+                    for status in ("all", "pending", "approved", "re-analyze", "rejected"):
+                        with self.subTest(product=product, username=username, status=status):
+                            request = RequestFactory().get("/", {"product": product, "rows": "1", "status": status, "analyser": "someone-else"})
+                            response = analyser_dashboard(request)
+                            self.assertEqual(response.status_code, 200)
+                            rows = json.loads(response.content)["bids"]
+                            expected = total if status == "all" else (1 if username == "first" or status == "approved" else 0)
+                            self.assertEqual(len(rows), expected)
+                            self.assertTrue(all(row["analyser_username"] == username for row in rows))
 
     def test_invalid_product_and_year(self):
         with patch("accounts.views.AnalyserDashboard._require_role", return_value=(self.actor, None)):
