@@ -457,7 +457,6 @@ def update_toner_docs(r,bid_id):
     b.selected_yield_standard_doc_labels=r.POST.get("selected_yield_standard_doc_labels",b.selected_yield_standard_doc_labels)
     if not has_bid_documents(b,b.selected_general_docs):return JsonResponse({"error":MISSING_DOCUMENTS_ERROR},status=400)
     b.status="complete";b.save()
-    _complete_toner_user_assignment(b.bid_no,b.user_id)
     return JsonResponse({"message":"Toner documents saved successfully","bid":_json(b,r)})
 
 def _complete_toner_user_assignment(bid_no,user_id=None):

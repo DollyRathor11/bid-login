@@ -577,8 +577,6 @@ def update_aio_docs(r,bid_id):
     b.atc_special_document=r.FILES.get("atc_special_document",b.atc_special_document);b.selected_general_docs=r.POST.get("selected_general_docs","[]")
     if not has_bid_documents(b,b.selected_general_docs):return JsonResponse({"error":MISSING_DOCUMENTS_ERROR},status=400)
     b.status="complete";b.save()
-    from .GemAssignments import complete_user_assignment_for_bid
-    complete_user_assignment_for_bid(b.bid_no,b.user)
     return JsonResponse({"message":"AIO documents saved successfully","bid":_json(b,r)})
 
 # These narrative certificate pages are shared with Desktop's own template and

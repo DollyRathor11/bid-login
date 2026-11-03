@@ -3,6 +3,7 @@ import re
 from collections import Counter
 
 from django.db import transaction
+from django.db.models import OuterRef, Q, Subquery
 from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -19,9 +20,11 @@ VALID_STATUSES = {value for value, _ in GemBidAssignment.STATUS_CHOICES}
 
 
 def complete_user_assignment_for_bid(bid_no, user=None):
-    """Remove a submitted bid from its assigned user's queue by bid number."""
+    """Complete an assignment only after the bid has been approved by admin."""
     normalized_bid_no = str(bid_no or "").strip()
     if not normalized_bid_no:
+        return 0
+    if normalized_bid_no.upper() not in _approved_bid_nos([normalized_bid_no]):
         return 0
     rows = GemBidAssignment.objects.select_related("opportunity").filter(
         opportunity__bid_no__iexact=normalized_bid_no,
@@ -39,7 +42,7 @@ def complete_user_assignment_for_bid(bid_no, user=None):
         )
         GemBidAssignmentHistory.objects.bulk_create([
             GemBidAssignmentHistory(
-                assignment=row, action="auto_completed_after_bid_submission",
+                assignment=row, action="auto_completed_after_admin_approval",
                 from_user=row.assigned_to, to_user=row.assigned_to,
                 old_status=row.status, new_status="participated", changed_by=row.assigned_to,
             ) for row in rows
@@ -74,14 +77,20 @@ def _approved_bid_nos(bid_nos):
     return approved
 
 
-def user_visible_assignments(user):
+def user_visible_assignments(user=None):
     """A user's Bid To Be Participated: their assignments whose End Date has
     not passed and which admin has not approved in any product yet."""
-    rows = list(
+    latest_action = GemBidAssignmentHistory.objects.filter(assignment_id=OuterRef("pk")).order_by("-changed_at", "-id").values("action")[:1]
+    queryset = (
         GemBidAssignment.objects.select_related("opportunity", "assigned_to", "assigned_by")
-        .filter(assigned_to=user, hidden_for_user=False, opportunity__end_date__gt=timezone.now())
+        .annotate(last_assignment_action=Subquery(latest_action))
+        .filter(opportunity__end_date__gt=timezone.now())
+        .filter(Q(hidden_for_user=False) | Q(hidden_for_user=True, last_assignment_action="auto_completed_after_bid_submission"))
         .exclude(status="skipped")
     )
+    if user is not None:
+        queryset = queryset.filter(assigned_to=user)
+    rows = list(queryset)
     approved = _approved_bid_nos(row.opportunity.bid_no for row in rows)
     return [row for row in rows if row.opportunity.bid_no.strip().upper() not in approved]
 

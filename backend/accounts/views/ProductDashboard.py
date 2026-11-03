@@ -11,10 +11,11 @@ from ..models import DesktopBid, PrinterBid, WorkstationBid
 
 @require_http_methods(["GET"])
 def admin_post_bid_summary(request):
-    from ..dashboard_metrics import dashboard_assignments, PRODUCTS
+    from ..dashboard_metrics import PRODUCTS
+    from .GemAssignments import user_visible_assignments
     from .Gem import _require_role
     from ..models import User
-    from django.db.models import Count
+    from collections import Counter
 
     _, error = _require_role(request, {"admin"})
     if error:
@@ -22,12 +23,12 @@ def admin_post_bid_summary(request):
     product = request.GET.get("product", "all")
     if product != "all" and product not in PRODUCTS:
         return JsonResponse({"error": "Unknown product"}, status=400)
-    assignments = dashboard_assignments(product)
-    counts = list(assignments.values("assigned_to__username").annotate(total=Count("id")))
+    assignments = [row for row in user_visible_assignments() if product == "all" or row.opportunity.product_type == product]
+    counts = Counter(row.assigned_to.username for row in assignments)
     return JsonResponse({
         "management_count": User.objects.filter(role="management").count(),
-        "assigned_total": assignments.count(),
-        "assigned_by_user": {row["assigned_to__username"]: row["total"] for row in counts},
+        "assigned_total": len(assignments),
+        "assigned_by_user": dict(counts),
     })
 
 

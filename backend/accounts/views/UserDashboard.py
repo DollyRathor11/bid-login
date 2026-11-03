@@ -5,8 +5,9 @@ from django.http import JsonResponse
 from django.utils import timezone
 from django.views.decorators.http import require_GET
 
-from ..dashboard_metrics import dashboard_assignments, dashboard_status
+from ..dashboard_metrics import dashboard_status
 from .Gem import _require_role
+from .GemAssignments import user_visible_assignments
 from .ProductDashboard import _model
 
 
@@ -42,6 +43,7 @@ def user_dashboard(request):
                 if day in daily:
                     daily[day]["total"] += 1
                     daily[day][label] += 1
-    # Assigned opportunities are separate from the bids the user has filled.
-    assigned = dashboard_assignments(product).filter(assigned_to_id=user.id).count()
+    # Match the user's current Bid To Be Participated list, not historical totals.
+    assignments = user_visible_assignments(user)
+    assigned = sum(1 for row in assignments if product == "all" or row.opportunity.product_type == product)
     return JsonResponse({"stats": stats, "assigned": assigned, "daily": list(daily.values())})

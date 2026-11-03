@@ -1651,8 +1651,6 @@ def review_printer_bid(request, bid_id):
         bid.status = "complete"
         bid.review_status = "pending"
         bid.save()
-        from .GemAssignments import complete_user_assignment_for_bid
-        complete_user_assignment_for_bid(bid.bid_no, bid.user)
         return JsonResponse({"success": True, "bid_id": bid.id, "review_status": bid.review_status})
     except PrinterBid.DoesNotExist:
         return JsonResponse({"error": "Bid not found"}, status=404)
