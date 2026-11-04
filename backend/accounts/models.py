@@ -363,6 +363,34 @@ class GemBidEvaluationHistory(models.Model):
         return f"{self.bid_result.bid_no}: {self.status}"
 
 
+class GemClarificationResult(models.Model):
+    """A seller-list bid on which the buyer sought clarification, read by the
+    extension's Clarification scan from the card's "Clarification History"."""
+    bid_no = models.CharField(max_length=100, unique=True)
+    product_type = models.CharField(max_length=20, choices=GemBidResult.PRODUCT_CHOICES, default="desktop")
+    item_name = models.CharField(max_length=500, blank=True, default="")
+    quantity = models.PositiveIntegerField(blank=True, null=True)
+    department = models.TextField(blank=True, default="")
+    start_date = models.DateTimeField(blank=True, null=True)
+    end_date = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(max_length=150, blank=True, default="")
+    technical_status = models.CharField(max_length=150, blank=True, default="")
+    clarification_status = models.CharField(max_length=150, blank=True, default="")
+    is_pending = models.BooleanField(default=False)
+    clarification_at = models.DateTimeField(blank=True, null=True)
+    # Rows of GeM's Clarification History popup, keyed by its column headings.
+    history = models.JSONField(default=list, blank=True)
+    last_synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "gem_clarification_bid_results"
+        ordering = ["-clarification_at", "-last_synced_at"]
+
+    def __str__(self):
+        return f"{self.bid_no}: {self.clarification_status}"
+
+
 class GemBidOpportunity(models.Model):
     bid_no = models.CharField(max_length=100, unique=True)
     bid_date = models.DateTimeField(blank=True, null=True)

@@ -663,6 +663,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Bid To Be Participated keeps its own resume point (page, category,
       // counts) in the progress it reports; Retry Scan continues from there.
       const opportunityRetry = opportunityScan && message.resume ? syncStates.gemOpportunitySync?.retry : null;
+      // Retry Sync continues whichever list scan (disqualified/clarification) stopped.
+      const scanMode = opportunityScan ? null
+        : (message.mode || (message.resume ? syncStates.gemBidSync?.mode : "")) === "clarification" ? "clarification" : "disqualified";
       const resume = retryState ? {
         page: retryPage, saved: Number(retryState.saved || 0),
         rejected: Number(retryState.rejected || 0), checked: Number(retryState.checked || 0),
@@ -727,18 +730,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         status: "starting",
         message: opportunityScan
           ? resume ? `Resuming Bid To Be Participated scan from page ${resume.page}...` : "Starting Bid To Be Participated scan..."
-          : resume ? `Resuming disqualified bid sync from page ${resume.page}...` : "Starting disqualified bid sync...",
+          : resume ? `Resuming ${scanMode} bid sync from page ${resume.page}...` : `Starting ${scanMode} bid sync...`,
         page: resume?.page || 0,
         saved: resume?.saved || 0,
         checked: resume?.checked || 0,
         pending: resume?.pending || [],
         ...(opportunityRetry ? { retry: opportunityRetry } : {}),
+        ...(scanMode ? { mode: scanMode } : {}),
         updatedAt: Date.now(),
       } });
       let response;
       try {
         const sendStart = () => Promise.race([
-          chrome.tabs.sendMessage(tab.id, { type: message.type, resume }),
+          chrome.tabs.sendMessage(tab.id, { type: message.type, resume, mode: scanMode }),
           new Promise((_, reject) => setTimeout(
             () => reject(new Error("GeM bid scanner did not respond within 5 seconds.")),
             5000,
@@ -883,6 +887,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         rejections: result.rejections || [],
       };
     }
+    if (message.type === "SAVE_GEM_CLARIFICATIONS") {
+      const body = JSON.stringify({ results: message.results || [] });
+      const result = await api("/gem/clarification-results/", { method: "POST", body });
+      await mirrorToOtherBackends("/gem/clarification-results/", body);
+      return {
+        ok: true,
+        saved: result.saved || 0,
+        created: result.created || 0,
+        updated: result.updated || 0,
+        rejected: result.rejected || 0,
+        rejections: result.rejections || [],
+      };
+    }
     if (message.type === "SAVE_GEM_BID_OPPORTUNITIES") {
       const body = JSON.stringify({ results: message.results || [] });
       const result = await api("/gem/bid-opportunities/", { method: "POST", body });
@@ -968,6 +985,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         checked: message.checked || 0,
         pending: Array.isArray(message.pending) ? message.pending : [],
         ...(message.retry ? { retry: message.retry } : {}),
+        ...(message.mode ? { mode: message.mode } : {}),
         updatedAt: Date.now(),
         extensionVersion: chrome.runtime.getManifest().version,
       };

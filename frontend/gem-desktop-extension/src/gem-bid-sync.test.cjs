@@ -416,7 +416,7 @@ async function runDisqualifiedScenario({ unread = 0, saveFails = 0, pages = 1, c
   const card = { bidNo: 'GEM/2026/B/7782662' };
   const nextCard = { bidNo: 'GEM/2026/B/9999999' };
   const context = {
-    syncing: false, activeScanType: '', stopRequested: false, pauseRequested: false,
+    syncing: false, activeScanType: '', stopRequested: false, pauseRequested: false, disqualifiedScanMode: 'disqualified',
     progress: async (status, message, extra) => events.push({ status, message, ...extra }),
     applyCompleteBidListFilter: async () => {}, sleep: async () => {},
     sessionStorage: { setItem: () => {}, removeItem: () => {}, getItem: () => null },
@@ -788,4 +788,35 @@ test('an unfinished Bid To Be Participated scan is continued by the next scan', 
   assert.match(scan, /page: Math\.max\(page \+ 1, jumpTarget\)/);
   assert.match(scan, /await saveUnfinished\(true\)/);
   assert.match(scan, /const cardReject = opportunityCardReject\(card\)/);
+});
+
+function clarificationSummaryFor(rows, cardStatus = '') {
+  const dateStart = source.indexOf('function dateFrom');
+  const dateEnd = source.indexOf('function isValidDisqualificationDate', dateStart);
+  const start = source.indexOf('function clarificationSummary');
+  const end = source.indexOf('async function extractClarificationPage', start);
+  assert.ok(dateStart >= 0 && start > 0 && end > start, 'clarification helpers must remain discoverable');
+  const context = { rows, cardStatus };
+  vm.runInNewContext(
+    `${source.slice(dateStart, dateEnd)}${source.slice(start, end)}; result = clarificationSummary(rows, cardStatus);`,
+    context,
+  );
+  return context.result;
+}
+
+test('a clarification without a seller response is pending, dated by its latest row', () => {
+  const result = clarificationSummaryFor([
+    { 'Sought On': '2026-10-20 10:00', Query: 'Upload OEM authorisation', Response: 'Uploaded' },
+    { 'Sought On': '2026-11-02 11:30', Query: 'Upload datasheet', Response: '' },
+  ]);
+  assert.equal(result.is_pending, true);
+  assert.equal(result.clarification_status, 'Pending Clarification');
+  assert.equal(new Date(result.clarification_at).getDate(), 2);
+});
+
+test('answered clarifications are not pending unless GeM still shows a pending status', () => {
+  const answered = [{ 'Sought On': '2026-11-02 11:30', Query: 'Upload datasheet', Response: 'Uploaded' }];
+  assert.equal(clarificationSummaryFor(answered).is_pending, false);
+  assert.equal(clarificationSummaryFor(answered).clarification_status, 'Clarification Submitted');
+  assert.equal(clarificationSummaryFor(answered, 'Pending Clarification').is_pending, true);
 });

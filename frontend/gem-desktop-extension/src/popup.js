@@ -1,6 +1,7 @@
 const state = document.getElementById("state");
 const message = document.getElementById("message");
 const syncButton = document.getElementById("sync-bids");
+const clarificationButton = document.getElementById("sync-clarifications");
 const pauseSyncButton = document.getElementById("pause-sync");
 const retrySyncButton = document.getElementById("retry-sync");
 const syncState = document.getElementById("sync-state");
@@ -61,11 +62,15 @@ function showSyncState(sync) {
   const paused = sync?.status === "paused";
   const retryable = ["failed", "stopped"].includes(sync?.status);
 
-  syncButton.disabled = !acxxelConnected || active;
-  syncButton.textContent = paused
+  // Both buttons drive the same seller-list scan; the running one shows its state.
+  const runningLabel = paused
     ? "Sync paused..."
-    : sync?.status === "recovering" ? "Recovering scan..."
-      : active ? "Scan running..." : "Scan Disqualified Bid";
+    : sync?.status === "recovering" ? "Recovering scan..." : "Scan running...";
+  const clarificationMode = sync?.mode === "clarification";
+  syncButton.disabled = !acxxelConnected || active;
+  syncButton.textContent = active && !clarificationMode ? runningLabel : "Scan Disqualified Bid";
+  clarificationButton.disabled = !acxxelConnected || active;
+  clarificationButton.textContent = active && clarificationMode ? runningLabel : "Scan Clarification";
 
   pauseSyncButton.hidden = false;
   pauseSyncButton.disabled = !active || ["starting", "recovering"].includes(sync?.status);
@@ -119,6 +124,7 @@ function preventConcurrentScans(bidSync, opportunitySync) {
   }
   if (opportunityActive) {
     syncButton.disabled = true;
+    clarificationButton.disabled = true;
     retrySyncButton.disabled = true;
   }
 }
@@ -136,21 +142,26 @@ function refreshSyncState() {
   });
 }
 
-syncButton.addEventListener("click", () => {
+function startListScan(mode) {
   syncButton.disabled = true;
-  syncState.textContent = "Starting GeM bid sync...";
-  chrome.runtime.sendMessage({ type: "START_GEM_BID_SYNC" }, (response) => {
+  clarificationButton.disabled = true;
+  syncState.textContent = mode === "clarification" ? "Starting GeM clarification sync..." : "Starting GeM bid sync...";
+  chrome.runtime.sendMessage({ type: "START_GEM_BID_SYNC", mode }, (response) => {
     if (chrome.runtime.lastError || !response?.ok) {
       syncState.className = "sync-state failed";
       syncState.textContent = chrome.runtime.lastError?.message || response?.error || "Unable to start sync.";
       syncButton.disabled = false;
+      clarificationButton.disabled = false;
       return;
     }
     syncState.className = "sync-state";
     syncState.textContent = "Sync started. You may close this popup.";
     window.setTimeout(refreshSyncState, 300);
   });
-});
+}
+
+syncButton.addEventListener("click", () => startListScan("disqualified"));
+clarificationButton.addEventListener("click", () => startListScan("clarification"));
 
 opportunityButton.addEventListener("click", () => {
   opportunityButton.disabled = true;

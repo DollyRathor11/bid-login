@@ -5,6 +5,9 @@
   let pauseRequested = false;
   let activeScanType = "";
   let disqualifiedPending = [];
+  // The disqualified scan's walk over the seller list also serves the
+  // Clarification scan ("clarification"), which reads Clarification History.
+  let disqualifiedScanMode = "disqualified";
   // Where a running Bid To Be Participated scan would continue; reported with
   // every progress update so Retry Scan can restart from that page.
   let opportunityRetryState = null;
@@ -114,9 +117,18 @@
   }
 
   async function progress(status, message, extra = {}) {
+    // The scan only stops at the next bid boundary; until then the current
+    // bid's "running" updates must not overwrite the user's pause in the popup.
+    if (pauseRequested && status === "running") {
+      status = "paused";
+      message = `Pausing after the current bid... ${message}`;
+    }
     if (activeScanType === "disqualified") {
       if (extra.pending) disqualifiedPending = extra.pending;
-      extra = { ...extra, pending: disqualifiedPending };
+      extra = { ...extra, pending: disqualifiedPending, mode: disqualifiedScanMode };
+      if (disqualifiedScanMode === "clarification" && !/^\[Clarification\]/.test(message)) {
+        message = `[Clarification] ${message}`;
+      }
     }
     if (activeScanType === "opportunity" && opportunityRetryState) {
       extra = { ...extra, retry: opportunityRetryState() };
@@ -756,6 +768,148 @@
     return results;
   }
 
+  const CLARIFICATION_STATUS_PATTERN = /pending\s+clarification|clarification\s+(?:sought|pending|requested|submitted|responded|replied|received|closed)/i;
+
+  // The "View" link beside the card's "Clarification History:" label.
+  function clarificationControl(card) {
+    const label = [...card.querySelectorAll("*")]
+      .filter((node) => visible(node) && /^clarification\s+history\s*:?\s*(?:view)?$/i.test(text(node)))
+      .sort((a, b) => text(a).length - text(b).length)[0];
+    if (label) {
+      let scope = label;
+      for (let depth = 0; scope && depth < 3; depth += 1, scope = scope.parentElement) {
+        const control = [...scope.querySelectorAll("a, button, [role=button], [ng-click], [data-ng-click]")]
+          .filter((node) => visible(node) && !BID_PATTERN.test(text(node)))
+          .find((node) => /^view$/i.test(text(node)) || /clarif/i.test(describeControl(node)));
+        if (control) return control;
+        if (scope.matches?.("a, button, [role=button], [ng-click]") && /view/i.test(text(scope))) return scope;
+      }
+    }
+    return [...card.querySelectorAll("a, button, [role=button], [ng-click], [data-ng-click]")]
+      .find((node) => visible(node) && /clarif/i.test(`${node.getAttribute("ng-click") || ""} ${node.getAttribute("data-ng-click") || ""} ${node.getAttribute("title") || ""} ${node.getAttribute("onclick") || ""}`)) || null;
+  }
+
+  function openClarificationModal() {
+    return [...document.querySelectorAll("[role=dialog], .modal, .modal-content, .ngdialog-content")]
+      .find((node) => visible(node) && /clarification/i.test(text(node))) || null;
+  }
+
+  // Each table row becomes { "<column heading>": "<cell text>" }, so whatever
+  // columns GeM shows (query, response, dates, ...) are kept as they appear.
+  function clarificationRows(modal) {
+    const rows = [];
+    for (const table of modal.querySelectorAll("table")) {
+      const allRows = [...table.querySelectorAll("tr")];
+      const headerRow = allRows.find((row) => row.querySelector("th")) || null;
+      const headers = headerRow ? [...headerRow.querySelectorAll("th, td")].map(text) : [];
+      for (const row of allRows) {
+        if (row === headerRow) continue;
+        const cells = [...row.querySelectorAll(":scope > td")].map(text);
+        if (!cells.length || cells.every((cell) => !cell)) continue;
+        if (cells.length === 1 && /no\s+(?:record|data|clarification)/i.test(cells[0])) continue;
+        const entry = {};
+        cells.forEach((cell, index) => {
+          const key = headers[index] || `Column ${index + 1}`;
+          entry[key] = entry[key] ? `${entry[key]} ${cell}` : cell;
+        });
+        rows.push(entry);
+      }
+    }
+    return rows;
+  }
+
+  async function clarificationHistoryFor(card) {
+    const stale = openClarificationModal();
+    if (stale && !await closeModal(stale)) {
+      return { rows: [], error: "previous clarification history popup is still open" };
+    }
+    const control = clarificationControl(card);
+    if (!control) return { rows: [], error: "Clarification History View link not found" };
+    if (gemTransientErrorMessage()) return { rows: [], error: "GeM temporarily rejected the clarification-history request" };
+    await waitForGemRemoteActionSlot();
+    activateControl(control);
+    let modal = null;
+    const openEnd = Date.now() + 8000;
+    while (!modal && Date.now() < openEnd) {
+      stopIfRequested();
+      throwIfGemTransientError();
+      await sleep(250);
+      modal = openClarificationModal();
+    }
+    if (!modal) return { rows: [], error: `clarification history popup did not open; control: ${describeControl(control)}` };
+    let rows = [];
+    let empty = false;
+    const rowsEnd = Date.now() + 15000;
+    while (Date.now() < rowsEnd) {
+      stopIfRequested();
+      throwIfGemTransientError();
+      rows = clarificationRows(modal);
+      empty = /no\s+(?:record|data|clarification)s?\s+(?:found|available)/i.test(text(modal));
+      if (rows.length || empty) break;
+      await sleep(250);
+    }
+    const sample = String(modal.innerHTML || "").replace(/\s+/g, " ").slice(0, 1800);
+    if (!await closeModal(modal)) return { rows: [], error: "clarification history popup could not be closed" };
+    await sleep(350);
+    if (rows.length || empty) return { rows, error: "" };
+    return { rows: [], error: `clarification history popup opened but no rows were read; modal HTML: ${sample}` };
+  }
+
+  function clarificationSummary(rows, cardStatus) {
+    const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+    const responseKey = keys.find((key) => /response|reply|answer|seller.*(?:remark|comment)/i.test(key));
+    const statusKey = keys.find((key) => /status/i.test(key));
+    const rowsPending = rows.some((row) => (
+      (statusKey && /pending|open|sought|awaiting/i.test(row[statusKey] || ""))
+      || (responseKey && !String(row[responseKey] || "").replace(/^-+$/, "").trim())
+    ));
+    const isPending = /pending|sought|requested|awaiting/i.test(cardStatus) || rowsPending;
+    const dates = rows
+      .flatMap((row) => Object.values(row).map(dateFrom))
+      .filter(Boolean)
+      .sort();
+    return {
+      clarification_status: cardStatus
+        || (isPending ? "Pending Clarification" : responseKey ? "Clarification Submitted" : "Clarification"),
+      is_pending: isPending,
+      clarification_at: dates[dates.length - 1] || "",
+    };
+  }
+
+  async function extractClarificationPage(onRecord, processed = new Set()) {
+    const cards = currentCards();
+    const results = [];
+    for (const { bidNo, card } of cards) {
+      stopIfRequested();
+      if (processed.has(bidNo)) continue;
+      const liveCard = currentCards().find((item) => item.bidNo === bidNo)?.card || card;
+      const raw = text(liveCard);
+      const cardStatus = (raw.match(CLARIFICATION_STATUS_PATTERN) || [""])[0];
+      const hasClarification = /clarification\s+history/i.test(raw) || Boolean(cardStatus);
+      const historyResult = hasClarification ? await clarificationHistoryFor(liveCard) : { rows: [], error: "" };
+      const itemName = valueAfterLabel(raw, ["Items", "Item", "Product Name", "Product"]).replace(/^s\s*:\s*/i, "");
+      const quantityText = valueAfterLabel(raw, ["Quantity"]);
+      const result = {
+        bid_no: bidNo,
+        product_type: productType(raw, itemName),
+        item_name: itemName,
+        quantity: Number((quantityText.match(/\d+/) || [])[0]) || null,
+        department: valueAfterLabel(raw, ["Department Name And Address", "Department Name & Address", "Department"]),
+        start_date: dateFrom(valueAfterLabel(raw, ["Start Date", "Bid Start Date"])),
+        end_date: dateFrom(valueAfterLabel(raw, ["End Date", "Bid End Date"])),
+        status: valueAfterLabel(raw, ["Bid/RA Status", "Status"]),
+        technical_status: visibleTechnicalStatus(liveCard),
+        has_clarification: hasClarification && (historyResult.rows.length > 0 || Boolean(cardStatus)),
+        history: historyResult.rows,
+        history_sync_error: historyResult.error,
+        ...clarificationSummary(historyResult.rows, cardStatus),
+      };
+      results.push(result);
+      if (onRecord) await onRecord(result, results.length, cards.length);
+    }
+    return results;
+  }
+
   function enabled(node) {
     return Boolean(node)
       && !node.disabled
@@ -1148,7 +1302,9 @@
   // pagination recovery below, instead of spinning until an unrecoverable
   // timeout ends the whole scan.
   async function reloadAndResumeDisqualifiedScan(state, message) {
-    sessionStorage.setItem("acxxelDisqualifiedResume", JSON.stringify({ ...state, savedAt: Date.now() }));
+    sessionStorage.setItem("acxxelDisqualifiedResume", JSON.stringify({
+      ...state, mode: disqualifiedScanMode, paused: pauseRequested, savedAt: Date.now(),
+    }));
     await progress("recovering", message, {
       page: state.page, saved: state.saved, rejected: state.rejected, checked: state.checked, pending: state.pending,
     });
@@ -1204,9 +1360,13 @@
     if (syncing) throw new Error("A GeM bid sync is already running in this tab.");
     syncing = true;
     activeScanType = "disqualified";
+    // The START message sets the mode; a reload-resume carries its own.
+    if (resume?.mode) disqualifiedScanMode = resume.mode === "clarification" ? "clarification" : "disqualified";
+    const clarificationScan = disqualifiedScanMode === "clarification";
     disqualifiedPending = [];
     stopRequested = false;
-    pauseRequested = false;
+    // A GeM recovery reload must not silently undo the user's pause.
+    pauseRequested = Boolean(resume?.paused);
     let page = Number(resume?.page || 1);
     let saved = Number(resume?.saved || 0);
     let created = Number(resume?.created || 0);
@@ -1307,13 +1467,42 @@
         // three times in quick succession was throttling GeM and removing the
         // seller-list pagination. API confirmation still has its own retries.
         for (let attempt = 1; attempt <= 1; attempt += 1) {
-          await extractPage(async (result, recordNumber, totalRecords) => {
+          await (clarificationScan ? extractClarificationPage : extractPage)(async (result, recordNumber, totalRecords) => {
             if (processed.has(result.bid_no)) return;
             if (!seen.has(result.bid_no)) { seen.add(result.bid_no); checked += 1; }
             pending.set(result.bid_no, { bidNo: result.bid_no, page, attempts: attempt, reason: "Awaiting save confirmation" });
             try {
               stopIfRequested();
               await waitWhilePaused({ page, saved, rejected, checked });
+              if (clarificationScan) {
+                if (result.history_sync_error) {
+                  throw new Error(`Could not read Clarification History for ${result.bid_no}: ${result.history_sync_error}`);
+                }
+                if (!result.has_clarification) {
+                  processed.add(result.bid_no);
+                  pending.delete(result.bid_no);
+                  await progress("running", `Checked ${result.bid_no}: no clarification (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                  return;
+                }
+                await progress("running", `Saving clarification bid ${result.bid_no}.`, { page, saved, rejected, checked });
+                let response = null;
+                for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt += 1) {
+                  response = await runtimeMessage({ type: "SAVE_GEM_CLARIFICATIONS", results: [result] });
+                  if (response.saved === 1) break;
+                  if (saveAttempt < 3) await sleep(saveAttempt * 2000);
+                }
+                if (response.saved !== 1) {
+                  const reason = (response.rejections || []).map((item) => item.reason).join(", ");
+                  throw new Error(`${result.bid_no}: clarification save not confirmed by dashboard API${reason ? ` (${reason})` : ""}.`);
+                }
+                processed.add(result.bid_no);
+                pending.delete(result.bid_no);
+                saved += 1;
+                created += response.created || 0;
+                updated += response.updated || 0;
+                await progress("running", `Completed ${result.bid_no}: ${result.clarification_status} (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                return;
+              }
               if (!result.evaluation_read) {
                 throw new Error(result.evaluation_error || "Technical status could not be read; bid has not been classified as qualified or skipped.");
               }
@@ -1458,6 +1647,7 @@
     } finally {
       syncing = false;
       activeScanType = "";
+      disqualifiedScanMode = "disqualified";
     }
   }
 
@@ -1995,7 +2185,7 @@
     syncing = true;
     activeScanType = "opportunity";
     stopRequested = false;
-    pauseRequested = false;
+    pauseRequested = Boolean(resume?.paused);
     let page = Number(resume?.page || 1);
     let saved = Number(resume?.saved || 0);
     let created = Number(resume?.created || 0);
@@ -2261,7 +2451,7 @@
   }
 
   async function reloadAndResumeOpportunityScan(state, message) {
-    sessionStorage.setItem("acxxelOpportunityResume", JSON.stringify({ ...state, savedAt: Date.now() }));
+    sessionStorage.setItem("acxxelOpportunityResume", JSON.stringify({ ...state, paused: pauseRequested, savedAt: Date.now() }));
     await progress("recovering", message, { page: state.page, saved: state.saved, checked: state.checked });
     // An immediate reload after GeM's generic error tends to reproduce it.
     await sleep(Math.min(8000 + Number(state.serverRecoveryAttempts || 0) * 5000, 30000));
@@ -2509,6 +2699,9 @@
     sendResponse({ ok: true, started: true, cardCount });
     window.setTimeout(() => {
       const runner = message.type === "START_GEM_OPPORTUNITY_SYNC" ? scanOpportunityPages : scanAllPages;
+      if (message.type === "START_GEM_BID_SYNC") {
+        disqualifiedScanMode = message.mode === "clarification" ? "clarification" : "disqualified";
+      }
       runner(message.resume || null).catch(async (error) => {
         if (error.code === "GEM_SYNC_STOPPED") return;
         console.error("Acxxel GeM bid sync failed:", error);
