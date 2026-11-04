@@ -201,6 +201,41 @@ async function settings() {
   return chrome.storage.local.get(["token", "apiBase"]);
 }
 
+// Every Acxxel app (local dev and the live server) that connects leaves its
+// token here, so scanned GeM results can be saved to all of them, not only to
+// whichever tab happened to connect last.
+async function rememberBackend(apiBase, token) {
+  const { backendTokens = {} } = await chrome.storage.local.get("backendTokens");
+  await chrome.storage.local.set({ backendTokens: { ...backendTokens, [apiBase]: token } });
+}
+
+async function mirrorToOtherBackends(path, body) {
+  const { apiBase, backendTokens = {} } = await chrome.storage.local.get(["apiBase", "backendTokens"]);
+  const primary = apiBase || DEFAULT_API;
+  const targets = Object.entries(backendTokens).filter(([base, token]) => base !== primary && token);
+  const mirrored = [];
+  await Promise.all(targets.map(async ([base, token]) => {
+    try {
+      const response = await fetch(`${base}${path}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+        body,
+      });
+      if (response.status === 401) {
+        const current = (await chrome.storage.local.get("backendTokens")).backendTokens || {};
+        delete current[base];
+        await chrome.storage.local.set({ backendTokens: current });
+        return;
+      }
+      if (response.ok) mirrored.push(base);
+    } catch {
+      // A backend that is offline (e.g. local server not running) must not
+      // block saving to the primary one.
+    }
+  }));
+  return mirrored;
+}
+
 const ACTIVE_SYNC_STATUSES = new Set(["starting", "running", "paused", "recovering"]);
 
 function interruptedSyncState(state, scanType, hasLiveRunner, now = Date.now()) {
@@ -259,10 +294,9 @@ async function recoverAcxxelSession() {
       if (!token) continue;
       const origin = new URL(tab.url || "").origin;
       const localApp = /^https?:\/\/(?:localhost|127\.0\.0\.1)(?::|$)/i.test(origin);
-      await chrome.storage.local.set({
-        token,
-        apiBase: localApp ? DEFAULT_API : `${origin}/api`,
-      });
+      const apiBase = localApp ? DEFAULT_API : `${origin}/api`;
+      await chrome.storage.local.set({ token, apiBase });
+      await rememberBackend(apiBase, token);
       return true;
     } catch {
       // Another Acxxel tab may still contain the active session.
@@ -521,6 +555,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         token: message.token,
         apiBase: message.apiBase || DEFAULT_API,
       });
+      await rememberBackend(message.apiBase || DEFAULT_API, message.token);
       const sync = await chrome.storage.local.get("gemOpportunitySync");
       if (!sync.gemOpportunitySync || ["failed", "authentication_required", "stopped"].includes(sync.gemOpportunitySync.status)) {
         await chrome.storage.local.set({
@@ -835,10 +870,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { ok: true, resumed: true };
     }
     if (message.type === "SAVE_GEM_BID_RESULTS") {
-      const result = await api("/gem/bid-results/", {
-        method: "POST",
-        body: JSON.stringify({ results: message.results || [] }),
-      });
+      const body = JSON.stringify({ results: message.results || [] });
+      const result = await api("/gem/bid-results/", { method: "POST", body });
+      await mirrorToOtherBackends("/gem/bid-results/", body);
       return {
         ok: true,
         saved: result.saved || 0,
@@ -850,10 +884,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       };
     }
     if (message.type === "SAVE_GEM_BID_OPPORTUNITIES") {
-      const result = await api("/gem/bid-opportunities/", {
-        method: "POST",
-        body: JSON.stringify({ results: message.results || [] }),
-      });
+      const body = JSON.stringify({ results: message.results || [] });
+      const result = await api("/gem/bid-opportunities/", { method: "POST", body });
+      await mirrorToOtherBackends("/gem/bid-opportunities/", body);
       return {
         ok: true,
         saved: result.saved || 0,
