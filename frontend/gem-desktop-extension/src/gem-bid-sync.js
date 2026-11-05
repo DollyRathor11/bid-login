@@ -789,43 +789,83 @@
       .find((node) => visible(node) && /clarif/i.test(`${node.getAttribute("ng-click") || ""} ${node.getAttribute("data-ng-click") || ""} ${node.getAttribute("title") || ""} ${node.getAttribute("onclick") || ""}`)) || null;
   }
 
-  function openClarificationModal() {
+  const CLARIFICATION_HISTORY_TITLE = /clarification\s+history/i;
+  const CLARIFICATION_DETAILS_TITLE = /clarification\s+request\s+details/i;
+
+  function openClarificationModal(titlePattern = /clarification/i) {
     return [...document.querySelectorAll("[role=dialog], .modal, .modal-content, .ngdialog-content")]
-      .find((node) => visible(node) && /clarification/i.test(text(node))) || null;
+      .find((node) => visible(node) && titlePattern.test(text(node))) || null;
   }
 
-  // Each table row becomes { "<column heading>": "<cell text>" }, so whatever
-  // columns GeM shows (query, response, dates, ...) are kept as they appear.
+  // The link that opens "Clarification Request Details" (buyer query, last
+  // date for seller response) on a card whose clarification is still pending.
+  function clarificationRequestControl(card, historyControl) {
+    return [...card.querySelectorAll("a, button, [role=button], [ng-click], [data-ng-click]")]
+      .filter((node) => visible(node) && node !== historyControl && !node.matches(".clarification_history"))
+      .filter((node) => !BID_PATTERN.test(text(node)) && !/^view$/i.test(text(node)))
+      .find((node) => /clarif|respond|reply/i.test(`${text(node)} ${describeControl(node)}`)) || null;
+  }
+
+  // Text of the nearest "Request No: 1 ... Request Initiated At: ..." heading
+  // above a history table.
+  function requestHeadingFor(table, modal) {
+    for (let node = table; node && node !== modal; node = node.parentElement) {
+      for (let sibling = node.previousElementSibling; sibling; sibling = sibling.previousElementSibling) {
+        if (/request\s+no/i.test(text(sibling))) return text(sibling);
+      }
+    }
+    return "";
+  }
+
+  // GeM shows two layouts: the history popup has one label | value table per
+  // request (Type, Clarification Description, Clarification File, Status) under
+  // a "Request No / Request Initiated At" heading; the request-details popup is
+  // a normal table with a heading row. Both become one object per clarification.
   function clarificationRows(modal) {
     const rows = [];
     for (const table of modal.querySelectorAll("table")) {
-      const allRows = [...table.querySelectorAll("tr")];
-      const headerRow = allRows.find((row) => row.querySelector("th")) || null;
-      const headers = headerRow ? [...headerRow.querySelectorAll("th, td")].map(text) : [];
-      for (const row of allRows) {
-        if (row === headerRow) continue;
-        const cells = [...row.querySelectorAll(":scope > td")].map(text);
-        if (!cells.length || cells.every((cell) => !cell)) continue;
-        if (cells.length === 1 && /no\s+(?:record|data|clarification)/i.test(cells[0])) continue;
+      if (table.querySelector("table")) continue;
+      const allRows = [...table.querySelectorAll("tr")]
+        .map((row) => [...row.querySelectorAll(":scope > th, :scope > td")]);
+      const pairs = allRows.filter((cells) => cells.length);
+      if (pairs.length && pairs.every((cells) => cells.length === 2)) {
         const entry = {};
-        cells.forEach((cell, index) => {
+        const heading = requestHeadingFor(table, modal);
+        const requestNo = (heading.match(/request\s+no\.?\s*:?\s*(\d+)/i) || [])[1];
+        const initiated = (heading.match(/initiated\s+at\s*:?\s*([\d/-]+\s+[\d:]+)/i) || [])[1];
+        if (requestNo) entry["Request No"] = requestNo;
+        if (initiated) entry["Request Initiated At"] = initiated;
+        for (const [label, value] of pairs) {
+          const key = text(label).replace(/\s*:\s*$/, "");
+          if (key) entry[key] = text(value);
+        }
+        if (Object.keys(entry).length > 1) rows.push(entry);
+        continue;
+      }
+      const headerIndex = allRows.findIndex((cells) => cells.length && cells.every((cell) => cell.tagName === "TH"));
+      const headers = headerIndex >= 0 ? allRows[headerIndex].map(text) : [];
+      allRows.forEach((cells, rowIndex) => {
+        if (rowIndex === headerIndex) return;
+        const values = cells.map(text);
+        if (!values.length || values.every((value) => !value)) return;
+        if (values.length === 1 && /no\s+(?:record|data|clarification)/i.test(values[0])) return;
+        const entry = {};
+        values.forEach((value, index) => {
           const key = headers[index] || `Column ${index + 1}`;
-          entry[key] = entry[key] ? `${entry[key]} ${cell}` : cell;
+          if (value) entry[key] = entry[key] ? `${entry[key]} ${value}` : value;
         });
         rows.push(entry);
-      }
+      });
     }
     return rows;
   }
 
-  async function clarificationHistoryFor(card) {
+  async function clarificationPopupRows(control, titlePattern, label) {
     const stale = openClarificationModal();
     if (stale && !await closeModal(stale)) {
-      return { rows: [], error: "previous clarification history popup is still open" };
+      return { rows: [], error: `previous clarification popup is still open` };
     }
-    const control = clarificationControl(card);
-    if (!control) return { rows: [], error: "Clarification History View link not found" };
-    if (gemTransientErrorMessage()) return { rows: [], error: "GeM temporarily rejected the clarification-history request" };
+    if (gemTransientErrorMessage()) return { rows: [], error: `GeM temporarily rejected the ${label} request` };
     await waitForGemRemoteActionSlot();
     activateControl(control);
     let modal = null;
@@ -834,9 +874,9 @@
       stopIfRequested();
       throwIfGemTransientError();
       await sleep(250);
-      modal = openClarificationModal();
+      modal = openClarificationModal(titlePattern);
     }
-    if (!modal) return { rows: [], error: `clarification history popup did not open; control: ${describeControl(control)}` };
+    if (!modal) return { rows: [], error: `${label} popup did not open; control: ${describeControl(control)}` };
     let rows = [];
     let empty = false;
     const rowsEnd = Date.now() + 15000;
@@ -849,10 +889,22 @@
       await sleep(250);
     }
     const sample = String(modal.innerHTML || "").replace(/\s+/g, " ").slice(0, 1800);
-    if (!await closeModal(modal)) return { rows: [], error: "clarification history popup could not be closed" };
+    if (!await closeModal(modal)) return { rows: [], error: `${label} popup could not be closed` };
     await sleep(350);
     if (rows.length || empty) return { rows, error: "" };
-    return { rows: [], error: `clarification history popup opened but no rows were read; modal HTML: ${sample}` };
+    return { rows: [], error: `${label} popup opened but no rows were read; modal HTML: ${sample}` };
+  }
+
+  async function clarificationHistoryFor(card) {
+    const control = clarificationControl(card);
+    if (!control) return { rows: [], error: "Clarification History View link not found" };
+    return clarificationPopupRows(control, CLARIFICATION_HISTORY_TITLE, "clarification history");
+  }
+
+  async function clarificationDetailsFor(card) {
+    const control = clarificationRequestControl(card, clarificationControl(card));
+    if (!control) return { rows: [], error: "Clarification Request Details link not found on the bid card" };
+    return clarificationPopupRows(control, CLARIFICATION_DETAILS_TITLE, "clarification request details");
   }
 
   function clarificationSummary(rows, cardStatus) {
@@ -887,6 +939,19 @@
       const cardStatus = (raw.match(CLARIFICATION_STATUS_PATTERN) || [""])[0];
       const hasClarification = /clarification\s+history/i.test(raw) || Boolean(cardStatus);
       const historyResult = hasClarification ? await clarificationHistoryFor(liveCard) : { rows: [], error: "" };
+      const summary = clarificationSummary(historyResult.rows, cardStatus);
+      // A pending clarification also has a "Clarification Request Details"
+      // popup with the last date for the seller's response. It is extra
+      // detail: failing to read it never blocks saving the history.
+      const detailsResult = summary.is_pending && !historyResult.error
+        ? await clarificationDetailsFor(liveCard)
+        : { rows: [], error: "" };
+      const lastDateKey = (row) => Object.keys(row).find((key) => /last\s+date/i.test(key));
+      const lastResponseDate = detailsResult.rows
+        .map((row) => dateFrom(row[lastDateKey(row)] || ""))
+        .filter(Boolean)
+        .sort()
+        .pop() || "";
       const itemName = valueAfterLabel(raw, ["Items", "Item", "Product Name", "Product"]).replace(/^s\s*:\s*/i, "");
       const quantityText = valueAfterLabel(raw, ["Quantity"]);
       const result = {
@@ -902,7 +967,10 @@
         has_clarification: hasClarification && (historyResult.rows.length > 0 || Boolean(cardStatus)),
         history: historyResult.rows,
         history_sync_error: historyResult.error,
-        ...clarificationSummary(historyResult.rows, cardStatus),
+        request_details: detailsResult.rows,
+        request_details_error: detailsResult.error,
+        last_response_date: lastResponseDate,
+        ...summary,
       };
       results.push(result);
       if (onRecord) await onRecord(result, results.length, cards.length);
@@ -1507,7 +1575,7 @@
                 saved += 1;
                 created += response.created || 0;
                 updated += response.updated || 0;
-                await progress("running", `Completed ${result.bid_no}: ${result.clarification_status} (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                await progress("running", `Completed ${result.bid_no}: ${result.clarification_status} (${recordNumber}/${totalRecords} on page ${page}).${result.request_details_error ? ` Request details not read: ${result.request_details_error}` : ""}`, { page, saved, rejected, checked });
                 return;
               }
               if (!result.evaluation_read) {
