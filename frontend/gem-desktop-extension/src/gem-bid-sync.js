@@ -1489,7 +1489,14 @@
                 for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt += 1) {
                   response = await runtimeMessage({ type: "SAVE_GEM_CLARIFICATIONS", results: [result] });
                   if (response.saved === 1) break;
+                  if ((response.rejections || []).some((item) => item.reason === "expired_only")) break;
                   if (saveAttempt < 3) await sleep(saveAttempt * 2000);
+                }
+                if ((response.rejections || []).some((item) => item.reason === "expired_only")) {
+                  processed.add(result.bid_no);
+                  pending.delete(result.bid_no);
+                  await progress("running", `Checked ${result.bid_no}: only expired clarification, not saved (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                  return;
                 }
                 if (response.saved !== 1) {
                   const reason = (response.rejections || []).map((item) => item.reason).join(", ");
