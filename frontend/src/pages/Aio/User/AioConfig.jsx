@@ -250,7 +250,7 @@ export default function AioConfig({ bidData, onNext }) {
     const { name, value } = e.target;
     const processorGroup = e.target.dataset.processorGroup;
     const fieldValue = name === "processor" && value === "None" ? "" : value;
-    const priceField = `${name}_price`;
+    const priceField = name === "screen_size" ? "screen_price" : `${name}_price`;
 
     if (name === "processor") {
       if (value === "None") {
@@ -353,7 +353,7 @@ export default function AioConfig({ bidData, onNext }) {
         </select>
         <input
           type="text"
-          value={componentPriceValue(form[name], form[`${name}_price`] ?? "")}
+          value={componentPriceValue(form[name], form[name === "screen_size" ? "screen_price" : `${name}_price`] ?? "")}
           readOnly
           disabled
           placeholder="Price"
