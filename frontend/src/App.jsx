@@ -84,6 +84,8 @@ function App() {
         <Route path="/login/post-bid" element={<Login showRoleSelector={false} fixedRole="management" />} />
         <Route path="/management-dashboard" element={<ManagementNavbar />}>
           <Route index element={null} />
+          <Route path="my-representation" element={<ComingSoon product="My Representation" />} />
+          <Route path="match-price" element={<ComingSoon product="Match Price" />} />
           <Route path="disqualified-bids" element={<DisqualifiedBidsPanel showProductFilter />} />
           <Route path="clarification-bids" element={<ClarificationBidsPanel />} />
           <Route path="bid-to-be-participated" element={<AdminBidToBeParticipated />} />

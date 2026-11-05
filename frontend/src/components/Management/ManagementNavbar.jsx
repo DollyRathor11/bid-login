@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { FaSignOutAlt, FaBan, FaClipboardList, FaChartLine, FaQuestionCircle } from "react-icons/fa";
+import { FaSignOutAlt, FaBan, FaClipboardList, FaChartLine, FaQuestionCircle, FaFileAlt, FaTags } from "react-icons/fa";
 import { connectGemExtension } from "../../utils/connectGemExtension";
 
 const managementItems = [
+  { name: "My Representation", path: "/management-dashboard/my-representation", icon: <FaFileAlt className="text-purple-400" /> },
+  { name: "Match Price", path: "/management-dashboard/match-price", icon: <FaTags className="text-cyan-400" /> },
   { name: "Disqualified Bid", path: "/management-dashboard/disqualified-bids", icon: <FaBan className="text-red-400" /> },
   { name: "Clarification Bid", path: "/management-dashboard/clarification-bids", icon: <FaQuestionCircle className="text-sky-400" /> },
   { name: "Bid To Be Participated", path: "/management-dashboard/bid-to-be-participated", icon: <FaClipboardList className="text-amber-400" /> },
