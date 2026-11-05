@@ -28,6 +28,8 @@ def _clarification_data(result):
         "is_pending": result.is_pending,
         "clarification_at": result.clarification_at.isoformat() if result.clarification_at else "",
         "history": result.history if isinstance(result.history, list) else [],
+        "request_details": result.request_details if isinstance(result.request_details, list) else [],
+        "last_response_date": result.last_response_date.isoformat() if result.last_response_date else "",
         "last_synced_at": result.last_synced_at.isoformat(),
     }
 
@@ -114,6 +116,17 @@ def gem_clarification_results(request):
                 rejections.append({"bid_no": bid_no, "reason": "missing_clarification_history"})
                 continue
             summary = summarise(kept)
+            is_pending = summary["is_pending"] or (not summary["clarification_status"] and bool(row.get("is_pending")))
+            details = row.get("request_details") if isinstance(row.get("request_details"), list) else []
+            details = [item for item in details if isinstance(item, dict)]
+            last_response_date = _parse_datetime(row.get("last_response_date"))
+            # Request details only matter while the clarification is pending; a
+            # re-scan that could not open that popup keeps what was read before.
+            if is_pending and existing and not details:
+                details = existing.request_details
+                last_response_date = last_response_date or existing.last_response_date
+            if not is_pending:
+                details, last_response_date = [], None
             product_type = str(row.get("product_type", "desktop")).lower()
             defaults = {
                 "product_type": product_type if product_type in dict(GemBidResult.PRODUCT_CHOICES) else "other",
@@ -127,11 +140,13 @@ def gem_clarification_results(request):
                 "clarification_status": (
                     summary["clarification_status"] or str(row.get("clarification_status", "")).strip()
                 )[:150],
-                "is_pending": summary["is_pending"] or (not summary["clarification_status"] and bool(row.get("is_pending"))),
+                "is_pending": is_pending,
                 "clarification_at": summary["clarification_at"]
                 or _parse_datetime(row.get("clarification_at"))
                 or (existing.clarification_at if existing else None),
                 "history": kept,
+                "request_details": details,
+                "last_response_date": last_response_date,
             }
             result, was_created = GemClarificationResult.objects.update_or_create(bid_no=bid_no, defaults=defaults)
             saved.append(result.bid_no)

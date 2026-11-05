@@ -380,6 +380,9 @@ class GemClarificationResult(models.Model):
     clarification_at = models.DateTimeField(blank=True, null=True)
     # Rows of GeM's Clarification History popup, keyed by its column headings.
     history = models.JSONField(default=list, blank=True)
+    # Rows of the "Clarification Request Details" popup of a pending clarification.
+    request_details = models.JSONField(default=list, blank=True)
+    last_response_date = models.DateTimeField(blank=True, null=True)
     last_synced_at = models.DateTimeField(auto_now=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
