@@ -820,3 +820,80 @@ test('answered clarifications are not pending unless GeM still shows a pending s
   assert.equal(clarificationSummaryFor(answered).clarification_status, 'Clarification Submitted');
   assert.equal(clarificationSummaryFor(answered, 'Pending Clarification').is_pending, true);
 });
+
+// Minimal element tree, enough for clarificationRows (tables, rows, cells).
+function fakeElement(tagName, children = []) {
+  const node = {
+    tagName: tagName.toUpperCase(),
+    children: [],
+    parentElement: null,
+    get textContent() {
+      return typeof this.ownText === 'string' ? this.ownText : this.children.map((child) => child.textContent).join(' ');
+    },
+    get previousElementSibling() {
+      const siblings = this.parentElement ? this.parentElement.children : [];
+      return siblings[siblings.indexOf(this) - 1] || null;
+    },
+    descendants() {
+      return this.children.flatMap((child) => [child, ...child.descendants()]);
+    },
+    querySelectorAll(selector) {
+      if (selector === ':scope > th, :scope > td') return this.children.filter((child) => ['TH', 'TD'].includes(child.tagName));
+      return this.descendants().filter((child) => child.tagName === selector.toUpperCase());
+    },
+    querySelector(selector) {
+      return this.querySelectorAll(selector)[0] || null;
+    },
+  };
+  for (const child of children) {
+    const element = typeof child === 'string' ? Object.assign(fakeElement('span'), { ownText: child }) : child;
+    element.parentElement = node;
+    node.children.push(element);
+  }
+  return node;
+}
+
+function clarificationRowsFor(modal) {
+  const start = source.indexOf('function requestHeadingFor');
+  const end = source.indexOf('async function clarificationPopupRows', start);
+  assert.ok(start > 0 && end > start, 'clarification row parser must remain discoverable');
+  const textHelper = source.match(/const text = \(node\) => .*\n/)[0];
+  const context = { modal };
+  vm.runInNewContext(
+    `${textHelper}${source.slice(start, end)}; result = clarificationRows(modal);`,
+    context,
+  );
+  return context.result;
+}
+
+test('history popup label/value tables become one clarification per request', () => {
+  const pair = (label, value) => fakeElement('tr', [fakeElement('th', [label]), fakeElement('td', [value])]);
+  const modal = fakeElement('div', [
+    fakeElement('div', ['Request No: 1', 'Request Initiated At: 03-11-2026 18:42']),
+    fakeElement('table', [
+      pair('Type', 'General clarification'),
+      pair('Clarification Description', 'Please comply against the letter issued.'),
+      pair('Clarification File', 'View file'),
+      pair('Status', 'Pending'),
+    ]),
+  ]);
+  assert.deepEqual(JSON.parse(JSON.stringify(clarificationRowsFor(modal))), [{
+    'Request No': '1',
+    'Request Initiated At': '03-11-2026 18:42',
+    Type: 'General clarification',
+    'Clarification Description': 'Please comply against the letter issued.',
+    'Clarification File': 'View file',
+    Status: 'Pending',
+  }]);
+});
+
+test('request details popup keeps its column headings, including the last response date', () => {
+  const cells = (tag, values) => fakeElement('tr', values.map((value) => fakeElement(tag, [value])));
+  const modal = fakeElement('div', [fakeElement('table', [
+    cells('th', ['Clarification Type', 'Request Received On', 'Last date for seller response', 'Clarification Details']),
+    cells('td', ['General Clarifications', '03-11-2026 18:42', '05-11-2026 18:42', 'Please comply against the letter issued.']),
+  ])]);
+  const [row] = JSON.parse(JSON.stringify(clarificationRowsFor(modal)));
+  assert.equal(row['Last date for seller response'], '05-11-2026 18:42');
+  assert.equal(row['Clarification Type'], 'General Clarifications');
+});

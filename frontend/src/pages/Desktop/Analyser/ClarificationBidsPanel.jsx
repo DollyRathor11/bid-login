@@ -4,6 +4,37 @@ import { FaEye, FaTrash } from "react-icons/fa";
 const API_BASE = import.meta.env.VITE_API_URL;
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem("token") || localStorage.getItem("token") || ""}` });
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-");
+const formatDateTime = (value) => (value ? new Date(value).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-");
+
+// GeM popup rows are stored as they were read, so the columns follow
+// whatever headings that popup had.
+function PopupRowsTable({ title, rows, emptyText }) {
+  const columns = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  return (
+    <div className="mb-6">
+      <h3 className="mb-2 text-sm font-bold text-sky-800">{title}</h3>
+      <div className="overflow-x-auto border border-slate-200">
+        <table className="w-full text-left text-sm">
+          <thead className="bg-gray-300 text-gray-900">
+            <tr>
+              {columns.map((column) => <th key={column} className="px-3 py-3 font-semibold">{column}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row, index) => (
+              <tr key={index} className="border-b border-gray-100 align-top">
+                {columns.map((column) => <td key={column} className="whitespace-pre-line px-3 py-3 text-gray-700">{row[column] || "-"}</td>)}
+              </tr>
+            ))}
+            {!rows.length && (
+              <tr><td className="py-10 text-center text-gray-500">{emptyText}</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function ClarificationHistoryModal({ bid, onClose }) {
   useEffect(() => {
@@ -17,11 +48,6 @@ function ClarificationHistoryModal({ bid, onClose }) {
     };
   }, [onClose]);
 
-  // GeM's Clarification History columns are stored as they were read, so the
-  // table follows whatever headings that popup had.
-  const history = bid.history || [];
-  const columns = [...new Set(history.flatMap((row) => Object.keys(row)))];
-
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4" onMouseDown={onClose}>
       <div className="flex max-h-[85vh] w-full max-w-6xl flex-col overflow-hidden bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
@@ -34,7 +60,8 @@ function ClarificationHistoryModal({ bid, onClose }) {
             {[
               ["Bid No.", bid.bid_no || "-"],
               ["Department Name And Address", bid.department || "-"],
-              ["Clarification Date", bid.clarification_at ? new Date(bid.clarification_at).toLocaleString("en-IN") : "-"],
+              ["Clarification Date", formatDateTime(bid.clarification_at)],
+              ["Last Date for Seller Response", formatDateTime(bid.last_response_date)],
               ["Items", bid.item_name || "-"],
               ["Clarification Status", bid.clarification_status || (bid.is_pending ? "Pending Clarification" : "Clarification")],
             ].map(([label, value]) => (
@@ -44,23 +71,18 @@ function ClarificationHistoryModal({ bid, onClose }) {
               </div>
             ))}
           </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-300 text-gray-900">
-              <tr>
-                {columns.map((column) => <th key={column} className="px-3 py-3 font-semibold">{column}</th>)}
-              </tr>
-            </thead>
-            <tbody>
-              {history.map((row, index) => (
-                <tr key={index} className="border-b border-gray-100 align-top">
-                  {columns.map((column) => <td key={column} className="whitespace-pre-line px-3 py-3 text-gray-700">{row[column] || "-"}</td>)}
-                </tr>
-              ))}
-              {!history.length && (
-                <tr><td className="py-10 text-center text-gray-500">Clarification history has not been synced from GeM yet.</td></tr>
-              )}
-            </tbody>
-          </table>
+          <PopupRowsTable
+            title="Clarification History"
+            rows={bid.history || []}
+            emptyText="Clarification history has not been synced from GeM yet."
+          />
+          {bid.is_pending && (
+            <PopupRowsTable
+              title="Clarification Request Details"
+              rows={bid.request_details || []}
+              emptyText="Clarification request details have not been synced from GeM yet."
+            />
+          )}
         </div>
       </div>
     </div>
@@ -161,13 +183,14 @@ export default function ClarificationBidsPanel() {
         )}
       </div>
       <div className="overflow-x-auto">
-      <table className="min-w-[900px] w-full text-left">
+      <table className="min-w-[1040px] w-full text-left">
         <thead className="bg-slate-800 text-[11px] uppercase tracking-wider text-white">
           <tr>
             <th className="w-12 px-4 py-4">S.No.</th>
             <th className="w-48 px-4 py-4">Bid No.</th>
             <th className="px-4 py-4">Department Name And Address</th>
             <th className="w-44 px-4 py-4">Clarification Date</th>
+            <th className="w-44 px-4 py-4">Last Date</th>
             <th className="w-56 px-4 py-4">Items</th>
             <th className="w-52 px-4 py-4">Clarification Status</th>
             <th className="w-28 px-4 py-4 text-center">
@@ -191,6 +214,9 @@ export default function ClarificationBidsPanel() {
               <td className="px-4 py-4 text-sm font-bold text-blue-700">{row.bid_no}</td>
               <td className="px-4 py-4 text-sm text-gray-700">{row.department || "-"}</td>
               <td className="px-4 py-4 text-sm text-gray-700">{formatDate(row.clarification_at)}</td>
+              <td className={`px-4 py-4 text-sm ${row.is_pending && row.last_response_date ? "font-bold text-red-600" : "text-gray-700"}`}>
+                {row.is_pending ? formatDateTime(row.last_response_date) : "-"}
+              </td>
               <td className="px-4 py-4 text-sm font-medium text-gray-800">{row.item_name || "-"}</td>
               <td className="px-4 py-4">
                 <button
@@ -230,7 +256,7 @@ export default function ClarificationBidsPanel() {
             </tr>
           ))}
           {visibleRows.length === 0 && (
-            <tr><td colSpan="7" className="py-16 text-center text-sm text-gray-500">
+            <tr><td colSpan="8" className="py-16 text-center text-sm text-gray-500">
               {filter === "pending" ? "No pending clarifications." : "No clarification bids have been synced from GeM yet."}
             </td></tr>
           )}
