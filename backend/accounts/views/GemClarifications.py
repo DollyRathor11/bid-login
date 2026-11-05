@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from ..clarification_history import summarise, without_expired
 from ..models import GemBidResult, GemClarificationResult
 from .Gem import _require_role
 from .GemResults import _parse_datetime
@@ -99,12 +100,20 @@ def gem_clarification_results(request):
             history = row.get("history") if isinstance(row.get("history"), list) else []
             history = [item for item in history if isinstance(item, dict)]
             existing = GemClarificationResult.objects.filter(bid_no=bid_no).first()
+            kept = without_expired(history)
+            # Expired clarifications are not tracked; a bid with nothing else is removed.
+            if history and not kept:
+                if existing:
+                    existing.delete()
+                rejections.append({"bid_no": bid_no, "reason": "expired_only"})
+                continue
             # An incomplete re-read must not wipe a history saved earlier.
-            if not history and existing:
-                history = existing.history
-            if not history and not row.get("clarification_status"):
+            if not kept and existing:
+                kept = without_expired(existing.history)
+            if not kept and not row.get("clarification_status"):
                 rejections.append({"bid_no": bid_no, "reason": "missing_clarification_history"})
                 continue
+            summary = summarise(kept)
             product_type = str(row.get("product_type", "desktop")).lower()
             defaults = {
                 "product_type": product_type if product_type in dict(GemBidResult.PRODUCT_CHOICES) else "other",
@@ -115,11 +124,14 @@ def gem_clarification_results(request):
                 "end_date": _parse_datetime(row.get("end_date")),
                 "status": str(row.get("status", "")).strip()[:150],
                 "technical_status": str(row.get("technical_status", "")).strip()[:150],
-                "clarification_status": str(row.get("clarification_status", "")).strip()[:150],
-                "is_pending": bool(row.get("is_pending")),
-                "clarification_at": _parse_datetime(row.get("clarification_at"))
+                "clarification_status": (
+                    summary["clarification_status"] or str(row.get("clarification_status", "")).strip()
+                )[:150],
+                "is_pending": summary["is_pending"] or (not summary["clarification_status"] and bool(row.get("is_pending"))),
+                "clarification_at": summary["clarification_at"]
+                or _parse_datetime(row.get("clarification_at"))
                 or (existing.clarification_at if existing else None),
-                "history": history,
+                "history": kept,
             }
             result, was_created = GemClarificationResult.objects.update_or_create(bid_no=bid_no, defaults=defaults)
             saved.append(result.bid_no)

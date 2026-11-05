@@ -53,7 +53,7 @@ document.addEventListener("acxxel-gem-click-control", (event) => {
   const target = marked.closest("[ng-click], [data-ng-click], a, button, [role=button]") || marked;
   let clicked = false;
   try {
-    if (window.jQuery && target.matches?.("a.view_reason, .view_reason")) {
+    if (window.jQuery && target.matches?.("a.view_reason, .view_reason, a.clarification_history, .clarification_history")) {
       window.jQuery(target).trigger("click");
       clicked = true;
     } else if (window.angular) {
