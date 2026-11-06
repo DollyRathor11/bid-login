@@ -1,3 +1,5 @@
+import { epbgPriceError } from "../../../utils/approvalComponentPrices";
+import useApprovalComponentPrices from "../../../hooks/useApprovalComponentPrices";
 import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -94,7 +96,7 @@ const PriceField = ({ label, name, priceName, form, handleChange, options, isTex
       {isTextArea ? (
         <textarea
           name={name}
-          value={form?.[name] || ""}
+          value={form?.[name] ?? ""}
           onChange={handleChange}
           rows={2}
           autoComplete="off"
@@ -103,7 +105,7 @@ const PriceField = ({ label, name, priceName, form, handleChange, options, isTex
       ) : options ? (
         <select
           name={name}
-          value={form?.[name] || ""}
+          value={form?.[name] ?? ""}
           onChange={handleChange}
           className="flex-1 min-w-0 border border-gray-300 rounded-md px-3 py-2 text-sm bg-white outline-none focus:ring-2 focus:ring-blue-500"
         >
@@ -120,7 +122,7 @@ const PriceField = ({ label, name, priceName, form, handleChange, options, isTex
         <input
           type="text"
           name={name}
-          value={form?.[name] || ""}
+          value={form?.[name] ?? ""}
           onChange={handleChange}
           autoComplete="off"
           className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
@@ -461,6 +463,7 @@ export default function DesktopBidApproval() {
   // the analyser's Approved section reads the same bid, so it shows the update.
   const isApprovedBid = selected?.status === "approved" || selected?.review_status === "approved";
   const [form, setForm] = useState({});
+  useApprovalComponentPrices("desktop", form.id || form.bid_id, COMPONENT_PRICE_PAIRS, setForm, calculateTotalPrice, applyMargin);
   const [adminNote, setAdminNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
@@ -687,6 +690,23 @@ export default function DesktopBidApproval() {
   // note: the admin note to save; Reject Bid passes the popup's reason.
   const handleAction = async (action, note = adminNote) => {
     setMsg("");
+    if (action === "approved" || action === "re-analyze") {
+      const epbgError = epbgPriceError(form);
+      if (epbgError) {
+        setMsg(epbgError.message);
+        focusInvalidField(epbgError.field);
+        return;
+      }
+    }
+    if (action === "re-analyze") {
+      const pairs = [...COMPONENT_PRICE_PAIRS, ...(form.hddreturnable === "Yes" ? [["hddreturnable", "hddreturnable_price"]] : [])];
+      const missingPrice = findUnpricedComponent(form, pairs);
+      if (missingPrice) {
+        setMsg("Please fill the missing component price before sending to Re-Analyze.");
+        focusInvalidField(missingPrice[1]);
+        return;
+      }
+    }
     if (action === "approved") {
       const localContent = String(form.local_content || "").trim().replace(/%$/, "");
       const localContentNumber = Number(localContent);
@@ -739,6 +759,7 @@ export default function DesktopBidApproval() {
         }, 1200);
       } else {
         setMsg(data.error || "Something went wrong");
+        if (data.field) focusInvalidField(data.field);
       }
     } catch (error) {
       console.error("handleAction error: ", error);

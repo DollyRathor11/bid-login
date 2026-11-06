@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchComponentRates } from "../../../utils/componentRates";
+import useComponentOptions from "../../../hooks/useComponentOptions";
 import {
   PROCESSORS,
-  DVDS,
-  WARRANTIES,
+  DVDS as DESKTOP_DVDS,
+  WARRANTIES as DESKTOP_WARRANTIES,
 } from "../../Desktop/User/DesktopConfig";
 import { componentPriceValue, priceInputValue } from "../../../utils/price";
+
+export const AIO_DVDS = DESKTOP_DVDS.map((item) => ({ ...item }));
+export const AIO_WARRANTIES = DESKTOP_WARRANTIES.map((item) => ({ ...item }));
 
 export const AIO_PROCESSORS = [
   ...PROCESSORS
@@ -131,12 +135,16 @@ export const AIO_OPTIONS = Object.fromEntries(
     screen_size: AIO_SCREEN_SIZES,
     wifi: AIO_WIFIS,
     keyboard: AIO_KEYBOARDS,
-    dvd: DVDS,
-    warranty: WARRANTIES,
+    dvd: AIO_DVDS,
+    warranty: AIO_WARRANTIES,
   }).map(([field, list]) => [field, list.map((item) => item.name)])
 );
 
 let liveRateByName = {};
+
+const loadAioRates = () => fetchComponentRates("aio").then((rates) => {
+  liveRateByName = Object.fromEntries(rates.map((rate) => [rate.name, Number(rate.price)]));
+});
 
 const getPriceFromCatalog = (categoryList, value) => {
   const item = categoryList.find((entry) => entry.name === value);
@@ -195,13 +203,7 @@ const normalizeInitialForm = (source = {}) => ({ ...INITIAL_FORM, ...source });
 export default function AioConfig({ bidData, onNext }) {
   const bid_id = bidData?.bid_id;
 
-  useEffect(() => {
-    fetchComponentRates("aio")
-      .then((rates) => {
-        liveRateByName = Object.fromEntries(rates.map((rate) => [rate.name, Number(rate.price)]));
-      })
-      .catch((error) => console.error("Component rates:", error));
-  }, []);
+  const optionsRevision = useComponentOptions(loadAioRates);
 
   const draftKey = useMemo(() => getDraftKey(bid_id), [bid_id]);
 
@@ -242,9 +244,9 @@ export default function AioConfig({ bidData, onNext }) {
   const intelProcessors = AIO_PROCESSORS.filter(
     (p) => p.name.includes("Intel") || p.name.includes("Gen") || p.name.includes("Ultra")
   );
-  const amdProcessors = PROCESSORS.filter((p) => p.name.includes("AMD"));
+  const amdProcessors = AIO_PROCESSORS.filter((p) => p.name.includes("AMD"));
 
-  const filteredRams = useMemo(() => getFilteredAioRams(form.processor), [form.processor]);
+  const filteredRams = useMemo(() => getFilteredAioRams(form.processor), [form.processor, optionsRevision]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -270,11 +272,11 @@ export default function AioConfig({ bidData, onNext }) {
     else if (name === "hdd") localList = AIO_HDDS;
     else if (name === "ssd") localList = AIO_SSDS;
     else if (name === "os") localList = AIO_OS_OPTIONS;
-    else if (name === "dvd") localList = DVDS;
+    else if (name === "dvd") localList = AIO_DVDS;
     else if (name === "wifi") localList = AIO_WIFIS;
     else if (name === "screen_size") localList = AIO_SCREEN_SIZES;
     else if (name === "keyboard") localList = AIO_KEYBOARDS;
-    else if (name === "warranty") localList = WARRANTIES;
+    else if (name === "warranty") localList = AIO_WARRANTIES;
     else if (name === "motherboard") localList = AIO_MOTHERBOARDS;
 
     if (localList) {
@@ -507,11 +509,11 @@ export default function AioConfig({ bidData, onNext }) {
 
           <SelectField label="Solid State Drive" name="ssd" options={AIO_SSDS} required />
           <SelectField label="Operating System" name="os" options={AIO_OS_OPTIONS} required />
-          <SelectField label="DVD" name="dvd" options={DVDS} required />
+          <SelectField label="DVD" name="dvd" options={AIO_DVDS} required />
           <SelectField label="Wi-FI Bluetooth" name="wifi" options={AIO_WIFIS} required />
           <SelectField label="Screen Size" name="screen_size" options={AIO_SCREEN_SIZES} required />
           <SelectField label="Keyboard & Mouse" name="keyboard" options={AIO_KEYBOARDS} required />
-          <SelectField label="Warranty" name="warranty" options={WARRANTIES} required />
+          <SelectField label="Warranty" name="warranty" options={AIO_WARRANTIES} required />
 
           <div className="col-span-1">
             <label className="block text-sm font-medium text-gray-700 mb-1">Bid Start Date</label>
