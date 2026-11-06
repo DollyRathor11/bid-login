@@ -996,6 +996,11 @@ def admin_review_workstation_bid(request, bid_id):
         action = data.get("status", "")
         if action not in ("approved", "re-analyze"):
             return JsonResponse({"error": "Invalid status."}, status=400)
+        if action in ("approved", "re-analyze"):
+            from ..approval_prices import unpriced_main_component
+            price_error = unpriced_main_component("workstation", data, bid, validate_hdd=action != "approved")
+            if price_error:
+                return JsonResponse(price_error, status=400)
         if action == "approved":
             from decimal import Decimal, InvalidOperation
             local_content = str(data.get("local_content") if data.get("local_content") is not None else "").strip().removesuffix("%").strip()

@@ -540,6 +540,7 @@ const AdminHome = () => {
 const AdminNavbar = () => {
   const [openBid, setOpenBid] = useState(true);
   const [openRates, setOpenRates] = useState(false);
+  const [openComponents, setOpenComponents] = useState(false);
   const [openAdmin, setOpenAdmin] = useState(false);
   const [username, setUsername] = useState("");
   const navigate = useNavigate();
@@ -674,6 +675,24 @@ const AdminNavbar = () => {
               </div>
             )}
           </div>
+
+          <button
+            type="button"
+            onClick={() => setOpenComponents(!openComponents)}
+            aria-expanded={openComponents}
+            className="mt-3 flex w-full items-center justify-between rounded-xl border border-gray-700/30 bg-gray-800/50 px-4 py-3 text-left font-medium text-gray-200 transition hover:bg-gray-700/70"
+          >
+            <span className="flex items-center gap-2"><FaBox className="text-emerald-400" /><span>Add Component</span></span>
+            <FaChevronDown className={`text-gray-400 transition duration-300 ${openComponents ? "rotate-180" : ""}`} />
+          </button>
+          {openComponents && (
+            <div className="mt-3 ml-2 space-y-1.5">
+              {[{ key: "desktop", label: "Desktop" }, { key: "workstation", label: "Workstation" }, { key: "aio", label: "AIO" }].map((item) => {
+                const path = `/admin-dashboard/add-component/${item.key}`;
+                return <button type="button" key={item.key} onClick={() => navigate(path)} aria-current={isActive(path) ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition ${isActive(path) ? "bg-gray-700/70 text-white" : "text-gray-200 hover:bg-gray-700/50"}`}><FaDesktop className="text-emerald-400" /><span className="text-sm font-medium">{item.label}</span></button>;
+              })}
+            </div>
+          )}
 
           <div className="mt-3">
             <button

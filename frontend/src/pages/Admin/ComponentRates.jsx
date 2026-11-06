@@ -41,12 +41,12 @@ const aioCategories = [
   ["processor", "Processor", Aio.AIO_PROCESSORS], ["ram", "RAM", Aio.AIO_RAMS],
   ["hdd", "HDD", Aio.AIO_HDDS], ["ssd", "SSD", Aio.AIO_SSDS],
   ["motherboard", "Motherboard", Aio.AIO_MOTHERBOARDS], ["os", "Operating System", Aio.AIO_OS_OPTIONS],
-  ["dvd", "DVD", Desktop.DVDS], ["wifi", "Wi-Fi / Bluetooth", Aio.AIO_WIFIS],
+  ["dvd", "DVD", Aio.AIO_DVDS], ["wifi", "Wi-Fi / Bluetooth", Aio.AIO_WIFIS],
   ["screen_size", "Screen Size", Aio.AIO_SCREEN_SIZES],
-  ["keyboard", "Keyboard & Mouse", Aio.AIO_KEYBOARDS], ["warranty", "Warranty", Desktop.WARRANTIES],
+  ["keyboard", "Keyboard & Mouse", Aio.AIO_KEYBOARDS], ["warranty", "Warranty", Aio.AIO_WARRANTIES],
 ];
 
-const catalogs = { desktop: desktopCategories, aio: aioCategories, workstation: workstationCategories };
+export const catalogs = { desktop: desktopCategories, aio: aioCategories, workstation: workstationCategories };
 const productNames = { desktop: "Desktop", workstation: "Workstation", aio: "AIO" };
 const money = (value) => value === "" || value == null ? "—" : `₹${Number(value).toLocaleString("en-IN")}`;
 

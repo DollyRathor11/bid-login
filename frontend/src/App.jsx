@@ -57,6 +57,7 @@ import ClarificationBidsPanel from "./pages/Desktop/Analyser/ClarificationBidsPa
 import FinancialRankingPanel from "./pages/Desktop/Analyser/FinancialRankingPanel";
 import AdminBidToBeParticipated from "./pages/Admin/AdminBidToBeParticipated";
 import ComponentRates from "./pages/Admin/ComponentRates.jsx";
+import AddComponent from "./pages/Admin/AddComponent.jsx";
 import UserAssignedBids from "./pages/User/UserAssignedBids.jsx";
 
 const ComingSoon = ({ product }) => (
@@ -148,6 +149,7 @@ function App() {
           <Route path="add-admin" element={<AddAnalyser accountType="admin" />} />
           <Route path="add-management" element={<AddAnalyser accountType="management" />} />
           <Route path="component-rates/:product" element={<ComponentRates />} />
+          <Route path="add-component/:product?" element={<AddComponent />} />
           <Route
             path="add-product"
             element={

@@ -206,6 +206,11 @@ def admin_review_aio_bid(r,bid_id):
         b.save(update_fields=["status","admin_note","admin_username","updated_at"])
         return JsonResponse({"message":"Bid rejected","bid":_json(b,r)})
     if status not in ("approved","rejected","re-analyze"):return JsonResponse({"error":"Invalid admin status"},status=400)
+    if status in ("approved", "re-analyze", "rejected"):
+        from ..approval_prices import unpriced_main_component
+        price_error = unpriced_main_component("aio", d, b, validate_hdd=status != "approved")
+        if price_error:
+            return JsonResponse(price_error, status=400)
     if status=="approved":
         local_content=str(d.get("local_content") or "").strip().rstrip("%")
         if not local_content:return JsonResponse({"error":"Local Content (%) is mandatory."},status=400)

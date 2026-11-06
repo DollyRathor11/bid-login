@@ -1,4 +1,5 @@
 from django.urls import path
+from .views.ComponentOptions import component_options
 from .views.GemFinancialRanking import financial_rankings, delete_financial_ranking
 from .views.GemProductSpecs import import_gem_product_specs, replace_from_gem_market, save_gem_category_excel
 from . import views
@@ -118,6 +119,7 @@ urlpatterns = [
     path("delete-management/<int:id>/", views.delete_management),
     path('login/', views.login),
     path("forgot-password/", views.forgot_password),
+    path("component-options/", component_options, name="component_options"),
     path("component-rates/", views.component_rates, name="component_rates"),
     path("component-rates/pdf/", views.component_rates_pdf, name="component_rates_pdf"),
 

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchComponentRates } from "../../../utils/componentRates";
+import useComponentOptions from "../../../hooks/useComponentOptions";
 import { componentPriceValue } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -414,9 +415,7 @@ const normalizeInitialForm = (source = {}) => {
 
 export default function WorkstationConfig({ bidData, onNext }) {
   const bid_id = bidData?.bid_id;
-  useEffect(() => {
-    loadLiveRates();
-  }, []);
+  const optionsRevision = useComponentOptions(loadLiveRates);
   const draftKey = useMemo(() => getDraftKey(bid_id), [bid_id]);
 
   // A saved config draft still carries the Step 1 values from when it was
@@ -470,14 +469,14 @@ export default function WorkstationConfig({ bidData, onNext }) {
   const intelProcessors = [...INTEL_PROCESSORS, ...INTEL_XEON_PROCESSORS];
   const amdProcessors = AMD_THREADRIPPER_PROCESSORS;
 
-  const filteredRams = useMemo(() => getFilteredRams(form.processor), [form.processor]);
+  const filteredRams = useMemo(() => getFilteredRams(form.processor), [form.processor, optionsRevision]);
   const filteredIntelMotherboards = useMemo(
     () => getFilteredIntelMotherboards(form.processor),
-    [form.processor]
+    [form.processor, optionsRevision]
   );
   const filteredAmdMotherboards = useMemo(
     () => getFilteredAmdMotherboards(form.processor),
-    [form.processor]
+    [form.processor, optionsRevision]
   );
 
 

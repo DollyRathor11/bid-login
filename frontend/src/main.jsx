@@ -1,14 +1,23 @@
-import React from "react";
 import ReactDOM from "react-dom/client";
-import App from "./App";
+import { loadComponentOptions } from "./utils/componentOptions";
 import { BrowserRouter } from "react-router-dom";
 import './index.css'
 import { installAuthFetch } from "./utils/authFetch";
 
 installAuthFetch();
 
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <BrowserRouter>
-    <App />
-  </BrowserRouter>
-);
+async function startApp() {
+  try {
+    await loadComponentOptions();
+  } catch (error) {
+    console.error(error);
+  }
+  const { default: App } = await import("./App");
+  ReactDOM.createRoot(document.getElementById("root")).render(
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  );
+}
+
+startApp();

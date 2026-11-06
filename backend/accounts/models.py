@@ -786,6 +786,23 @@ class PrinterBid(models.Model):
         db_table = "printer_bid_details"
 
 
+class ComponentOption(models.Model):
+    """An extra specification option added by an administrator."""
+
+    product = models.CharField(max_length=30)
+    category = models.CharField(max_length=60)
+    group = models.CharField(max_length=100)
+    name = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "custom_component_options"
+        ordering = ["product", "group", "name"]
+        constraints = [models.UniqueConstraint(
+            fields=["product", "category", "name"], name="unique_custom_component_option",
+        )]
+
+
 class ComponentRate(models.Model):
     """Admin-managed price override for a product configuration option."""
 

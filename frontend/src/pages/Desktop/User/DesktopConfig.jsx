@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchComponentRates } from "../../../utils/componentRates";
+import useComponentOptions from "../../../hooks/useComponentOptions";
 import { componentPriceValue, priceInputValue } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
@@ -141,11 +142,11 @@ const getFilteredIntelMotherboards = (processorName) => {
   if (!category) return MOTHERBOARDS.filter((m) => !m.name.includes("AMD"));
 
   if (category === "intel_ultra") {
-        return MOTHERBOARDS.filter((m) => m.name.includes("H810"));
+        return MOTHERBOARDS.filter((m) => m.name.includes("H810") || (m.custom && !m.name.includes("AMD")));
   }
   if (category === "intel_old") {
         return MOTHERBOARDS.filter(
-      (m) => m.name.includes("H610") || m.name.includes("Q670")
+      (m) => m.name.includes("H610") || m.name.includes("Q670") || (m.custom && !m.name.includes("AMD"))
     );
   }
   return [];
@@ -156,10 +157,10 @@ const getFilteredAmdMotherboards = (processorName) => {
   if (!category) return MOTHERBOARDS.filter((m) => m.name.includes("AMD"));
 
   if (category === "amd_new") {
-        return MOTHERBOARDS.filter((m) => m.name.includes("B650"));
+        return MOTHERBOARDS.filter((m) => m.name.includes("B650") || (m.custom && m.name.includes("AMD")));
   }
   if (category === "amd_old") {
-        return MOTHERBOARDS.filter((m) => m.name.includes("A520"));
+        return MOTHERBOARDS.filter((m) => m.name.includes("A520") || (m.custom && m.name.includes("AMD")));
   }
   return [];
 };
@@ -170,6 +171,8 @@ export const isRamCompatible = () => true;
 export const isMotherboardCompatible = (processorName, mbName) => {
   const category = getProcessorCategory(processorName);
   if (!category) return true;
+  const customBoard = MOTHERBOARDS.find((board) => board.custom && board.name === mbName);
+  if (customBoard) return category.startsWith("amd") === mbName.includes("AMD");
 
   const compatibleMbs =
     category === "intel_ultra"
@@ -243,9 +246,7 @@ const normalizeInitialForm = (source = {}) => {
 
 export default function DesktopConfig({ bidData, onNext }) {
   const bid_id = bidData?.bid_id;
-  useEffect(() => {
-    loadLiveRates();
-  }, []);
+  const optionsRevision = useComponentOptions(loadLiveRates);
   const draftKey = useMemo(() => getDraftKey(bid_id), [bid_id]);
 
   const [form, setForm] = useState(() => {
@@ -293,17 +294,17 @@ export default function DesktopConfig({ bidData, onNext }) {
 
   const filteredRams = useMemo(
     () => getFilteredRams(form.processor),
-    [form.processor]
+    [form.processor, optionsRevision]
   );
 
   const filteredIntelMotherboards = useMemo(
     () => getFilteredIntelMotherboards(form.processor),
-    [form.processor]
+    [form.processor, optionsRevision]
   );
 
   const filteredAmdMotherboards = useMemo(
     () => getFilteredAmdMotherboards(form.processor),
-    [form.processor]
+    [form.processor, optionsRevision]
   );
 
         const handleChange = async (e) => {
