@@ -20,6 +20,6 @@ export function findUnpricedComponent(values, pairs) {
   return pairs.find(([name, priceName]) => {
     const choice = String(values?.[name] ?? "").trim();
     const price = Number(String(values?.[priceName] ?? "").replace(/,/g, "").trim());
-    return choice !== "" && choice !== "None" && !(price > 0);
+    return choice !== "" && choice !== "None" && !(Number.isFinite(price) && price > 0);
   }) || null;
 }

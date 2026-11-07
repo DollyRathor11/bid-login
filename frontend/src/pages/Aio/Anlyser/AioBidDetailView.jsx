@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import SpecialDocEditor from "../../../components/analyser/SpecialDocEditor";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { DVDS, WARRANTIES } from "../../Desktop/User/DesktopConfig";
+import { AIO_DVDS as DVDS, AIO_WARRANTIES as WARRANTIES } from "../User/AioConfig";
 // AIO-native RAM/SSD/HDD/OS/screen-size/WiFi/keyboard/motherboard vocabulary
 // (see AioConfig.jsx for why these can't just reuse Desktop's lists) — same
 // source used at the User config step, so the Analyser sees the exact same

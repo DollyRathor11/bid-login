@@ -5,11 +5,13 @@ from django.http import JsonResponse
 from django.test import RequestFactory, SimpleTestCase
 
 from .views.Workstation import admin_review_workstation_bid
+from .models import WorkstationBid
 
 
 class WorkstationApprovalValidationTests(SimpleTestCase):
     def request_approval(self, payload):
-        bid = Mock(hdd_non_return="Yes", hdd_non_return_price=0, model_number="model")
+        bid = WorkstationBid(hdd_non_return="Yes", hdd_non_return_price=0, model_number="model")
+        bid.save = Mock()
         request = RequestFactory().patch("/", json.dumps(payload), content_type="application/json")
         with patch("accounts.views.Workstation.WorkstationBid.objects.get", return_value=bid), patch("accounts.views.model_duplicates.guard_new_model", return_value=JsonResponse({"validated": True})) as guard:
             response = admin_review_workstation_bid(request, 1)
@@ -40,6 +42,6 @@ class WorkstationApprovalValidationTests(SimpleTestCase):
                 guard.assert_called_once()
 
     def test_reanalyse_does_not_require_approval_fields(self):
-        response, guard = self.request_approval({"status": "re-analyze"})
+        response, guard = self.request_approval({"status": "re-analyze", "hddreturnable": "None"})
         self.assertEqual(response.status_code, 200)
         guard.assert_called_once()

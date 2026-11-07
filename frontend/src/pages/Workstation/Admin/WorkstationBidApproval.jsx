@@ -1,3 +1,5 @@
+import { epbgPriceError } from "../../../utils/approvalComponentPrices";
+import useApprovalComponentPrices from "../../../hooks/useApprovalComponentPrices";
 import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
 import { useNavigate } from "react-router-dom";
 import { useEffect, useRef, useState } from "react";
@@ -91,14 +93,14 @@ const PriceField = ({ label, name, priceName, form, handleChange, options = [], 
       {isTextArea ? (
         <textarea
           name={name}
-          value={form?.[name] || ""}
+          value={form?.[name] ?? ""}
           onChange={handleChange}
           rows={2}
           autoComplete="off"
           className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm resize-none outline-none focus:ring-2 focus:ring-blue-500"
         />
       ) : options.length ? (
-        <select name={name} value={form?.[name] || ""} onChange={handleChange}
+        <select name={name} value={form?.[name] ?? ""} onChange={handleChange}
           className="flex-1 min-w-0 border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-white">
           <option value="">Select {label}</option>
           {form?.[name] && !options.some((option) => option.name === form[name]) && <option value={form[name]}>{form[name]}</option>}
@@ -108,7 +110,7 @@ const PriceField = ({ label, name, priceName, form, handleChange, options = [], 
         <input
           type="text"
           name={name}
-          value={form?.[name] || ""}
+          value={form?.[name] ?? ""}
           onChange={handleChange}
           autoComplete="off"
           className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
@@ -418,6 +420,7 @@ export default function WorkstationBidApproval() {
   // the analyser's Approved section reads the same bid, so it shows the update.
   const isApprovedBid = selected?.status === "approved" || selected?.review_status === "approved";
   const [form, setForm] = useState({});
+  useApprovalComponentPrices("workstation", form.id || form.bid_id, COMPONENT_PRICE_PAIRS, setForm, calculateTotalPrice, applyMargin);
   const [adminNote, setAdminNote] = useState("");
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -590,6 +593,23 @@ export default function WorkstationBidApproval() {
   // note: the admin note to save; Reject Bid passes the popup's reason.
   const handleAction = async (status, note = adminNote) => {
     setMsg("");
+    if (status === "approved" || status === "re-analyze") {
+      const epbgError = epbgPriceError(form);
+      if (epbgError) {
+        setMsg(epbgError.message);
+        focusInvalidField(epbgError.field);
+        return;
+      }
+    }
+    if (status === "re-analyze") {
+      const pairs = [...COMPONENT_PRICE_PAIRS, ...(form.hddreturnable === "Yes" ? [["hddreturnable", "hddreturnable_price"]] : [])];
+      const missingPrice = findUnpricedComponent(form, pairs);
+      if (missingPrice) {
+        setMsg("Please fill the missing component price before sending to Re-Analyze.");
+        focusInvalidField(missingPrice[1]);
+        return;
+      }
+    }
     if (status === "approved") {
       const localContent = String(form.local_content ?? "").trim().replace(/%$/, "").trim();
       if (!localContent || !Number.isFinite(Number(localContent)) || Number(localContent) < 0 || Number(localContent) > 100) {
@@ -630,7 +650,10 @@ export default function WorkstationBidApproval() {
         body: JSON.stringify(payload),
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || "Admin review failed.");
+      if (!res.ok) {
+        if (data.field) focusInvalidField(data.field);
+        throw new Error(data.error || "Admin review failed.");
+      }
       setMsg(status === "approved" ? (isApprovedBid ? "Approved bid updated." : "Bid approved successfully.") : status === "bid_rejected" ? "Bid rejected." : "Bid sent to re-analyze.");
       await fetchBids();
       await fetchReAnalyzeCount();
