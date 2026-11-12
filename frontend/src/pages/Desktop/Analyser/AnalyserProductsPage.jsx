@@ -1493,10 +1493,11 @@ export default function CatalogueProducts() {
           fetch(url)
             .then(parseJsonResponse)
             .then((data) => (Array.isArray(data) ? data : []))
-            // AIO products come from the dedicated /aio-catalogue/ fetch
-            // below (with real extra_specs) — drop the category="All" copy
-            // here so they don't show up twice with broken specs.
-            .then((data) => data.filter((p) => String(p?.category || "").toLowerCase() !== "aio"))
+            // AIO and Workstation products come from their dedicated
+            // /aio-catalogue/ and /workstation-catalogue/ fetches below (with
+            // real extra_specs) — drop the category="All" copy here so they
+            // don't show up twice with broken specs.
+            .then((data) => data.filter((p) => !["aio", "workstation"].includes(String(p?.category || "").toLowerCase())))
         );
       }
 
