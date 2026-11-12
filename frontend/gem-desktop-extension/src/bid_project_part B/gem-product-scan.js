@@ -83,21 +83,25 @@
     await update({ status: 'running', message: `Scan resumed on page ${run.page}.` });
   }
 
+  // Every other connected Acxxel app (local / live server) gets the same
+  // products, so a scan shows up wherever the software is used.
+  async function mirror(path, body) {
+    if (typeof mirrorToOtherBackends === 'function') await mirrorToOtherBackends(path, body);
+  }
+
   async function savePage(category, products) {
     if (DESKTOP_CATEGORY.test(category)) {
       const withModel = products.filter((p) => p.model_no);
       if (!withModel.length) return 0;
-      await api('/catalogue/replace-from-gem-market/', {
-        method: 'POST',
-        body: JSON.stringify({ products: withModel, total: withModel.length, mode: 'update' }),
-      });
+      const body = JSON.stringify({ products: withModel, total: withModel.length, mode: 'update' });
+      await api('/catalogue/replace-from-gem-market/', { method: 'POST', body });
+      await mirror('/catalogue/replace-from-gem-market/', body);
       run.target = 'Desktop directory + Desktop_Product.xlsx';
       return withModel.length;
     }
-    const result = await api('/catalogue/gem-category-excel/', {
-      method: 'POST',
-      body: JSON.stringify({ category, products }),
-    });
+    const body = JSON.stringify({ category, products });
+    const result = await api('/catalogue/gem-category-excel/', { method: 'POST', body });
+    await mirror('/catalogue/gem-category-excel/', body);
     run.target = result.file;
     // Printer scans recheck the models already in printer.xlsx (none added).
     if (result.printer_sheet) {

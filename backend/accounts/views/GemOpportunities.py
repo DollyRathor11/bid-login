@@ -200,7 +200,9 @@ def gem_bid_opportunities(request):
             rejections.append({"bid_no": bid_no, "reason": "invalid_offer_validity"})
             continue
         quantity = item.get("quantity")
-        min_quantity = 1 if product_type in NO_MINIMUM_QUANTITY_PRODUCTS else MINIMUM_QUANTITY
+        # A bunch bid lists each item's own quantity (often 1 each), so the
+        # 5-unit minimum applies only to single-product bids.
+        min_quantity = 1 if product_type in NO_MINIMUM_QUANTITY_PRODUCTS or classification["is_bunch"] else MINIMUM_QUANTITY
         if type(quantity) is not int or quantity < min_quantity:
             rejections.append({"bid_no": bid_no, "reason": "minimum_quantity_5"})
             continue

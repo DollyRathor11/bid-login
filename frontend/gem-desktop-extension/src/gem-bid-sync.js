@@ -287,7 +287,9 @@
 
   // Bid numbers read by the last completed opportunity scan, including bids
   // that were rejected, so a later scan can tell where the new bids end.
-  const OPPORTUNITY_KNOWN_BIDS_KEY = "gemOpportunityKnownBids";
+  // Renamed when bunch bids started being received, so bunch bids rejected by
+  // earlier scans are read again once.
+  const OPPORTUNITY_KNOWN_BIDS_KEY = "gemOpportunityKnownBidsV2";
   // Bids read by the scan in progress. They only become "known" once that
   // scan completes; an interrupted run must not hide the pages it never read.
   const OPPORTUNITY_RUN_BIDS_KEY = "gemOpportunityRunBids";
@@ -338,28 +340,37 @@
     ["toner", "toner cartridges / ink cartridges"],
     ["printer", "a4 and legal size multifunction printer (mfp)"],
   ];
+  const BUNCH_ONLY_CARD_ITEM_NAMES = [
+    ["ups", "line interactive ups with avr (v2)"],
+    ["ups", "online ups (≤10 kva) with battery conforming to is 16242 (part 1)"],
+    ["ups", "online ups (≤10 kva) without battery conforming to is 16242 (part 1)"],
+  ];
 
   // A reject the seller-list card alone already proves, so the bid's detail
-  // and PDF are not downloaded: an item that is none of our products, more
-  // than one item (bunch), or one item below its minimum quantity. Anything
-  // unclear returns "" and is decided from the detail as before.
+  // and PDF are not downloaded: an item that is none of our products (or,
+  // inside a bunch, not a UPS either), or a single item below its minimum
+  // quantity. Anything unclear returns "" and is decided from the detail.
   function opportunityCardReject(card) {
     const itemsText = text(card).match(/\bItems?\s*:\s*(.+?)\s*\bQuantity\s*:/i)?.[1] || "";
     const items = itemsText.split(/\s*,\s*/)
       .map((item) => item.replace(/\s*\(Q\d+\)\s*/gi, " ").replace(/\s*(?:\.\.\.|…)\s*$/, "").replace(/\s+/g, " ").trim())
       .filter(Boolean);
     if (!items.length || /\bPAC\b/i.test(itemsText)) return "";
+    const isBunch = items.length > 1;
     const productOf = (item) => {
       const lower = item.toLowerCase();
-      const byPattern = OPPORTUNITY_PRODUCTS.find(([, pattern]) => pattern.test(item))?.[0];
+      const patterns = isBunch ? [...OPPORTUNITY_PRODUCTS, ...BUNCH_ONLY_PRODUCTS] : OPPORTUNITY_PRODUCTS;
+      const byPattern = patterns.find(([, pattern]) => pattern.test(item))?.[0];
       if (byPattern) return byPattern;
-      return OPPORTUNITY_CARD_ITEM_NAMES.find(([, name]) => name.startsWith(lower) || lower.startsWith(name))?.[0] || null;
+      const names = isBunch ? [...OPPORTUNITY_CARD_ITEM_NAMES, ...BUNCH_ONLY_CARD_ITEM_NAMES] : OPPORTUNITY_CARD_ITEM_NAMES;
+      return names.find(([, name]) => name.startsWith(lower) || lower.startsWith(name))?.[0] || null;
     };
     // A very short visible name could still be one of ours; leave it alone.
     if (items.some((item) => item.length < 8)) return "";
     const products = items.map(productOf);
     if (products.some((product) => !product)) return "product";
-    if (items.length > 1) return "bunch";
+    // A bunch of only UPS items has none of our products.
+    if (isBunch) return products.every((product) => product === "ups") ? "product" : "";
     const quantity = opportunityCardQuantity(card);
     if (quantity > 0 && quantity < 5 && !NO_MINIMUM_QUANTITY_PRODUCTS.has(products[0])) return "quantity";
     return "";
@@ -1734,6 +1745,12 @@
     ["toner", /^toner\s+cartridges?\s*(?:\/|and)\s*ink\s+cartridges?$/i],
     ["printer", /^a4\b(?=[\s\S]*(?:multifunction|\bmfp\b))(?=[\s\S]*(?:printer|\bp\b))[\s\S]*$/i],
   ];
+  // UPS categories are received only inside a bunch bid, never on their own,
+  // and only under these exact GeM names.
+  const BUNCH_ONLY_PRODUCTS = [
+    ["ups", /^line\s+interactive\s+ups\s+with\s+avr\s*\(v2\)$/i],
+    ["ups", /^online\s+ups\s*\(\s*(?:≤|<=|&le;|<|\?|�)\s*10\s*kva\s*\)\s+with(?:out)?\s+battery\s+conforming\s+to\s+is\s+16242\s*\(\s*part\s+1\s*\)$/i],
+  ];
   const OPPORTUNITY_CATEGORIES = [
     ["Entry/Mid Desktop", "Entry and Mid Level Desktop", /entry\s+and\s+mid.*desktop/i],
     ["High-End Desktop", "High End Desktop", /high\s+end.*desktop/i],
@@ -1782,17 +1799,21 @@
       .replace(/\s*,\s*/g, ", ")
       .trim().replace(/^,|,$/g, "").trim();
     const categories = cleanItemName.split(/\s*,\s*/).map((value) => value.trim()).filter(Boolean);
+    const isBunch = categories.length > 1;
     const matchedProducts = categories.map((category) => (
-      OPPORTUNITY_PRODUCTS.find(([, pattern]) => pattern.test(category)) || null
+      OPPORTUNITY_PRODUCTS.find(([, pattern]) => pattern.test(category))
+      || (isBunch ? BUNCH_ONLY_PRODUCTS.find(([, pattern]) => pattern.test(category)) : null)
+      || null
     ));
-    // Only single-product bids are received. A bunch bid (more than one item
-    // category) is rejected even when every category is supported.
-    if (!categories.length || matchedProducts.some((product) => !product)) return { reject: "product" };
-    if (categories.length > 1) return { reject: "bunch" };
-    const product = matchedProducts[0];
+    // Every category must be one of ours; inside a bunch bid (several item
+    // categories) a UPS category is allowed too. A bunch needs at least one
+    // of our products and is filed under the first one.
+    const product = matchedProducts.find((match) => match && match[0] !== "ups");
+    if (!categories.length || matchedProducts.some((match) => !match) || !product) return { reject: "product" };
     // Bids below 5 units are not received, except Printer and Workstation.
-    if (quantity < 5 && !NO_MINIMUM_QUANTITY_PRODUCTS.has(product[0])) return { reject: "quantity" };
-    if (product[0] === "printer" && inkjetOnlyPrinter(flat)) return { reject: "inkjet" };
+    // A bunch lists a quantity per item (often 1 each), so it has no minimum.
+    if (!isBunch && quantity < 5 && !NO_MINIMUM_QUANTITY_PRODUCTS.has(product[0])) return { reject: "quantity" };
+    if (!isBunch && product[0] === "printer" && inkjetOnlyPrinter(flat)) return { reject: "inkjet" };
     const deliveryText = bounded(
       "Consignees?/Reporting\\s+Officer\\s+and\\s+Quantity",
       "(?:Special\\s+terms|Buyer\\s+Added|Technical\\s+Specifications|$)"
@@ -1844,6 +1865,7 @@
       end_date: endDate,
       product_name: cleanItemName.slice(0, 500),
       product_type: product[0],
+      is_bunch: isBunch,
       quantity,
       offer_validity_days: validityDays || null,
       department: bounded("Department\\s+Name", "(?:Organisation|Office|Contact|Buyer|Item\\s+Category|$)"),

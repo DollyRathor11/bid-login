@@ -922,10 +922,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       return { ok: true, bidNos: result.bid_nos || [] };
     }
     if (message.type === "MARK_GEM_CORRIGENDUM") {
-      const result = await api("/gem/bid-opportunities/", {
-        method: "POST",
-        body: JSON.stringify({ action: "mark_corrigendum", bid_nos: message.bidNos || [], bids: message.bids || [] }),
-      });
+      const body = JSON.stringify({ action: "mark_corrigendum", bid_nos: message.bidNos || [], bids: message.bids || [] });
+      const result = await api("/gem/bid-opportunities/", { method: "POST", body });
+      await mirrorToOtherBackends("/gem/bid-opportunities/", body);
       return { ok: true, updated: result.updated || 0 };
     }
     if (message.type === "READ_GEM_BID_DETAIL") {

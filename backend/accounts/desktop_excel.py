@@ -584,10 +584,13 @@ def update_directory(entries, dry_run=False):
                 result["skipped_non_desktop"].append(key[0])
                 continue
             old_specs = _product_specs(product) if product else {}
-            specs = _normalize_extra_specs({**old_specs, **entry["specs"]})
+            # A model created from a bid takes GeM's specs as they are; none of
+            # the bid's own values are kept.
+            from_bid = bool(old_specs.get("_source"))
+            specs = _normalize_extra_specs({**({} if from_bid else old_specs), **entry["specs"]})
             if entry.get("sections"):
                 specs["_gem_sections"] = entry["sections"]
-            summary = {f: v for f, v in entry["summary"].items() if v}
+            summary = dict(entry["summary"]) if from_bid else {f: v for f, v in entry["summary"].items() if v}
             # Compare with the stored values as they are; a bid-created model
             # found on GeM also loses its "not yet on GeM" marker.
             same_specs = all((old_specs.get(k) or "") == (v or "") for k, v in specs.items())

@@ -36,6 +36,20 @@ ALLOWED_CATEGORY_PATTERNS = (
 )
 
 
+# UPS categories are received only inside a bunch bid, never on their own,
+# and only under these exact GeM names.
+BUNCH_ONLY_CATEGORY_PATTERNS = (
+    ("line_interactive_ups", "ups", re.compile(
+        r"^line\s+interactive\s+ups\s+with\s+avr\s*\(v2\)$",
+        re.IGNORECASE,
+    )),
+    ("online_ups", "ups", re.compile(
+        r"^online\s+ups\s*\(\s*(?:≤|<=|&le;|<|\?|�)\s*10\s*kva\s*\)\s+with(?:out)?\s+battery\s+conforming\s+to\s+is\s+16242\s*\(\s*part\s+1\s*\)$",
+        re.IGNORECASE,
+    )),
+)
+
+
 def has_pac_only(value):
     return bool(PAC_ONLY_RE.search(str(value or "")))
 
@@ -50,16 +64,23 @@ def clean_opportunity_item(value):
     return re.sub(r"\s*,\s*", ", ", text).strip(" ,")[:500]
 
 
-def _category_key_and_product(category):
+def _category_key_and_product(category, in_bunch=False):
     normalized = " ".join(str(category or "").split()).strip(" ,")
-    for category_key, product_type, pattern in ALLOWED_CATEGORY_PATTERNS:
+    patterns = ALLOWED_CATEGORY_PATTERNS + (BUNCH_ONLY_CATEGORY_PATTERNS if in_bunch else ())
+    for category_key, product_type, pattern in patterns:
         if pattern.fullmatch(normalized):
             return category_key, product_type
     return None, None
 
 
 def classify_opportunity_item(value):
-    """Return strict category metadata, or None when any category is unsupported."""
+    """Return category metadata, or None when any category is unsupported.
+
+    A single-category bid must be one of the approved categories. A bunch bid
+    (several categories) is kept when every category is approved or a UPS
+    category and at least one is approved; its product type is that of its
+    first approved category.
+    """
     raw = str(value or "")
     if not raw.strip() or has_pac_only(raw):
         return None
@@ -67,15 +88,17 @@ def classify_opportunity_item(value):
     categories = [part.strip() for part in re.split(r"\s*,\s*", clean_name) if part.strip()]
     if not categories:
         return None
-    classified = [_category_key_and_product(category) for category in categories]
+    is_bunch = len(categories) > 1
+    classified = [_category_key_and_product(category, is_bunch) for category in categories]
     if any(category_key is None for category_key, _ in classified):
         return None
-    # Only single-product bids are kept; bunch bids (several categories) are not.
-    if len(categories) > 1:
+    primary = next((product_type for _, product_type in classified if product_type != "ups"), None)
+    if not primary:
         return None
     return {
         "clean_name": clean_name,
         "categories": categories,
         "category_keys": [category_key for category_key, _ in classified],
-        "product_type": classified[0][1],
+        "product_type": primary,
+        "is_bunch": is_bunch,
     }

@@ -24,7 +24,7 @@ export default function AdminBidToBeParticipated() {
     printer: "A4 and Legal Size MFP", aio: "All in One PC (V2)", workstation: "Fixed Computer Workstation",
     toner: "Toner / Ink Cartridges", bunch_bid: "Bunch Bid",
   };
-  const itemOrder = ["high_end_desktop", "entry_mid_desktop", "printer", "aio", "workstation", "toner"];
+  const itemOrder = ["high_end_desktop", "entry_mid_desktop", "printer", "aio", "workstation", "toner", "bunch_bid"];
   const itemTypes = itemOrder;
   const filteredRows = itemFilter === "all"
     ? rows

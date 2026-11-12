@@ -571,9 +571,10 @@ def save_workstation_model_number(request, bid_id):
         catalogue_product = CatalogueProduct.objects.filter(model_no__iexact=model_number).first()
         catalogue_created = False
         if catalogue_product is None:
+            # An unused slot can be saved as the text "None"/"NA".
             storage = " + ".join(
                 str(value).strip() for value in (bid.ssd1, bid.ssd2, bid.hdd)
-                if str(value or "").strip()
+                if str(value or "").strip().lower() not in {"", "none", "na", "-"}
             )
             extra_specs = {
                 "_source": "workstation_bid",
