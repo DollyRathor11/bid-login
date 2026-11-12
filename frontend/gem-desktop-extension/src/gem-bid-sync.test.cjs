@@ -144,12 +144,15 @@ test("removes a Printer bid only when its Printer Technology is just Inkjet", ()
   assert.equal(opportunityResult(desktop, "Total Quantity 30 Printer Technology Inkjet").eligible, true);
 });
 
-test("rejects a bunch bid even when every category is approved", () => {
+test("receives a bunch bid filed under its first category of ours, with no minimum quantity", () => {
   const result = opportunityResult(
     "All in One PC (V2) (Q2), Entry and Mid Level Desktop Computer (Q2), "
       + "A4 and Legal Size Multifunction Printer (MFP) (Q2)",
+    "Total Quantity 3",
   );
-  assert.equal(result.reject, "bunch");
+  assert.equal(result.eligible, true);
+  assert.equal(result.is_bunch, true);
+  assert.equal(result.product_type, "aio");
 });
 
 test("never receives a bid below five units or with an unreadable quantity", () => {
@@ -166,13 +169,27 @@ test("rejects PAC Only even when it follows the final Q marker", () => {
   assert.equal(result.reject, "pac");
 });
 
-test("rejects the complete bunch when it contains A3, UPS, or another unsupported category", () => {
-  const invalid = [
-    "A3 Size Multifunction Printer (MFP) (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2)",
-    "All in One PC (V2) (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2), Line Interactive UPS with AVR (V2) (Q2)",
-    "All in One PC (V2) (Q2), Entry and Mid Level Desktop Computer (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2), A3 Printer (MFP) (Q2)",
-  ];
-  for (const category of invalid) assert.equal(opportunityResult(category).reject, "product", category);
+test("receives a bunch only when every item is ours or one of the exact UPS names", () => {
+  const kept = {
+    "Line Interactive UPS with AVR (V2) (Q2), All in One PC (V2) (Q2)": "aio",
+    "Online UPS (?10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2), All in One PC (V2) (Q2)": "aio",
+    "Online UPS (≤10 KVA) Without Battery Conforming To IS 16242 (Part 1) (Q2), Fixed Computer Workstation (Q2)": "workstation",
+  };
+  for (const [category, productType] of Object.entries(kept)) {
+    const result = opportunityResult(category, "Total Quantity 8");
+    assert.equal(result.eligible, true, category);
+    assert.equal(result.product_type, productType, category);
+  }
+  assert.equal(opportunityResult("Laptop (Q2), Tablet (Q2)").reject, "product");
+  assert.equal(opportunityResult("A3 Size Multifunction Printer (MFP) (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Line Interactive UPS With AVR (V3) (Q2), All in One PC (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Line Intractive UPS With AVR (Q2), All in One PC (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Online UPS (V2) (Q2), All in One PC (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Online UPS (≤20 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2), All in One PC (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Laptop (Q2), Line Interactive UPS With AVR (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Interactive Panels with CPU (Q2) , Entry and Mid Level Desktop Computer (Q2)").reject, "product");
+  assert.equal(opportunityResult("Line Interactive UPS With AVR (V2) (Q2), Online UPS (≤10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Line Interactive UPS With AVR (V2) (Q2)", "Total Quantity 8").reject, "product");
 });
 
 test("a page is old only when every bid on it was already read", () => {
@@ -774,9 +791,15 @@ test('the seller-list card rules out only bids it can prove ineligible', () => {
   assert.equal(cardReject("BID NO: GEM/2026/B/1 Department Name And Address: X"), "");
   // Provable rejects.
   assert.equal(cardReject(card("Entry and Mid Level Desktop Co...", 2)), "quantity");
-  assert.equal(cardReject(card("All in One PC (V2),A4 and Lega...", 2)), "bunch");
   assert.equal(cardReject(card("Laptop - Notebook", 50)), "product");
+  assert.equal(cardReject(card("Laptop - Notebook,Tablet Computer", 50)), "product");
+  assert.equal(cardReject(card("Line Interactive UPS With AVR (V2)", 50)), "product");
   assert.equal(cardReject(card("Entry and Mid Level Desktop Computer,Laptop - Notebook", 50)), "product");
+  assert.equal(cardReject(card("Interactive Panels with CPU,Entry and Mid Level...", 2)), "product");
+  assert.equal(cardReject(card("Line Interactive UPS With AVR (V2),Online UPS (≤10 KVA) With...", 2)), "product");
+  // A bunch of our products and UPS is read from the detail, at any quantity.
+  assert.equal(cardReject(card("All in One PC (V2),A4 and Lega...", 2)), "");
+  assert.equal(cardReject(card("All in One PC (V2),Line Intera...", 1)), "");
 });
 
 test('an unfinished Bid To Be Participated scan is continued by the next scan', () => {

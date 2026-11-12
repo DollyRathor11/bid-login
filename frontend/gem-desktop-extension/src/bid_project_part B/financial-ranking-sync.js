@@ -538,16 +538,19 @@
           const combined = combineRankingAndEvaluation(ranking, bidEvaluation, task.technical_status);
           await check(run);
           await update(run, 'saving', `Saving ${task.bid_no} awarded ranking (${combined.companyStatus})...`);
+          const rankingBody = JSON.stringify({ bid_no: task.bid_no, ra_no: task.ra_no || '', source_type: 'bid_ra_awarded', technical_status: combined.companyStatus, start_date: task.start_date, end_date: task.end_date, sellers: combined.sellers, item_name: combined.sellers[0]?.offeredItem || '' });
           const response = await fetch(`${base.href.replace(/\/$/, '')}/gem/financial-rankings/`, {
             method: 'POST', signal: AbortSignal.timeout(20000),
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${saved.token}` },
-            body: JSON.stringify({ bid_no: task.bid_no, ra_no: task.ra_no || '', source_type: 'bid_ra_awarded', technical_status: combined.companyStatus, start_date: task.start_date, end_date: task.end_date, sellers: combined.sellers, item_name: combined.sellers[0]?.offeredItem || '' }),
+            body: rankingBody,
           });
           const payload = await response.json().catch(() => ({}));
           if (!response.ok) throw new Error(payload.error || `Save failed (HTTP ${response.status}).`);
           if (payload.saved !== 1 || payload.frontend_visible !== true) {
             throw new Error('API did not confirm that this result is available in the frontend.');
           }
+          // The other connected Acxxel apps (local / live server) get it too.
+          if (typeof mirrorToOtherBackends === 'function') await mirrorToOtherBackends('/gem/financial-rankings/', rankingBody);
           savedCount += payload.saved;
           createdCount += payload.created || 0;
           updatedCount += payload.updated || 0;
