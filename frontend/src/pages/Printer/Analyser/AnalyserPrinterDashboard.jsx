@@ -211,32 +211,32 @@ export default function AnalyserPrinterDashboard() {
       )}
 
       <div className="w-full overflow-hidden">
-        <table className="w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-1.5 [&_th]:!text-xs [&_tbody_span]:!text-sm [&_tbody_td]:!px-1.5 [&_tbody_td]:!text-sm [&_tbody_button]:!text-xs">
+        <table className={`w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-1.5 [&_th]:!text-xs [&_tbody_td]:!px-1.5 [&_tbody_button]:!text-xs ${showModelNo ? "[&_tbody_span]:!text-[13px] [&_tbody_td]:!text-[13px]" : "[&_tbody_span]:!text-sm [&_tbody_td]:!text-sm"}`}>
           <thead>
             <tr className="bg-slate-800">
-              <th className="w-[4%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">S.No.</th>
-              <th className="w-[9%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">Bid No</th>
-              <th className={`${showModelNo ? "w-[9%]" : "w-[12%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Department</th>
-              <th className={`${showModelNo ? "w-[8%]" : "w-[10%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Printer Type</th>
-              <th className={`${showModelNo ? "w-[7%]" : "w-[8%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Type Of Printing</th>
-              <th className="w-[4%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Qty</th>
+              <th className={`${showModelNo ? "w-[3%]" : "w-[4%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap`}>S.No.</th>
+              <th className={`${showModelNo ? "w-[12%]" : "w-[9%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap`}>Bid No</th>
+              <th className={`${showModelNo ? "w-[12%]" : "w-[12%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Department</th>
+              <th className={`${showModelNo ? "w-[9%]" : "w-[10%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Printer Type</th>
+              <th className={`${showModelNo ? "w-[8%]" : "w-[8%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Type Of Printing</th>
+              <th className={`${showModelNo ? "w-[3%]" : "w-[4%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Qty</th>
               {showModelNo && (
-                <th className="w-[9%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Model No</th>
+                <th className="w-[8%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Model No</th>
               )}
               <th className={`${showModelNo ? "w-[7%]" : "w-[8%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Submitted By</th>
-              <th className={`${showModelNo ? "w-[7%]" : "w-[8%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Date</th>
+              <th className={`${showModelNo ? "w-[8%]" : "w-[8%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Date</th>
               {activeTab === "pending" && (
                 <th className="w-[8%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Status</th>
               )}
-              <th className="w-[7%] !pl-3 py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700">Action</th>
+              <th className={`${showModelNo ? "w-[6%]" : "w-[7%]"} !pl-3 py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700`}>Action</th>
               {activeTab === "approved" && (
-                <th className="w-[10%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Approved Details For Bidding</th>
+                <th className="w-[9%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Approved Details For Bidding</th>
               )}
               {activeTab === "approved" && (
-                <th className="w-[11%] py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700 !px-2 text-center">Download Docs for the bid</th>
+                <th className="w-[9%] py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700 !px-2 text-center">Download Docs for the bid</th>
               )}
               {activeTab === "approved" && (
-                <th className="w-[8%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700">
+                <th className="w-[6%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700">
                   <div className="flex items-center justify-center gap-2">
                     <input type="checkbox" aria-label="Select all bids on this page"
                       checked={paginatedBids.length > 0 && paginatedBids.every((bid) => selectedBidIds.has(bid.id))}
@@ -286,7 +286,7 @@ export default function AnalyserPrinterDashboard() {
                 <td className="px-2 py-4 text-xs font-bold text-gray-700 border-b border-gray-100">
                   {(safePage - 1) * ITEMS_PER_PAGE + i + 1}
                 </td>
-                <td className="break-words px-2 py-4 border-b border-gray-100">
+                <td className="overflow-hidden break-words px-2 py-4 border-b border-gray-100">
                   <span className={`text-xs font-bold text-blue-600 ${showModelNo ? "whitespace-nowrap" : ""}`}><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></span>
                 </td>
                 <td className="break-words px-2 py-4 border-b border-gray-100">
