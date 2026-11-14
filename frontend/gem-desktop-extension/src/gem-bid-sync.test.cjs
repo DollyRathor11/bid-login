@@ -920,3 +920,67 @@ test('request details popup keeps its column headings, including the last respon
   assert.equal(row['Last date for seller response'], '05-11-2026 18:42');
   assert.equal(row['Clarification Type'], 'General Clarifications');
 });
+
+function counterOfferHelpers(extra = {}) {
+  const start = source.indexOf('const COUNTER_OFFER_LABEL');
+  const end = source.indexOf('async function priceMatchFor', start);
+  assert.ok(start > 0 && end > start, 'counter offer helpers must remain discoverable');
+  const textHelper = source.match(/const text = \(node\) => .*\n/)[0];
+  const context = { ...extra };
+  vm.runInNewContext(
+    `${textHelper}${source.slice(start, end)}; helpers = { counterOfferValue, COUNTER_OFFER_CLOSED, priceMatchRows, closePriceMatchModal, rupees };`,
+    context,
+  );
+  return context.helpers;
+}
+
+test('counter offer status is read from the card and only an undecided one is pending', () => {
+  const { counterOfferValue, COUNTER_OFFER_CLOSED } = counterOfferHelpers();
+  const card = (value) => `BID NO: GEM/2026/B/7333927 Items: High End Desktop Computer Quantity: 7 Technical Status: Qualified Counter Offer Confirmation:${value} Department Name And Address: Ministry of Defence`;
+  assert.equal(counterOfferValue('BID NO: GEM/2026/B/1 Items: Desktop Quantity: 7'), null);
+  for (const closed of ['Accepted', 'Not Accepted', 'Expired', 'Rejected', 'Duration Ended']) {
+    assert.match(counterOfferValue(card(closed)), COUNTER_OFFER_CLOSED, closed);
+  }
+  for (const open of ['Pending', 'Click here', 'Confirm', '']) {
+    assert.doesNotMatch(counterOfferValue(card(open)), COUNTER_OFFER_CLOSED, open);
+  }
+});
+
+test('Online Price Match rows give the product, our offer and the L1 price in rupees', () => {
+  const { priceMatchRows } = counterOfferHelpers();
+  const rows = priceMatchRows([
+    { 'Product Name': 'Entry and Mid Level Desktop Computer (5)', 'Your offer': '₹ 61000.000', 'L1 price for the item': '₹ 59300' },
+    { 'Column 1': 'Advisory : The Price match does not guarantee the award of the contract.' },
+  ]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].product, 'Entry and Mid Level Desktop Computer (5)');
+  assert.equal(rows[0].our_offer, 61000);
+  assert.equal(rows[0].l1_price, 59300);
+});
+
+test('the price match popup is closed with x / Cancel and never with an accept button', async () => {
+  const clicked = [];
+  const button = (label, extra = {}) => ({
+    textContent: label,
+    matches: (selector) => selector === '.close' && extra.close === true,
+    ...extra,
+  });
+  // GeM's order: footer buttons listed first, the header x last.
+  const buttons = [
+    button('L1 price not accepted', { close: true }),
+    button('Accept L1 price', { close: true }),
+    button('Cancel'),
+    button('×', { close: true }),
+  ];
+  const modal = { querySelectorAll: () => buttons };
+  const { closePriceMatchModal } = counterOfferHelpers({
+    visible: () => true,
+    activateControl: (node) => clicked.push(node.textContent),
+    document: { contains: () => false },
+    sleep: async () => {},
+    Date,
+  });
+  assert.equal(await closePriceMatchModal(modal), true);
+  assert.deepEqual(clicked, ['Cancel']);
+  assert.ok(!clicked.some((label) => /accept/i.test(label)));
+});

@@ -13,6 +13,9 @@ const VISIBLE_PAGES = 5;
 
 export default function AnalyserPrinterDashboard() {
   const [activeTab, setActiveTab] = useAnalyserTab("printer");
+  // Only the Approved tab shows each bid's model number; its columns are
+  // narrowed so the table still fits without a horizontal scroll bar.
+  const showModelNo = activeTab === "approved";
   const [bids, setBids] = useState([]);
   const gemBidLinks = useGemBidLinks(bids);
   const [loading, setLoading] = useState(true);
@@ -213,18 +216,21 @@ export default function AnalyserPrinterDashboard() {
             <tr className="bg-slate-800">
               <th className="w-[4%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">S.No.</th>
               <th className="w-[9%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">Bid No</th>
-              <th className="w-[12%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Department</th>
-              <th className="w-[10%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Printer Type</th>
-              <th className="w-[8%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Type Of Printing</th>
+              <th className={`${showModelNo ? "w-[9%]" : "w-[12%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Department</th>
+              <th className={`${showModelNo ? "w-[8%]" : "w-[10%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Printer Type</th>
+              <th className={`${showModelNo ? "w-[7%]" : "w-[8%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Type Of Printing</th>
               <th className="w-[4%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Qty</th>
-              <th className="w-[8%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Submitted By</th>
-              <th className="w-[8%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Date</th>
+              {showModelNo && (
+                <th className="w-[9%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Model No</th>
+              )}
+              <th className={`${showModelNo ? "w-[7%]" : "w-[8%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Submitted By</th>
+              <th className={`${showModelNo ? "w-[7%]" : "w-[8%]"} px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700`}>Date</th>
               {activeTab === "pending" && (
                 <th className="w-[8%] px-1 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Status</th>
               )}
               <th className="w-[7%] !pl-3 py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700">Action</th>
               {activeTab === "approved" && (
-                <th className="w-[11%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Approved Details For Bidding</th>
+                <th className="w-[10%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Approved Details For Bidding</th>
               )}
               {activeTab === "approved" && (
                 <th className="w-[11%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700">Download Docs for the bid</th>
@@ -250,7 +256,7 @@ export default function AnalyserPrinterDashboard() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={activeTab === "approved" ? 12 : activeTab === "re-analyze" ? 9 : 10} className="text-center py-16 text-gray-400 font-medium">
+                <td colSpan={activeTab === "approved" ? 13 : activeTab === "re-analyze" ? 9 : 10} className="text-center py-16 text-gray-400 font-medium">
                   Loading printer bids...
                 </td>
               </tr>
@@ -258,7 +264,7 @@ export default function AnalyserPrinterDashboard() {
 
             {!loading && bids.length === 0 && (
               <tr>
-                <td colSpan={activeTab === "approved" ? 12 : activeTab === "re-analyze" ? 9 : 10} className="text-center py-16 text-gray-400 font-medium">
+                <td colSpan={activeTab === "approved" ? 13 : activeTab === "re-analyze" ? 9 : 10} className="text-center py-16 text-gray-400 font-medium">
                   No printer bids found.
                 </td>
               </tr>
@@ -301,6 +307,11 @@ export default function AnalyserPrinterDashboard() {
                 <td className="px-2 py-4 border-b border-gray-100">
                   <span className="text-xs font-bold text-gray-700">{bid.qty || "-"}</span>
                 </td>
+                {showModelNo && (
+                  <td className="overflow-hidden px-2 py-4 border-b border-gray-100">
+                    <span className="block break-all text-xs font-bold text-gray-800" title={bid.model_number || ""}>{bid.model_number || "-"}</span>
+                  </td>
+                )}
                 <td className="break-words px-2 py-4 border-b border-gray-100">
                   <span className="text-xs font-bold text-gray-700">{bid.submitted_by || bid.user_name || "-"}</span>
                 </td>

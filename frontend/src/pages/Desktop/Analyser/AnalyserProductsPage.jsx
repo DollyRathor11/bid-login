@@ -1545,9 +1545,26 @@ export default function CatalogueProducts() {
 
       const responses = await Promise.all(requests);
       if (fetchId !== latestFetch.current) return;
-      const mergedProducts = responses
-        .flat()
-        .map((product, index) => ({ ...product, __imageIndex: index }));
+      // One card per model number on every tab: a model listed twice (two
+      // lists, or two GeM listings) keeps the copy that has its GeM listing.
+      const modelKey = (product) => String(product?.model_no || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      const byModel = new Map();
+      const uniqueProducts = [];
+      for (const product of responses.flat()) {
+        const key = modelKey(product);
+        if (!key) {
+          uniqueProducts.push(product);
+          continue;
+        }
+        const index = byModel.get(key);
+        if (index === undefined) {
+          byModel.set(key, uniqueProducts.length);
+          uniqueProducts.push(product);
+        } else if (!uniqueProducts[index].gem_product_id && product.gem_product_id) {
+          uniqueProducts[index] = product;
+        }
+      }
+      const mergedProducts = uniqueProducts.map((product, index) => ({ ...product, __imageIndex: index }));
 
       setProducts(mergedProducts);
     } catch (err) {

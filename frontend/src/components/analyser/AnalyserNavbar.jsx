@@ -287,6 +287,27 @@ const AnalyserNavbar = () => {
 
   const isActive = (path) => location.pathname.startsWith(path);
   const isDashboard = location.pathname === "/analyser-dashboard" || location.pathname === "/analyser-dashboard/";
+  // A product's bid list opens full width without the sidebar, like the
+  // admin's bid approval pages, so its whole table fits on screen.
+  const isProductBidList = /^\/analyser-dashboard\/(?:desktop|aio|toner|workstation|printer)\/?$/.test(location.pathname);
+
+  if (isProductBidList) {
+    return (
+      <div className="min-h-screen w-full bg-gray-50 p-4">
+        <button
+          type="button"
+          onClick={() => navigate("/analyser-dashboard")}
+          className="mb-4 flex items-center gap-2 px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-700 text-sm font-medium hover:bg-slate-800 hover:text-white hover:border-slate-800 transition-all duration-200 shadow-sm"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+          </svg>
+          Back
+        </button>
+        <Outlet />
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen w-full flex bg-gray-100 overflow-hidden">
