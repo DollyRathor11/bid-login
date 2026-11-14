@@ -233,7 +233,7 @@ export default function AnalyserPrinterDashboard() {
                 <th className="w-[10%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-slate-700">Approved Details For Bidding</th>
               )}
               {activeTab === "approved" && (
-                <th className="w-[11%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700">Download Docs for the bid</th>
+                <th className="w-[11%] py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700 !px-2 text-center">Download Docs for the bid</th>
               )}
               {activeTab === "approved" && (
                 <th className="w-[8%] px-2 py-4 text-[10px] font-bold text-white uppercase border-b border-l border-slate-700">
@@ -287,7 +287,7 @@ export default function AnalyserPrinterDashboard() {
                   {(safePage - 1) * ITEMS_PER_PAGE + i + 1}
                 </td>
                 <td className="break-words px-2 py-4 border-b border-gray-100">
-                  <span className="text-xs font-bold text-blue-600"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></span>
+                  <span className={`text-xs font-bold text-blue-600 ${showModelNo ? "whitespace-nowrap" : ""}`}><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></span>
                 </td>
                 <td className="break-words px-2 py-4 border-b border-gray-100">
                   <span className="block text-xs font-bold text-gray-800">
@@ -309,7 +309,7 @@ export default function AnalyserPrinterDashboard() {
                 </td>
                 {showModelNo && (
                   <td className="overflow-hidden px-2 py-4 border-b border-gray-100">
-                    <span className="block break-all text-xs font-bold text-gray-800" title={bid.model_number || ""}>{bid.model_number || "-"}</span>
+                    <span className="block truncate whitespace-nowrap text-xs font-bold text-gray-800" title={bid.model_number || ""}>{bid.model_number || "-"}</span>
                   </td>
                 )}
                 <td className="break-words px-2 py-4 border-b border-gray-100">
@@ -367,7 +367,7 @@ export default function AnalyserPrinterDashboard() {
                   </td>
                 )}
                 {activeTab === "approved" && (
-                  <td className="px-2 py-4 border-b border-l border-gray-100">
+                  <td className="py-4 border-b border-l border-gray-100 !px-2 text-center">
                     <button
                       type="button"
                       onClick={() => navigate(`/analyser-dashboard/printer/bid/${bid.id}/downloads`, { state: { bid } })}

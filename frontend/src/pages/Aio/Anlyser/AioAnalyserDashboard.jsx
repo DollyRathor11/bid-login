@@ -334,17 +334,17 @@ export default function AioAnalyserDashboard({ product = "aio" }) {
                             // Approved tab: Model No added, widths sum to 100% so the
                             // whole table fits without a horizontal scroll bar.
                             <>
+                                <col className="w-[3%]" />
+                                <col className="w-[13%]" />
+                                <col className="w-[16%]" />
                                 <col className="w-[4%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[13%]" />
-                                <col className="w-[5%]" />
-                                <col className="w-[13%]" />
-                                <col className="w-[9%]" />
+                                <col className="w-[15%]" />
                                 <col className="w-[8%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[6%]" />
+                                <col className="w-[10%]" />
+                                <col className="w-[10%]" />
                                 <col className="w-[7%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[11%]" />
-                                <col className="w-[8%]" />
                             </>
                         ) : (
                             <>
@@ -414,7 +414,7 @@ export default function AioAnalyserDashboard({ product = "aio" }) {
                             )}
 
                             {isApprovedView && (
-                                <th className="w-[15%] !pl-5 py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-l border-slate-700">
+                                <th className="w-[15%] py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-l border-slate-700 !px-2 text-center">
                                     Download Docs for the bid
                                 </th>
                             )}
@@ -482,7 +482,7 @@ export default function AioAnalyserDashboard({ product = "aio" }) {
 
                                     <td className="overflow-hidden px-5 py-4 border-b border-gray-100">
                                         <span
-                                            className="block break-all text-sm font-bold text-blue-600"
+                                            className={`block text-sm font-bold text-blue-600 ${showModelNo ? "whitespace-nowrap" : "break-all"}`}
                                             title={bid.bid_no}
                                         >
                                             <GemBidNo bidNo={bid.bid_no} links={gemBidLinks} />
@@ -491,7 +491,7 @@ export default function AioAnalyserDashboard({ product = "aio" }) {
 
                                     <td className="overflow-hidden px-5 py-4 border-b border-gray-100">
                                         <span
-                                            className="block truncate whitespace-nowrap text-sm font-bold text-gray-800"
+                                            className={`block text-sm font-bold text-gray-800 ${showModelNo ? "line-clamp-2" : "truncate whitespace-nowrap"}`}
                                             title={bid.dept_name || ""}
                                         >
                                             {bid.dept_name || "—"}
@@ -506,7 +506,7 @@ export default function AioAnalyserDashboard({ product = "aio" }) {
                                     {showModelNo && (
                                     <td className="overflow-hidden px-5 py-4 border-b border-gray-100">
                                         <span
-                                            className="block break-all text-sm font-bold text-gray-800"
+                                            className="block truncate whitespace-nowrap text-sm font-bold text-gray-800"
                                             title={bid.model_number || ""}
                                         >
                                             {bid.model_number || "—"}
@@ -625,7 +625,7 @@ export default function AioAnalyserDashboard({ product = "aio" }) {
                                     )}
 
                                     {isApprovedView && (
-                                    <td className="!pl-5 py-4 border-b border-l border-gray-100">
+                                    <td className="py-4 border-b border-l border-gray-100 !px-2 text-center">
                                         {bid.status === "approved" ? (
                                             <button
                                                 type="button"
