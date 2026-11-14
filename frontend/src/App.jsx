@@ -54,6 +54,7 @@ import TonerBidApproval from "./pages/Toner/Admin/TonerBidApproval";
 import DocumentPrintView from "./pages/Documents/DocumentPrintView";
 import DisqualifiedBidsPanel from "./pages/Desktop/Analyser/DisqualifiedBidsPanel";
 import ClarificationBidsPanel from "./pages/Desktop/Analyser/ClarificationBidsPanel";
+import MatchPricePanel from "./pages/Desktop/Analyser/MatchPricePanel";
 import FinancialRankingPanel from "./pages/Desktop/Analyser/FinancialRankingPanel";
 import AdminBidToBeParticipated from "./pages/Admin/AdminBidToBeParticipated";
 import ComponentRates from "./pages/Admin/ComponentRates.jsx";
@@ -86,7 +87,7 @@ function App() {
         <Route path="/management-dashboard" element={<ManagementNavbar />}>
           <Route index element={null} />
           <Route path="my-representation" element={<ComingSoon product="My Representation" />} />
-          <Route path="match-price" element={<ComingSoon product="Match Price" />} />
+          <Route path="match-price" element={<MatchPricePanel />} />
           <Route path="disqualified-bids" element={<DisqualifiedBidsPanel showProductFilter />} />
           <Route path="clarification-bids" element={<ClarificationBidsPanel />} />
           <Route path="bid-to-be-participated" element={<AdminBidToBeParticipated />} />

@@ -113,6 +113,8 @@ export default function WorkstationAnalyserDashboard() {
     return status === "re_analyze" ? "re-analyze" : status;
   };
   const isApprovedView = activeTab === "approved" || activeTab === "gem-transfer";
+  // Only the Approved tab shows each bid's model number.
+  const showModelNo = activeTab === "approved";
 
   const deleteBid = async (bid) => {
     if (!window.confirm(`Permanently delete bid ${bid.bid_no}?`)) return;
@@ -229,7 +231,24 @@ export default function WorkstationAnalyserDashboard() {
       )}
 
       <div className="w-full overflow-x-auto">
-        <table className={`w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-2 [&_td]:!px-2 ${activeTab === "gem-transfer" ? "min-w-[1000px]" : ""}`}>
+        <table className={`w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-2 [&_td]:!px-2 ${activeTab === "gem-transfer" ? "min-w-[1000px]" : ""} ${showModelNo ? "[&_tbody_button]:!px-3 [&_tbody_button]:!tracking-wide" : ""}`}>
+          {showModelNo ? (
+            // Approved tab: Model No added, widths sum to 100% so the whole
+            // table fits without a horizontal scroll bar.
+            <colgroup>
+              <col className="w-[4%]" />
+              <col className="w-[11%]" />
+              <col className="w-[13%]" />
+              <col className="w-[5%]" />
+              <col className="w-[13%]" />
+              <col className="w-[9%]" />
+              <col className="w-[8%]" />
+              <col className="w-[7%]" />
+              <col className="w-[11%]" />
+              <col className="w-[11%]" />
+              <col className="w-[8%]" />
+            </colgroup>
+          ) : (
           <colgroup>
             <col className={isApprovedView ? "w-[5%]" : "w-[6%]"} />
             <col className={isApprovedView ? "w-[12%]" : "w-[16%]"} />
@@ -243,9 +262,10 @@ export default function WorkstationAnalyserDashboard() {
             {isApprovedView && <col className="w-[15%]" />}
             {activeTab === "approved" && <col className="w-[8%]" />}
           </colgroup>
+          )}
           <thead>
             <tr className="bg-slate-800">
-              {["S.No.", "Bid No", "Department", "Qty", "Submitted By", "Date"].map((head) => (
+              {["S.No.", "Bid No", "Department", "Qty", ...(showModelNo ? ["Model No"] : []), "Submitted By", "Date"].map((head) => (
                 <th key={head} className="px-5 py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">
                   {head}
                 </th>
@@ -282,7 +302,7 @@ export default function WorkstationAnalyserDashboard() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={activeTab === "approved" ? 10 : isApprovedView ? 9 : 8} className="text-center py-16 text-gray-400 font-medium">
+                <td colSpan={activeTab === "approved" ? 11 : isApprovedView ? 9 : 8} className="text-center py-16 text-gray-400 font-medium">
                   Loading bids...
                 </td>
               </tr>
@@ -290,7 +310,7 @@ export default function WorkstationAnalyserDashboard() {
 
             {!loading && bids.length === 0 && (
               <tr>
-                <td colSpan={activeTab === "approved" ? 10 : isApprovedView ? 9 : 8} className="text-center py-16 text-gray-400 font-medium">
+                <td colSpan={activeTab === "approved" ? 11 : isApprovedView ? 9 : 8} className="text-center py-16 text-gray-400 font-medium">
                   No bids found.
                 </td>
               </tr>
@@ -322,6 +342,11 @@ export default function WorkstationAnalyserDashboard() {
                     <td className="px-5 py-4 border-b border-gray-100">
                       <span className="text-sm font-bold text-gray-700">{bid.qty || "-"}</span>
                     </td>
+                    {showModelNo && (
+                      <td className="overflow-hidden px-5 py-4 border-b border-gray-100">
+                        <span className="block break-all text-sm font-bold text-gray-800" title={bid.model_number || ""}>{bid.model_number || "-"}</span>
+                      </td>
+                    )}
                     <td className="px-5 py-4 border-b border-gray-100">
                       <span className="text-sm font-bold text-gray-700">{bid.submitted_by || bid.user_name || "-"}</span>
                     </td>

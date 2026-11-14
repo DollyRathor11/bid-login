@@ -149,6 +149,8 @@ export default function AnalyserDashboard({ product = "desktop" }) {
     };
 
     const isApprovedView = activeTab === "approved" || activeTab === "gem-transfer";
+    // Only the Approved tab shows each bid's model number.
+    const showModelNo = activeTab === "approved";
 
     const deleteBid = async (bid) => {
         if (!window.confirm(`Permanently delete bid ${bid.bid_no}?`)) return;
@@ -298,20 +300,40 @@ export default function AnalyserDashboard({ product = "desktop" }) {
 
             <div className="w-full overflow-x-auto">
 
-                <table className={`w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-2 [&_td]:!px-2 ${activeTab === "gem-transfer" ? "min-w-[1000px]" : ""}`}>
+                <table className={`w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-2 [&_td]:!px-2 ${activeTab === "gem-transfer" ? "min-w-[1000px]" : ""} ${showModelNo ? "[&_tbody_button]:!px-3 [&_tbody_button]:!tracking-wide" : ""}`}>
 
                     <colgroup>
-                        <col className={isApprovedView ? "w-[5%]" : "w-[6%]"} />
-                        <col className={isApprovedView ? "w-[12%]" : "w-[16%]"} />
-                        <col className={isApprovedView ? "w-[15%]" : "w-[18%]"} />
-                        <col className={isApprovedView ? "w-[6%]" : "w-[6%]"} />
-                        <col className={isApprovedView ? "w-[12%]" : "w-[15%]"} />
-                        <col className={isApprovedView ? "w-[11%]" : "w-[13%]"} />
-                        {!isApprovedView && <col className="w-[13%]" />}
-                        <col className={activeTab === "gem-transfer" ? "w-[14%]" : isApprovedView ? "w-[10%]" : "w-[13%]"} />
-                        {isApprovedView && <col className="w-[14%]" />}
-                        {isApprovedView && <col className="w-[15%]" />}
-                        {activeTab === "approved" && <col className="w-[8%]" />}
+                        {showModelNo ? (
+                            // Approved tab: Model No added, widths sum to 100% so the
+                            // whole table fits without a horizontal scroll bar.
+                            <>
+                                <col className="w-[4%]" />
+                                <col className="w-[11%]" />
+                                <col className="w-[13%]" />
+                                <col className="w-[5%]" />
+                                <col className="w-[13%]" />
+                                <col className="w-[9%]" />
+                                <col className="w-[8%]" />
+                                <col className="w-[7%]" />
+                                <col className="w-[11%]" />
+                                <col className="w-[11%]" />
+                                <col className="w-[8%]" />
+                            </>
+                        ) : (
+                            <>
+                            <col className={isApprovedView ? "w-[5%]" : "w-[6%]"} />
+                            <col className={isApprovedView ? "w-[12%]" : "w-[16%]"} />
+                            <col className={isApprovedView ? "w-[15%]" : "w-[18%]"} />
+                            <col className={isApprovedView ? "w-[6%]" : "w-[6%]"} />
+                            <col className={isApprovedView ? "w-[12%]" : "w-[15%]"} />
+                            <col className={isApprovedView ? "w-[11%]" : "w-[13%]"} />
+                            {!isApprovedView && <col className="w-[13%]" />}
+                            <col className={activeTab === "gem-transfer" ? "w-[14%]" : isApprovedView ? "w-[10%]" : "w-[13%]"} />
+                            {isApprovedView && <col className="w-[14%]" />}
+                            {isApprovedView && <col className="w-[15%]" />}
+                            {activeTab === "approved" && <col className="w-[8%]" />}
+                            </>
+                        )}
                     </colgroup>
 
                     <thead>
@@ -333,6 +355,12 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                             <th className="px-5 py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">
                                 Qty
                             </th>
+                            {showModelNo && (
+                                <th className="px-5 py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">
+                                    Model No
+                                </th>
+                            )}
+
 
                             <th className="px-5 py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">
                                 Submitted By
@@ -389,7 +417,7 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                         {loading && (
                             <tr>
                                 <td
-                                    colSpan={activeTab === "approved" ? 10 : isApprovedView ? 9 : 8}
+                                    colSpan={activeTab === "approved" ? 11 : isApprovedView ? 9 : 8}
                                     className="text-center py-16 text-gray-400 font-medium"
                                 >
                                     Loading bids...
@@ -400,7 +428,7 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                         {!loading && bids.length === 0 && (
                             <tr>
                                 <td
-                                    colSpan={activeTab === "approved" ? 10 : isApprovedView ? 9 : 8}
+                                    colSpan={activeTab === "approved" ? 11 : isApprovedView ? 9 : 8}
                                     className="text-center py-16 text-gray-400 font-medium"
                                 >
                                     {activeTab === "gem-transfer"
@@ -454,6 +482,17 @@ export default function AnalyserDashboard({ product = "desktop" }) {
                                             {bid.qty || "—"}
                                         </span>
                                     </td>
+                                    {showModelNo && (
+                                    <td className="overflow-hidden px-5 py-4 border-b border-gray-100">
+                                        <span
+                                            className="block break-all text-sm font-bold text-gray-800"
+                                            title={bid.model_number || ""}
+                                        >
+                                            {bid.model_number || "—"}
+                                        </span>
+                                    </td>
+                                    )}
+
 
                                     <td className="px-5 py-4 border-b border-gray-100">
                                         <span className="text-sm font-bold text-gray-700">

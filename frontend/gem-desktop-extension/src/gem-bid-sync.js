@@ -6,8 +6,12 @@
   let activeScanType = "";
   let disqualifiedPending = [];
   // The disqualified scan's walk over the seller list also serves the
-  // Clarification scan ("clarification"), which reads Clarification History.
+  // Clarification scan ("clarification"), which reads Clarification History,
+  // and the Counter Offer scan ("counteroffer"), which reads Online Price Match.
   let disqualifiedScanMode = "disqualified";
+  const LIST_SCAN_MODES = new Set(["disqualified", "clarification", "counteroffer"]);
+  const listScanMode = (value) => (LIST_SCAN_MODES.has(value) ? value : "disqualified");
+  const LIST_SCAN_PREFIX = { clarification: "[Clarification]", counteroffer: "[Counter Offer]" };
   // Where a running Bid To Be Participated scan would continue; reported with
   // every progress update so Retry Scan can restart from that page.
   let opportunityRetryState = null;
@@ -126,9 +130,8 @@
     if (activeScanType === "disqualified") {
       if (extra.pending) disqualifiedPending = extra.pending;
       extra = { ...extra, pending: disqualifiedPending, mode: disqualifiedScanMode };
-      if (disqualifiedScanMode === "clarification" && !/^\[Clarification\]/.test(message)) {
-        message = `[Clarification] ${message}`;
-      }
+      const prefix = LIST_SCAN_PREFIX[disqualifiedScanMode];
+      if (prefix && !message.startsWith(prefix)) message = `${prefix} ${message}`;
     }
     if (activeScanType === "opportunity" && opportunityRetryState) {
       extra = { ...extra, retry: opportunityRetryState() };
@@ -459,6 +462,17 @@
 
   function disqualifiedControl(card) {
     return disqualifiedControls(card)[0] || null;
+  }
+
+  // GeM binds some card links through jQuery; the MAIN-world bridge then
+  // triggers them through jQuery instead of Angular.
+  function activateJqueryControl(control) {
+    control.setAttribute("data-acxxel-jquery-click", "1");
+    try {
+      return activateControl(control);
+    } finally {
+      control.removeAttribute("data-acxxel-jquery-click");
+    }
   }
 
   function activateControl(control) {
@@ -916,6 +930,159 @@
     const control = clarificationRequestControl(card, clarificationControl(card));
     if (!control) return { rows: [], error: "Clarification Request Details link not found on the bid card" };
     return clarificationPopupRows(control, CLARIFICATION_DETAILS_TITLE, "clarification request details");
+  }
+
+  // "Counter Offer Confirmation: Accepted" on a card is already decided; any
+  // other value (a link to answer GeM's L1 price) is a pending counter offer.
+  const COUNTER_OFFER_LABEL = /counter\s*offer\s*confirmation\s*:?\s*/i;
+  const COUNTER_OFFER_CLOSED = /^(?:accepted|not\s+accepted|rejected|declined|expired|closed|duration\s+ended|time\s+(?:over|ended|expired)|l1\s+price\s+(?:not\s+)?accepted)/i;
+
+  function counterOfferValue(raw) {
+    const match = String(raw || "").match(/counter\s*offer\s*confirmation\s*:?\s*([A-Za-z0-9 ]{0,40})/i);
+    if (!match) return null;
+    return match[1].replace(/\b(?:Bid|RA|Start|End|Department|Status|Technical)\b[\s\S]*$/, "").trim();
+  }
+
+  // The clickable right after the "Counter Offer Confirmation:" label. Card
+  // links before it (bid number, Items) and GeM's own document links (Bid Doc
+  // Hash "View", BID/RA/Participation Document) are never taken.
+  function counterOfferControl(card) {
+    const label = [...card.querySelectorAll("*")]
+      .filter((node) => visible(node) && COUNTER_OFFER_LABEL.test(text(node)))
+      .sort((a, b) => text(a).length - text(b).length)[0];
+    if (!label) return null;
+    if (label.matches?.("a, button, [role=button], [ng-click], [data-ng-click], [onclick]")) return label;
+    const clickables = "a, button, [role=button], [ng-click], [data-ng-click], [onclick]";
+    const usable = (node) => visible(node)
+      && !BID_PATTERN.test(text(node))
+      && !/^(?:view|bid document|ra document|participation document|check ra eligibility|view bid results|view ra results)$/i.test(text(node));
+    const inside = [...label.querySelectorAll(clickables)].find(usable);
+    if (inside) return inside;
+    let scope = label.parentElement;
+    for (let depth = 0; scope && scope !== card && depth < 2; depth += 1, scope = scope.parentElement) {
+      const after = [...scope.querySelectorAll(clickables)]
+        .filter((node) => !label.contains(node) && (label.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING))
+        .find(usable);
+      if (after) return after;
+    }
+    return null;
+  }
+
+  function openPriceMatchModal() {
+    return [...document.querySelectorAll("[role=dialog], .modal, .modal-content, .ngdialog-content")]
+      .find((node) => visible(node) && /online\s+price\s+match|l1\s+price\s+for/i.test(text(node))) || null;
+  }
+
+  // Closes the Online Price Match popup with its x / Cancel only. Accept L1
+  // price and L1 price not accepted are never clicked, whatever their markup.
+  async function closePriceMatchModal(modal) {
+    const close = [...modal.querySelectorAll("[data-dismiss=modal], [data-bs-dismiss=modal], .close, button, a, [role=button]")]
+      .filter((node) => visible(node) && !/accept|price|submit|confirm|agree/i.test(text(node)))
+      .find((node) => /^(?:×|x|close|cancel)$/i.test(text(node)) || node.matches(".close"));
+    if (!close) return false;
+    activateControl(close);
+    const end = Date.now() + 5000;
+    while (Date.now() < end) {
+      if (!document.contains(modal) || !visible(modal)) return true;
+      await sleep(150);
+    }
+    return false;
+  }
+
+  function rupees(value) {
+    const number = Number(String(value || "").replace(/[^\d.]/g, ""));
+    return Number.isFinite(number) && /\d/.test(String(value || "")) ? number : null;
+  }
+
+  function priceMatchRows(rows) {
+    const keyOf = (row, pattern) => Object.keys(row).find((key) => pattern.test(key));
+    return rows.map((row) => {
+      const productKey = keyOf(row, /product|item/i);
+      const offerKey = keyOf(row, /your\s+offer/i);
+      const l1Key = keyOf(row, /l1/i);
+      return {
+        product: productKey ? row[productKey] : "",
+        our_offer: offerKey ? rupees(row[offerKey]) : null,
+        l1_price: l1Key ? rupees(row[l1Key]) : null,
+      };
+    }).filter((row) => row.our_offer !== null || row.l1_price !== null);
+  }
+
+  async function priceMatchFor(card) {
+    const stale = openPriceMatchModal();
+    if (stale && !await closePriceMatchModal(stale)) return { rows: [], error: "a previous Online Price Match popup is still open" };
+    const control = counterOfferControl(card);
+    if (!control) {
+      const sample = String(card.innerHTML || "").replace(/\s+/g, " ").match(/.{0,300}counter\s*offer.{0,500}/i)?.[0] || "";
+      return { rows: [], error: `Counter Offer Confirmation link not found on the card; card HTML: ${sample}` };
+    }
+    if (gemTransientErrorMessage()) return { rows: [], error: "GeM temporarily rejected the price match request" };
+    await waitForGemRemoteActionSlot();
+    activateJqueryControl(control);
+    let modal = null;
+    const openEnd = Date.now() + 8000;
+    while (!modal && Date.now() < openEnd) {
+      stopIfRequested();
+      throwIfGemTransientError();
+      await sleep(250);
+      modal = openPriceMatchModal();
+    }
+    if (!modal) return { rows: [], error: `Online Price Match popup did not open; control: ${describeControl(control)}` };
+    let rows = [];
+    const rowsEnd = Date.now() + 15000;
+    while (Date.now() < rowsEnd) {
+      stopIfRequested();
+      throwIfGemTransientError();
+      rows = priceMatchRows(clarificationRows(modal));
+      if (rows.some((row) => row.l1_price !== null)) break;
+      await sleep(250);
+    }
+    const sample = String(modal.innerHTML || "").replace(/\s+/g, " ").slice(0, 1800);
+    if (!await closePriceMatchModal(modal)) return { rows: [], error: "Online Price Match popup could not be closed with x / Cancel" };
+    await sleep(350);
+    if (rows.length) return { rows, error: "" };
+    return { rows: [], error: `Online Price Match popup opened but its prices were not read; modal HTML: ${sample}` };
+  }
+
+  async function extractCounterOfferPage(onRecord, processed = new Set()) {
+    const cards = currentCards();
+    const results = [];
+    for (const { bidNo, card } of cards) {
+      stopIfRequested();
+      if (processed.has(bidNo)) continue;
+      const liveCard = currentCards().find((item) => item.bidNo === bidNo)?.card || card;
+      const raw = text(liveCard);
+      const value = counterOfferValue(raw);
+      const hasCounterOffer = value !== null;
+      const isPending = hasCounterOffer && !COUNTER_OFFER_CLOSED.test(value);
+      const offer = isPending ? await priceMatchFor(liveCard) : { rows: [], error: "" };
+      const itemName = valueAfterLabel(raw, ["Items", "Item", "Product Name", "Product"]).replace(/^s\s*:\s*/i, "");
+      const quantityText = valueAfterLabel(raw, ["Quantity"]);
+      const raNo = (raw.match(/RA\s*NO\.?\s*:?\s*(GEM\s*\/\s*\d{4}\s*\/\s*R\s*\/\s*\d+)/i) || [])[1] || "";
+      const first = offer.rows[0] || {};
+      const result = {
+        bid_no: bidNo,
+        ra_no: raNo.replace(/\s+/g, ""),
+        product_type: productType(raw, itemName),
+        item_name: itemName,
+        quantity: Number((quantityText.match(/\d+/) || [])[0]) || null,
+        department: valueAfterLabel(raw, ["Department Name And Address", "Department Name & Address", "Department"]),
+        start_date: dateFrom(valueAfterLabel(raw, ["Start Date", "Bid Start Date"])),
+        end_date: dateFrom(valueAfterLabel(raw, ["End Date", "Bid End Date"])),
+        status: valueAfterLabel(raw, ["Status"]),
+        technical_status: visibleTechnicalStatus(liveCard),
+        has_counter_offer: hasCounterOffer,
+        is_pending: isPending,
+        counter_offer_status: value || "",
+        counter_offer_error: offer.error,
+        our_offer: first.our_offer ?? null,
+        l1_price: first.l1_price ?? null,
+        items: offer.rows,
+      };
+      results.push(result);
+      if (onRecord) await onRecord(result, results.length, cards.length);
+    }
+    return results;
   }
 
   function clarificationSummary(rows, cardStatus) {
@@ -1440,8 +1607,9 @@
     syncing = true;
     activeScanType = "disqualified";
     // The START message sets the mode; a reload-resume carries its own.
-    if (resume?.mode) disqualifiedScanMode = resume.mode === "clarification" ? "clarification" : "disqualified";
+    if (resume?.mode) disqualifiedScanMode = listScanMode(resume.mode);
     const clarificationScan = disqualifiedScanMode === "clarification";
+    const counterOfferScan = disqualifiedScanMode === "counteroffer";
     disqualifiedPending = [];
     stopRequested = false;
     // A GeM recovery reload must not silently undo the user's pause.
@@ -1464,7 +1632,11 @@
         : "Preparing the complete GeM bid list...", { page, saved, rejected, checked, pending: [...pending.values()] });
       // Always start from the complete evaluated-bid listing and page 1. Leaving
       // this to the user's current UI state silently syncs only a filtered subset.
-      await applyCompleteBidListFilter();
+      // The Counter Offer scan reads the same list as the Awarded Bid/RA
+      // Ranking scan (Bid/RA Awarded); the others read Technical Evaluated.
+      // GeM's stage filters act like radio buttons, so selecting one replaces
+      // whichever was selected before.
+      await applyCompleteBidListFilter({ stage: counterOfferScan ? "awarded" : "technical" });
       await sleep(1500);
       if (page > 1) {
         // A forced location.reload() cold-boots GeM's whole Angular app, which is
@@ -1546,13 +1718,52 @@
         // three times in quick succession was throttling GeM and removing the
         // seller-list pagination. API confirmation still has its own retries.
         for (let attempt = 1; attempt <= 1; attempt += 1) {
-          await (clarificationScan ? extractClarificationPage : extractPage)(async (result, recordNumber, totalRecords) => {
+          await (counterOfferScan ? extractCounterOfferPage : clarificationScan ? extractClarificationPage : extractPage)(async (result, recordNumber, totalRecords) => {
             if (processed.has(result.bid_no)) return;
             if (!seen.has(result.bid_no)) { seen.add(result.bid_no); checked += 1; }
             pending.set(result.bid_no, { bidNo: result.bid_no, page, attempts: attempt, reason: "Awaiting save confirmation" });
             try {
               stopIfRequested();
               await waitWhilePaused({ page, saved, rejected, checked });
+              if (counterOfferScan) {
+                if (result.counter_offer_error) {
+                  throw new Error(`Could not read the Online Price Match for ${result.bid_no}: ${result.counter_offer_error}`);
+                }
+                if (!result.has_counter_offer) {
+                  processed.add(result.bid_no);
+                  pending.delete(result.bid_no);
+                  await progress("running", `Checked ${result.bid_no}: no counter offer (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                  return;
+                }
+                // Only pending counter offers are kept; an accepted, declined or
+                // ended one is removed from the dashboard if it was there. That
+                // clean-up is best effort and never holds the bid for retry.
+                if (!result.is_pending) {
+                  await progress("running", `Checked ${result.bid_no}: counter offer ${result.counter_offer_status || "closed"} (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                  await runtimeMessage({ type: "SAVE_GEM_COUNTER_OFFERS", results: [result] }).catch(() => {});
+                  processed.add(result.bid_no);
+                  pending.delete(result.bid_no);
+                  return;
+                }
+                await progress("running", `Saving counter offer ${result.bid_no}.`, { page, saved, rejected, checked });
+                let response = null;
+                for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt += 1) {
+                  response = await runtimeMessage({ type: "SAVE_GEM_COUNTER_OFFERS", results: [result] });
+                  if (response.saved === 1) break;
+                  if (saveAttempt < 3) await sleep(saveAttempt * 2000);
+                }
+                if (response.saved !== 1) {
+                  const reason = (response.rejections || []).map((item) => item.reason).join(", ");
+                  throw new Error(`${result.bid_no}: counter offer save not confirmed by dashboard API${reason ? ` (${reason})` : ""}.`);
+                }
+                processed.add(result.bid_no);
+                pending.delete(result.bid_no);
+                saved += 1;
+                created += response.created || 0;
+                updated += response.updated || 0;
+                await progress("running", `Completed ${result.bid_no}: your offer ${result.our_offer ?? "-"}, L1 ${result.l1_price ?? "-"} (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                return;
+              }
               if (clarificationScan) {
                 if (result.history_sync_error) {
                   throw new Error(`Could not read Clarification History for ${result.bid_no}: ${result.history_sync_error}`);
@@ -2633,7 +2844,8 @@
     return false;
   }
 
-  async function applyCompleteBidListFilter() {
+  async function applyCompleteBidListFilter({ stage = "technical" } = {}) {
+    const technical = stage === "technical";
     const labelledInput = (pattern) => [...document.querySelectorAll('input[type="checkbox"], input[type="radio"]')]
       .find((input) => {
         const label = input.id
@@ -2656,7 +2868,7 @@
     const desiredFilters = [
       ["Bids/RAs Already Submitted/Participated", /^bids?\s*\/\s*ras?\s+already\s+submitted\s*\/\s*participated$/i, true, true],
       ["All Bid/RAs", /^all\s+bids?\s*\/\s*ras?$/i, true, true],
-      ["Technical Evaluated", /^technical\s+evaluated$/i, true, true],
+      ["Technical Evaluated", /^technical\s+evaluated$/i, technical, technical],
       ["Ongoing Bids Available For Participation", /^ongoing\s+bids?\s+available\s+for\s+participation$/i, false, false],
       ["Ongoing RAs Available For Participation", /^ongoing\s+ras?\s+available\s+for\s+participation$/i, false, false],
       ["Product Bid/RAs", /^product\s+bids?\s*\/\s*ras?$/i, false, false],
@@ -2667,7 +2879,7 @@
       ["Rate Contract Bids", /^rate\s+contract\s+bids?$/i, false, false],
       ["Global Tender", /^global\s+tender$/i, false, false],
       ["Financial Evaluated", /^financial\s+evaluated$/i, false, false],
-      ["Bid/RA Awarded", /^bid\s*\/\s*ra\s+awarded$/i, false, false],
+      ["Bid/RA Awarded", /^bid\s*\/\s*ra\s+awarded$/i, !technical, !technical],
     ].map(([label, pattern, checked, required]) => ({ label, pattern, checked, required }));
 
     // Apply the three positive filters first; GeM normally clears conflicting
@@ -2797,7 +3009,7 @@
     window.setTimeout(() => {
       const runner = message.type === "START_GEM_OPPORTUNITY_SYNC" ? scanOpportunityPages : scanAllPages;
       if (message.type === "START_GEM_BID_SYNC") {
-        disqualifiedScanMode = message.mode === "clarification" ? "clarification" : "disqualified";
+        disqualifiedScanMode = listScanMode(message.mode);
       }
       runner(message.resume || null).catch(async (error) => {
         if (error.code === "GEM_SYNC_STOPPED") return;

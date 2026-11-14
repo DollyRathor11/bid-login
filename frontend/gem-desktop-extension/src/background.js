@@ -663,9 +663,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Bid To Be Participated keeps its own resume point (page, category,
       // counts) in the progress it reports; Retry Scan continues from there.
       const opportunityRetry = opportunityScan && message.resume ? syncStates.gemOpportunitySync?.retry : null;
-      // Retry Sync continues whichever list scan (disqualified/clarification) stopped.
+      // Retry Sync continues whichever list scan (disqualified/clarification/
+      // counter offer) stopped.
+      const requestedMode = message.mode || (message.resume ? syncStates.gemBidSync?.mode : "");
       const scanMode = opportunityScan ? null
-        : (message.mode || (message.resume ? syncStates.gemBidSync?.mode : "")) === "clarification" ? "clarification" : "disqualified";
+        : ["clarification", "counteroffer"].includes(requestedMode) ? requestedMode : "disqualified";
       const resume = retryState ? {
         page: retryPage, saved: Number(retryState.saved || 0),
         rejected: Number(retryState.rejected || 0), checked: Number(retryState.checked || 0),
@@ -884,6 +886,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         updated: result.updated || 0,
         rejected: result.rejected || 0,
         frontendVisible: result.frontend_visible === true,
+        rejections: result.rejections || [],
+      };
+    }
+    if (message.type === "SAVE_GEM_COUNTER_OFFERS") {
+      const body = JSON.stringify({ results: message.results || [] });
+      const result = await api("/gem/counter-offers/", { method: "POST", body });
+      await mirrorToOtherBackends("/gem/counter-offers/", body);
+      return {
+        ok: true,
+        saved: result.saved || 0,
+        created: result.created || 0,
+        updated: result.updated || 0,
+        removed: result.removed || 0,
+        rejected: result.rejected || 0,
         rejections: result.rejections || [],
       };
     }
