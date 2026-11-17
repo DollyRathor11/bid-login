@@ -663,13 +663,16 @@ def _save_category_directory(items, category, fields, default_description):
             added += 1
         else:
             updated += 1
+        # A model created from a bid takes GeM's values as they are, so none of
+        # the bid's own processor/RAM/storage/OS is left behind.
+        from_bid = bool((product.extra_specs or {}).get("_source")) if isinstance(product.extra_specs, dict) else False
         product.gem_product_id = key[1]
         # Found on GeM, so no longer a bid-created model waiting for upload.
         product.extra_specs = specs
         product.description = _clean_text(item.get("title")) or default_description
         for field, value in summary.items():
-            if value:
-                setattr(product, field, value)
+            if value or from_bid:
+                setattr(product, field, value or "")
         product.save()
         attach_gem_image(product, item.get("image"))
     return added, updated

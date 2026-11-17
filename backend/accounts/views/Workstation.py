@@ -571,9 +571,10 @@ def save_workstation_model_number(request, bid_id):
         catalogue_product = CatalogueProduct.objects.filter(model_no__iexact=model_number).first()
         catalogue_created = False
         if catalogue_product is None:
+            # An unused slot can be saved as the text "None"/"NA".
             storage = " + ".join(
                 str(value).strip() for value in (bid.ssd1, bid.ssd2, bid.hdd)
-                if str(value or "").strip()
+                if str(value or "").strip().lower() not in {"", "none", "na", "-"}
             )
             extra_specs = {
                 "_source": "workstation_bid",
@@ -840,6 +841,12 @@ def match_workstation_catalogue_models(request, bid_id):
     }, status=200)
 
 
+def _ws_model_key(value):
+    # Hidden spaces, non-breaking spaces or a different dash in one copy of a
+    # model number must not make the same model show twice.
+    return re.sub(r"[^a-z0-9]", "", str(value or "").lower())
+
+
 @require_http_methods(["GET"])
 def list_workstation_catalogue_products(request):
     search = (request.GET.get("search") or "").strip().lower()
@@ -849,7 +856,7 @@ def list_workstation_catalogue_products(request):
     products = []
     known_models = set()
     for catalogue_product in CatalogueProduct.objects.filter(category__icontains="workstation").order_by("-created_at"):
-        model_key = (catalogue_product.model_no or "").strip().lower()
+        model_key = _ws_model_key(catalogue_product.model_no)
         if not model_key or model_key in known_models:
             continue
         extra_specs = _catalogue_extra_specs(catalogue_product)
@@ -875,7 +882,7 @@ def list_workstation_catalogue_products(request):
         }
         products.append(product)
         known_models.add(model_key)
-    products += [p for p in sheet_products if p["model_no"].strip().lower() not in known_models]
+    products += [p for p in sheet_products if _ws_model_key(p["model_no"]) not in known_models]
     if search:
         products = [
             product for product in products

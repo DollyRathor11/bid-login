@@ -106,7 +106,7 @@ def _category(value):
         "toner": bool(re.search(r"toner|cartridge", item)),
     }
     found = [key for key, matched in matches.items() if matched]
-    if re.search(r"bunch|\bboq\b", item) or len(found) > 1:
+    if re.search(r"bunch|\bboq\b", item) or len(found) > 1 or "," in item:
         return "bunch_bid"
     if found:
         return found[0]

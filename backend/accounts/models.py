@@ -394,6 +394,36 @@ class GemClarificationResult(models.Model):
         return f"{self.bid_no}: {self.clarification_status}"
 
 
+class GemCounterOffer(models.Model):
+    """A participated bid whose GeM "Counter Offer Confirmation" (Online Price
+    Match against the L1 price) is still pending, read by the extension's
+    Counter Offer scan. Only pending offers are kept."""
+    bid_no = models.CharField(max_length=100, unique=True)
+    ra_no = models.CharField(max_length=100, blank=True, default="")
+    product_type = models.CharField(max_length=20, choices=GemBidResult.PRODUCT_CHOICES, default="desktop")
+    item_name = models.CharField(max_length=500, blank=True, default="")
+    quantity = models.PositiveIntegerField(blank=True, null=True)
+    department = models.TextField(blank=True, default="")
+    start_date = models.DateTimeField(blank=True, null=True)
+    end_date = models.DateTimeField(blank=True, null=True)
+    status = models.CharField(max_length=150, blank=True, default="")
+    technical_status = models.CharField(max_length=150, blank=True, default="")
+    counter_offer_status = models.CharField(max_length=150, blank=True, default="")
+    our_offer = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True)
+    l1_price = models.DecimalField(max_digits=14, decimal_places=2, blank=True, null=True)
+    # Rows of the Online Price Match popup: product, our offer, L1 price.
+    items = models.JSONField(default=list, blank=True)
+    last_synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "gem_counter_offer_bids"
+        ordering = ["end_date", "-last_synced_at"]
+
+    def __str__(self):
+        return f"{self.bid_no}: {self.our_offer} vs L1 {self.l1_price}"
+
+
 class GemBidOpportunity(models.Model):
     bid_no = models.CharField(max_length=100, unique=True)
     bid_date = models.DateTimeField(blank=True, null=True)

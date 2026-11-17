@@ -91,7 +91,6 @@ function ClarificationHistoryModal({ bid, onClose }) {
 
 export default function ClarificationBidsPanel() {
   const [rows, setRows] = useState([]);
-  const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -149,26 +148,17 @@ export default function ClarificationBidsPanel() {
   if (loading) return <div className="py-16 text-center text-sm font-medium text-gray-500">Loading clarification bids...</div>;
   if (error) return <div className="m-6 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
 
-  const pendingCount = rows.filter((row) => row.is_pending).length;
-  const visibleRows = filter === "pending" ? rows.filter((row) => row.is_pending) : rows;
+  // Only bids whose clarification is still pending are shown.
+  const visibleRows = rows.filter((row) => row.is_pending);
 
   return (
     <div className="bg-white">
       <div className="flex min-h-[76px] flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
         <div className="flex flex-wrap items-center gap-4">
           <h2 className="text-lg font-bold text-slate-900">Clarification Bid</h2>
-          <div className="flex overflow-hidden rounded border border-slate-300 text-sm font-semibold">
-            {[["all", `All (${rows.length})`], ["pending", `Pending Clarification (${pendingCount})`]].map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => { setFilter(key); setSelectedIds(new Set()); }}
-                className={`px-3 py-1.5 ${filter === key ? "bg-slate-800 text-white" : "bg-white text-slate-700 hover:bg-slate-100"}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <span className="rounded border border-slate-300 bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white">
+            Pending Clarification ({visibleRows.length})
+          </span>
         </div>
         {selectedIds.size > 0 && (
           <button
@@ -257,7 +247,7 @@ export default function ClarificationBidsPanel() {
           ))}
           {visibleRows.length === 0 && (
             <tr><td colSpan="8" className="py-16 text-center text-sm text-gray-500">
-              {filter === "pending" ? "No pending clarifications." : "No clarification bids have been synced from GeM yet."}
+              No pending clarifications.
             </td></tr>
           )}
         </tbody>

@@ -113,6 +113,8 @@ export default function WorkstationAnalyserDashboard() {
     return status === "re_analyze" ? "re-analyze" : status;
   };
   const isApprovedView = activeTab === "approved" || activeTab === "gem-transfer";
+  // Only the Approved tab shows each bid's model number.
+  const showModelNo = activeTab === "approved";
 
   const deleteBid = async (bid) => {
     if (!window.confirm(`Permanently delete bid ${bid.bid_no}?`)) return;
@@ -229,7 +231,24 @@ export default function WorkstationAnalyserDashboard() {
       )}
 
       <div className="w-full overflow-x-auto">
-        <table className={`w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-2 [&_td]:!px-2 ${activeTab === "gem-transfer" ? "min-w-[1000px]" : ""}`}>
+        <table className={`w-full table-fixed text-left border-separate border-spacing-0 [&_th]:!px-2 [&_td]:!px-2 ${activeTab === "gem-transfer" ? "min-w-[1000px]" : ""} ${showModelNo ? "[&_tbody_button]:!px-3 [&_tbody_button]:!tracking-wide" : ""}`}>
+          {showModelNo ? (
+            // Approved tab: Model No added, widths sum to 100% so the whole
+            // table fits without a horizontal scroll bar.
+            <colgroup>
+              <col className="w-[3%]" />
+              <col className="w-[13%]" />
+              <col className="w-[16%]" />
+              <col className="w-[4%]" />
+              <col className="w-[15%]" />
+              <col className="w-[8%]" />
+              <col className="w-[8%]" />
+              <col className="w-[6%]" />
+              <col className="w-[10%]" />
+              <col className="w-[10%]" />
+              <col className="w-[7%]" />
+            </colgroup>
+          ) : (
           <colgroup>
             <col className={isApprovedView ? "w-[5%]" : "w-[6%]"} />
             <col className={isApprovedView ? "w-[12%]" : "w-[16%]"} />
@@ -243,9 +262,10 @@ export default function WorkstationAnalyserDashboard() {
             {isApprovedView && <col className="w-[15%]" />}
             {activeTab === "approved" && <col className="w-[8%]" />}
           </colgroup>
+          )}
           <thead>
             <tr className="bg-slate-800">
-              {["S.No.", "Bid No", "Department", "Qty", "Submitted By", "Date"].map((head) => (
+              {["S.No.", "Bid No", "Department", "Qty", ...(showModelNo ? ["Model No"] : []), "Submitted By", "Date"].map((head) => (
                 <th key={head} className="px-5 py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-slate-700 whitespace-nowrap">
                   {head}
                 </th>
@@ -258,7 +278,7 @@ export default function WorkstationAnalyserDashboard() {
                 </th>
               )}
               {isApprovedView && (
-                <th className="pl-5 py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-l border-slate-700">
+                <th className="py-4 text-[11px] tracking-wider font-bold text-white uppercase border-b border-l border-slate-700 !px-2 text-center">
                   Download Docs for the bid
                 </th>
               )}
@@ -282,7 +302,7 @@ export default function WorkstationAnalyserDashboard() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={activeTab === "approved" ? 10 : isApprovedView ? 9 : 8} className="text-center py-16 text-gray-400 font-medium">
+                <td colSpan={activeTab === "approved" ? 11 : isApprovedView ? 9 : 8} className="text-center py-16 text-gray-400 font-medium">
                   Loading bids...
                 </td>
               </tr>
@@ -290,7 +310,7 @@ export default function WorkstationAnalyserDashboard() {
 
             {!loading && bids.length === 0 && (
               <tr>
-                <td colSpan={activeTab === "approved" ? 10 : isApprovedView ? 9 : 8} className="text-center py-16 text-gray-400 font-medium">
+                <td colSpan={activeTab === "approved" ? 11 : isApprovedView ? 9 : 8} className="text-center py-16 text-gray-400 font-medium">
                   No bids found.
                 </td>
               </tr>
@@ -314,14 +334,19 @@ export default function WorkstationAnalyserDashboard() {
                       {(safePage - 1) * ITEMS_PER_PAGE + i + 1}
                     </td>
                     <td className="px-5 py-4 border-b border-gray-100">
-                      <span className="block break-all text-sm font-bold text-blue-600"><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></span>
+                      <span className={`block text-sm font-bold text-blue-600 ${showModelNo ? "whitespace-nowrap" : "break-all"}`}><GemBidNo bidNo={bid.bid_no} links={gemBidLinks} /></span>
                     </td>
                     <td className="px-5 py-4 border-b border-gray-100">
-                      <span className="text-sm font-bold text-gray-800 truncate max-w-[160px] block">{bid.dept_name || "-"}</span>
+                      <span className={`block text-sm font-bold text-gray-800 ${showModelNo ? "line-clamp-2" : "truncate max-w-[160px]"}`} title={bid.dept_name || ""}>{bid.dept_name || "-"}</span>
                     </td>
                     <td className="px-5 py-4 border-b border-gray-100">
                       <span className="text-sm font-bold text-gray-700">{bid.qty || "-"}</span>
                     </td>
+                    {showModelNo && (
+                      <td className="overflow-hidden px-5 py-4 border-b border-gray-100">
+                        <span className="block truncate whitespace-nowrap text-sm font-bold text-gray-800" title={bid.model_number || ""}>{bid.model_number || "-"}</span>
+                      </td>
+                    )}
                     <td className="px-5 py-4 border-b border-gray-100">
                       <span className="text-sm font-bold text-gray-700">{bid.submitted_by || bid.user_name || "-"}</span>
                     </td>
@@ -394,7 +419,7 @@ export default function WorkstationAnalyserDashboard() {
                       </td>
                     )}
                     {isApprovedView && (
-                      <td className="pl-5 py-4 border-b border-l border-gray-100">
+                      <td className="py-4 border-b border-l border-gray-100 !px-2 text-center">
                         <button
                           type="button"
                           onClick={() => navigate(`/analyser-dashboard/workstation/bid/${bid.id}/downloads`, { state: { bid } })}

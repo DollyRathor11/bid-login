@@ -144,12 +144,15 @@ test("removes a Printer bid only when its Printer Technology is just Inkjet", ()
   assert.equal(opportunityResult(desktop, "Total Quantity 30 Printer Technology Inkjet").eligible, true);
 });
 
-test("rejects a bunch bid even when every category is approved", () => {
+test("receives a bunch bid filed under its first category of ours, with no minimum quantity", () => {
   const result = opportunityResult(
     "All in One PC (V2) (Q2), Entry and Mid Level Desktop Computer (Q2), "
       + "A4 and Legal Size Multifunction Printer (MFP) (Q2)",
+    "Total Quantity 3",
   );
-  assert.equal(result.reject, "bunch");
+  assert.equal(result.eligible, true);
+  assert.equal(result.is_bunch, true);
+  assert.equal(result.product_type, "aio");
 });
 
 test("never receives a bid below five units or with an unreadable quantity", () => {
@@ -166,13 +169,27 @@ test("rejects PAC Only even when it follows the final Q marker", () => {
   assert.equal(result.reject, "pac");
 });
 
-test("rejects the complete bunch when it contains A3, UPS, or another unsupported category", () => {
-  const invalid = [
-    "A3 Size Multifunction Printer (MFP) (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2)",
-    "All in One PC (V2) (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2), Line Interactive UPS with AVR (V2) (Q2)",
-    "All in One PC (V2) (Q2), Entry and Mid Level Desktop Computer (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2), A3 Printer (MFP) (Q2)",
-  ];
-  for (const category of invalid) assert.equal(opportunityResult(category).reject, "product", category);
+test("receives a bunch only when every item is ours or one of the exact UPS names", () => {
+  const kept = {
+    "Line Interactive UPS with AVR (V2) (Q2), All in One PC (V2) (Q2)": "aio",
+    "Online UPS (?10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2), All in One PC (V2) (Q2)": "aio",
+    "Online UPS (≤10 KVA) Without Battery Conforming To IS 16242 (Part 1) (Q2), Fixed Computer Workstation (Q2)": "workstation",
+  };
+  for (const [category, productType] of Object.entries(kept)) {
+    const result = opportunityResult(category, "Total Quantity 8");
+    assert.equal(result.eligible, true, category);
+    assert.equal(result.product_type, productType, category);
+  }
+  assert.equal(opportunityResult("Laptop (Q2), Tablet (Q2)").reject, "product");
+  assert.equal(opportunityResult("A3 Size Multifunction Printer (MFP) (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Line Interactive UPS With AVR (V3) (Q2), All in One PC (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Line Intractive UPS With AVR (Q2), All in One PC (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Online UPS (V2) (Q2), All in One PC (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Online UPS (≤20 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2), All in One PC (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Laptop (Q2), Line Interactive UPS With AVR (V2) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Interactive Panels with CPU (Q2) , Entry and Mid Level Desktop Computer (Q2)").reject, "product");
+  assert.equal(opportunityResult("Line Interactive UPS With AVR (V2) (Q2), Online UPS (≤10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2)").reject, "product");
+  assert.equal(opportunityResult("Line Interactive UPS With AVR (V2) (Q2)", "Total Quantity 8").reject, "product");
 });
 
 test("a page is old only when every bid on it was already read", () => {
@@ -774,9 +791,15 @@ test('the seller-list card rules out only bids it can prove ineligible', () => {
   assert.equal(cardReject("BID NO: GEM/2026/B/1 Department Name And Address: X"), "");
   // Provable rejects.
   assert.equal(cardReject(card("Entry and Mid Level Desktop Co...", 2)), "quantity");
-  assert.equal(cardReject(card("All in One PC (V2),A4 and Lega...", 2)), "bunch");
   assert.equal(cardReject(card("Laptop - Notebook", 50)), "product");
+  assert.equal(cardReject(card("Laptop - Notebook,Tablet Computer", 50)), "product");
+  assert.equal(cardReject(card("Line Interactive UPS With AVR (V2)", 50)), "product");
   assert.equal(cardReject(card("Entry and Mid Level Desktop Computer,Laptop - Notebook", 50)), "product");
+  assert.equal(cardReject(card("Interactive Panels with CPU,Entry and Mid Level...", 2)), "product");
+  assert.equal(cardReject(card("Line Interactive UPS With AVR (V2),Online UPS (≤10 KVA) With...", 2)), "product");
+  // A bunch of our products and UPS is read from the detail, at any quantity.
+  assert.equal(cardReject(card("All in One PC (V2),A4 and Lega...", 2)), "");
+  assert.equal(cardReject(card("All in One PC (V2),Line Intera...", 1)), "");
 });
 
 test('an unfinished Bid To Be Participated scan is continued by the next scan', () => {
@@ -896,4 +919,68 @@ test('request details popup keeps its column headings, including the last respon
   const [row] = JSON.parse(JSON.stringify(clarificationRowsFor(modal)));
   assert.equal(row['Last date for seller response'], '05-11-2026 18:42');
   assert.equal(row['Clarification Type'], 'General Clarifications');
+});
+
+function counterOfferHelpers(extra = {}) {
+  const start = source.indexOf('const COUNTER_OFFER_LABEL');
+  const end = source.indexOf('async function priceMatchFor', start);
+  assert.ok(start > 0 && end > start, 'counter offer helpers must remain discoverable');
+  const textHelper = source.match(/const text = \(node\) => .*\n/)[0];
+  const context = { ...extra };
+  vm.runInNewContext(
+    `${textHelper}${source.slice(start, end)}; helpers = { counterOfferValue, COUNTER_OFFER_CLOSED, priceMatchRows, closePriceMatchModal, rupees };`,
+    context,
+  );
+  return context.helpers;
+}
+
+test('counter offer status is read from the card and only an undecided one is pending', () => {
+  const { counterOfferValue, COUNTER_OFFER_CLOSED } = counterOfferHelpers();
+  const card = (value) => `BID NO: GEM/2026/B/7333927 Items: High End Desktop Computer Quantity: 7 Technical Status: Qualified Counter Offer Confirmation:${value} Department Name And Address: Ministry of Defence`;
+  assert.equal(counterOfferValue('BID NO: GEM/2026/B/1 Items: Desktop Quantity: 7'), null);
+  for (const closed of ['Accepted', 'Not Accepted', 'Expired', 'Rejected', 'Duration Ended']) {
+    assert.match(counterOfferValue(card(closed)), COUNTER_OFFER_CLOSED, closed);
+  }
+  for (const open of ['Pending', 'Click here', 'Confirm', '']) {
+    assert.doesNotMatch(counterOfferValue(card(open)), COUNTER_OFFER_CLOSED, open);
+  }
+});
+
+test('Online Price Match rows give the product, our offer and the L1 price in rupees', () => {
+  const { priceMatchRows } = counterOfferHelpers();
+  const rows = priceMatchRows([
+    { 'Product Name': 'Entry and Mid Level Desktop Computer (5)', 'Your offer': '₹ 61000.000', 'L1 price for the item': '₹ 59300' },
+    { 'Column 1': 'Advisory : The Price match does not guarantee the award of the contract.' },
+  ]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].product, 'Entry and Mid Level Desktop Computer (5)');
+  assert.equal(rows[0].our_offer, 61000);
+  assert.equal(rows[0].l1_price, 59300);
+});
+
+test('the price match popup is closed with x / Cancel and never with an accept button', async () => {
+  const clicked = [];
+  const button = (label, extra = {}) => ({
+    textContent: label,
+    matches: (selector) => selector === '.close' && extra.close === true,
+    ...extra,
+  });
+  // GeM's order: footer buttons listed first, the header x last.
+  const buttons = [
+    button('L1 price not accepted', { close: true }),
+    button('Accept L1 price', { close: true }),
+    button('Cancel'),
+    button('×', { close: true }),
+  ];
+  const modal = { querySelectorAll: () => buttons };
+  const { closePriceMatchModal } = counterOfferHelpers({
+    visible: () => true,
+    activateControl: (node) => clicked.push(node.textContent),
+    document: { contains: () => false },
+    sleep: async () => {},
+    Date,
+  });
+  assert.equal(await closePriceMatchModal(modal), true);
+  assert.deepEqual(clicked, ['Cancel']);
+  assert.ok(!clicked.some((label) => /accept/i.test(label)));
 });

@@ -28,20 +28,40 @@ class GemOpportunityProductRulesTests(SimpleTestCase):
             with self.subTest(item=item):
                 self.assertIsNotNone(classify_opportunity_item(item))
 
-    def test_rejects_bunch_even_when_every_category_is_approved(self):
-        self.assertIsNone(classify_opportunity_item(
+    def test_keeps_bunch_whose_every_category_is_approved_or_ups(self):
+        cases = {
             "All in One PC (V2) (Q2), Entry and Mid Level Desktop Computer (Q2), "
-            "A4 and Legal Size Multifunction Printer (MFP) (Q2)"
-        ))
+            "A4 and Legal Size Multifunction Printer (MFP) (Q2)": "aio",
+            "All in One PC (V2), Line Interactive UPS with AVR (V2)": "aio",
+            "Line Interactive UPS with AVR (V2), A4 and Legal Size Multifunction Printer (MFP)": "printer",
+            "All in One PC (V2) (Q2), Online UPS (?10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2)": "aio",
+            "All in One PC (V2) (Q2), Online UPS (<=10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2)": "aio",
+            "Online UPS (≤10 KVA) Without Battery Conforming To IS 16242 (Part 1), Fixed Computer Workstation": "workstation",
+        }
+        for item, product_type in cases.items():
+            with self.subTest(item=item):
+                result = classify_opportunity_item(item)
+                self.assertIsNotNone(result)
+                self.assertTrue(result["is_bunch"])
+                self.assertEqual(result["product_type"], product_type)
 
-        invalid = [
+    def test_rejects_bunch_with_any_other_item_or_only_ups(self):
+        for item in [
+            "Interactive Panels with CPU (Q2) , Entry and Mid Level Desktop Computer (Q2)",
+            "Laptop (Q2), Line Interactive UPS With AVR (V2) (Q2)",
+            "All in One PC (V2) (Q2), Line Intractive UPS With AVR (Q2)",
+            "All in One PC (V2) (Q2), Online UPS (V2) (Q2)",
+            "All in One PC (V2) (Q2), Online UPS (Q2)",
             "A3 Size Multifunction Printer (MFP), A4 and Legal Size Multifunction Printer (MFP)",
-            "All in One PC (V2), A4 and Legal Size Multifunction Printer (MFP), Line Interactive UPS with AVR (V2)",
-            "All in One PC (V2), Entry and Mid Level Desktop Computer, A4 and Legal Size Multifunction Printer (MFP), A3 Printer (MFP)",
-        ]
-        for item in invalid:
+            "Line Interactive UPS With AVR (V2) (Q2), "
+            "Online UPS (≤10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2)",
+        ]:
             with self.subTest(item=item):
                 self.assertIsNone(classify_opportunity_item(item))
+
+    def test_ups_alone_is_not_received(self):
+        self.assertIsNone(classify_opportunity_item("Line Interactive UPS with AVR (V2) (Q2)"))
+        self.assertIsNone(classify_opportunity_item("Online UPS (≤10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2)"))
 
     def test_rejects_pac_only_after_q_marker(self):
         self.assertIsNone(classify_opportunity_item(

@@ -2,6 +2,11 @@ const state = document.getElementById("state");
 const message = document.getElementById("message");
 const syncButton = document.getElementById("sync-bids");
 const clarificationButton = document.getElementById("sync-clarifications");
+const counterOfferButton = document.getElementById("sync-counter-offers");
+const counterOfferState = document.getElementById("counter-offer-state");
+const pauseCounterOfferButton = document.getElementById("pause-counter-offers");
+const retryCounterOfferButton = document.getElementById("retry-counter-offers");
+const copyCounterOfferStatus = document.getElementById("copy-counter-offer-status");
 const pauseSyncButton = document.getElementById("pause-sync");
 const retrySyncButton = document.getElementById("retry-sync");
 const syncState = document.getElementById("sync-state");
@@ -58,6 +63,18 @@ function showSyncState(sync) {
     const updated = sync.updatedAt ? new Date(sync.updatedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : "";
     syncState.textContent = `${sync.message || sync.status}${details.length ? ` (${details.join(" · ")})` : ""}${updated ? ` · Updated ${updated}` : ""}`;
   }
+  // The Counter Offer scan runs on the same seller-list scanner but has its
+  // own section: each section shows only its own scan's progress.
+  const counterOffer = sync?.mode === "counteroffer";
+  if (counterOffer) {
+    counterOfferState.className = syncState.className;
+    counterOfferState.textContent = syncState.textContent;
+    syncState.className = "sync-state";
+    syncState.textContent = "Ready to scan. Refresh the GeM page if required.";
+  } else {
+    counterOfferState.className = acxxelConnected ? "sync-state" : syncState.className;
+    counterOfferState.textContent = acxxelConnected ? "Ready to scan Counter Offer." : syncState.textContent;
+  }
   const active = ACTIVE_SCAN_STATUSES.has(sync?.status);
   const paused = sync?.status === "paused";
   const retryable = ["failed", "stopped"].includes(sync?.status);
@@ -66,18 +83,25 @@ function showSyncState(sync) {
   const runningLabel = paused
     ? "Sync paused..."
     : sync?.status === "recovering" ? "Recovering scan..." : "Scan running...";
-  const clarificationMode = sync?.mode === "clarification";
+  const mode = sync?.mode || "disqualified";
   syncButton.disabled = !acxxelConnected || active;
-  syncButton.textContent = active && !clarificationMode ? runningLabel : "Scan Disqualified Bid";
+  syncButton.textContent = active && mode === "disqualified" ? runningLabel : "Scan Disqualified Bid";
   clarificationButton.disabled = !acxxelConnected || active;
-  clarificationButton.textContent = active && clarificationMode ? runningLabel : "Scan Clarification";
+  clarificationButton.textContent = active && mode === "clarification" ? runningLabel : "Scan Clarification";
+  counterOfferButton.disabled = !acxxelConnected || active;
+  counterOfferButton.textContent = active && mode === "counteroffer" ? runningLabel : "Scan Counter Offer";
 
+  const pausable = active && !["starting", "recovering"].includes(sync?.status);
   pauseSyncButton.hidden = false;
-  pauseSyncButton.disabled = !active || ["starting", "recovering"].includes(sync?.status);
-  pauseSyncButton.textContent = paused ? "Resume Sync" : "Pause Sync";
+  pauseSyncButton.disabled = !pausable || counterOffer;
+  pauseSyncButton.textContent = paused && !counterOffer ? "Resume Sync" : "Pause Sync";
+  pauseCounterOfferButton.disabled = !pausable || !counterOffer;
+  pauseCounterOfferButton.textContent = paused && counterOffer ? "Resume Scan" : "Pause Scan";
 
-  retrySyncButton.hidden = !retryable;
+  retrySyncButton.hidden = !retryable || counterOffer;
   retrySyncButton.disabled = false;
+  retryCounterOfferButton.hidden = !retryable || !counterOffer;
+  retryCounterOfferButton.disabled = false;
 }
 
 function showOpportunityState(sync) {
@@ -125,7 +149,9 @@ function preventConcurrentScans(bidSync, opportunitySync) {
   if (opportunityActive) {
     syncButton.disabled = true;
     clarificationButton.disabled = true;
+    counterOfferButton.disabled = true;
     retrySyncButton.disabled = true;
+    retryCounterOfferButton.disabled = true;
   }
 }
 
@@ -145,13 +171,16 @@ function refreshSyncState() {
 function startListScan(mode) {
   syncButton.disabled = true;
   clarificationButton.disabled = true;
-  syncState.textContent = mode === "clarification" ? "Starting GeM clarification sync..." : "Starting GeM bid sync...";
+  counterOfferButton.disabled = true;
+  syncState.textContent = mode === "clarification" ? "Starting GeM clarification sync..."
+    : mode === "counteroffer" ? "Starting GeM counter offer sync..." : "Starting GeM bid sync...";
   chrome.runtime.sendMessage({ type: "START_GEM_BID_SYNC", mode }, (response) => {
     if (chrome.runtime.lastError || !response?.ok) {
       syncState.className = "sync-state failed";
       syncState.textContent = chrome.runtime.lastError?.message || response?.error || "Unable to start sync.";
       syncButton.disabled = false;
       clarificationButton.disabled = false;
+      counterOfferButton.disabled = false;
       return;
     }
     syncState.className = "sync-state";
@@ -162,6 +191,7 @@ function startListScan(mode) {
 
 syncButton.addEventListener("click", () => startListScan("disqualified"));
 clarificationButton.addEventListener("click", () => startListScan("clarification"));
+counterOfferButton.addEventListener("click", () => startListScan("counteroffer"));
 
 opportunityButton.addEventListener("click", () => {
   opportunityButton.disabled = true;
@@ -191,38 +221,59 @@ pauseOpportunityButton.addEventListener("click", () => {
   });
 });
 
-pauseSyncButton.addEventListener("click", () => {
-  const resuming = pauseSyncButton.textContent === "Resume Sync";
-  pauseSyncButton.disabled = true;
-  pauseSyncButton.textContent = resuming ? "Resuming..." : "Pausing...";
+// The Disqualified/Clarification section and the Counter Offer section drive
+// the same seller-list scanner, each with its own Pause / Retry / Copy.
+function pauseListScan(button, output, labels) {
+  const resuming = button.textContent === labels.resume;
+  button.disabled = true;
+  button.textContent = resuming ? "Resuming..." : "Pausing...";
   chrome.runtime.sendMessage({ type: resuming ? "RESUME_GEM_BID_SYNC" : "PAUSE_GEM_BID_SYNC" }, (response) => {
     if (chrome.runtime.lastError || !response?.ok) {
-      pauseSyncButton.disabled = false;
-      pauseSyncButton.textContent = resuming ? "Resume Sync" : "Pause Sync";
-      syncState.className = "sync-state failed";
-      syncState.textContent = chrome.runtime.lastError?.message || response?.error
+      button.disabled = false;
+      button.textContent = resuming ? labels.resume : labels.pause;
+      output.className = "sync-state failed";
+      output.textContent = chrome.runtime.lastError?.message || response?.error
         || `Unable to ${resuming ? "resume" : "pause"} sync.`;
       return;
     }
     window.setTimeout(refreshSyncState, 200);
   });
-});
+}
 
-retrySyncButton.addEventListener("click", () => {
-  retrySyncButton.disabled = true;
-  retrySyncButton.textContent = "Retrying...";
-  syncState.textContent = "Retrying GeM bid sync...";
+function retryListScan(button, output, label) {
+  button.disabled = true;
+  button.textContent = "Retrying...";
+  output.textContent = "Retrying from the saved page...";
   chrome.runtime.sendMessage({ type: "START_GEM_BID_SYNC", resume: true }, (response) => {
-    retrySyncButton.textContent = "Retry Sync";
+    button.textContent = label;
     if (chrome.runtime.lastError || !response?.ok) {
-      retrySyncButton.disabled = false;
-      syncState.className = "sync-state failed";
-      syncState.textContent = chrome.runtime.lastError?.message || response?.error || "Unable to retry sync.";
+      button.disabled = false;
+      output.className = "sync-state failed";
+      output.textContent = chrome.runtime.lastError?.message || response?.error || "Unable to retry sync.";
       return;
     }
     window.setTimeout(refreshSyncState, 300);
   });
-});
+}
+
+async function copyListScanStatus(button, output) {
+  const lines = [output.textContent || ""];
+  const pending = lastSyncState?.pending;
+  if (Array.isArray(pending) && pending.length) {
+    lines.push("", `Pending bids (${pending.length}${pending.length > 25 ? ", first 25 shown" : ""}):`);
+    for (const item of pending.slice(0, 25)) {
+      lines.push(`- ${item.bidNo} (page ${item.page}): ${item.reason || "unknown reason"}`);
+    }
+  }
+  await navigator.clipboard.writeText(lines.join("\n"));
+  button.textContent = "Copied";
+  window.setTimeout(() => { button.textContent = "Copy status"; }, 1200);
+}
+
+pauseSyncButton.addEventListener("click", () => pauseListScan(pauseSyncButton, syncState, { pause: "Pause Sync", resume: "Resume Sync" }));
+pauseCounterOfferButton.addEventListener("click", () => pauseListScan(pauseCounterOfferButton, counterOfferState, { pause: "Pause Scan", resume: "Resume Scan" }));
+retrySyncButton.addEventListener("click", () => retryListScan(retrySyncButton, syncState, "Retry Sync"));
+retryCounterOfferButton.addEventListener("click", () => retryListScan(retryCounterOfferButton, counterOfferState, "Retry Scan"));
 
 retryOpportunityButton.addEventListener("click", () => {
   retryOpportunityButton.disabled = true;
@@ -244,19 +295,8 @@ retryOpportunityButton.addEventListener("click", () => {
 
 window.setInterval(refreshSyncState, 1000);
 
-copySyncStatus.addEventListener("click", async () => {
-  const lines = [syncState.textContent || ""];
-  const pending = lastSyncState?.pending;
-  if (Array.isArray(pending) && pending.length) {
-    lines.push("", `Pending bids (${pending.length}${pending.length > 25 ? ", first 25 shown" : ""}):`);
-    for (const item of pending.slice(0, 25)) {
-      lines.push(`- ${item.bidNo} (page ${item.page}): ${item.reason || "unknown reason"}`);
-    }
-  }
-  await navigator.clipboard.writeText(lines.join("\n"));
-  copySyncStatus.textContent = "Copied";
-  window.setTimeout(() => { copySyncStatus.textContent = "Copy status"; }, 1200);
-});
+copySyncStatus.addEventListener("click", () => copyListScanStatus(copySyncStatus, syncState));
+copyCounterOfferStatus.addEventListener("click", () => copyListScanStatus(copyCounterOfferStatus, counterOfferState));
 
 copyOpportunityStatus.addEventListener("click", async () => {
   await navigator.clipboard.writeText(opportunityState.textContent || "");
