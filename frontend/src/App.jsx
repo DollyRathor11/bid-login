@@ -11,6 +11,7 @@ import DesktopBidApproval from "./pages/Desktop/Admin/DesktopBidApproval";
 import UserNavbar from "./components/user/UserNavbar";
 import UserDashboard from "./pages/User/UserDashboard";
 import AllBidsApproval from "./pages/Admin/AllBidsApproval";
+import AdminBidSearch from "./components/Admin/AdminBidSearch";
 import CreateDesktopBid from "./pages/Desktop/User/CreateDesktopBid";
 import CreateWorkstationBid from "./pages/Workstation/User/CreateWorkstationBid";
 import WorkstationAnalyserDashboard from "./pages/Workstation/Analyser/WorkstationAnalyserDashboard";
@@ -161,6 +162,7 @@ function App() {
         </Route>
 
         <Route path="/admin-dashboard/all-bids-approval" element={<AllBidsApproval />} />
+        <Route path="/admin-dashboard/bid-search" element={<AdminBidSearch />} />
         <Route path="/admin-dashboard/desktop-bid-approval" element={<DesktopBidApproval />} />
         <Route path="/admin-dashboard/aio-bid-approval" element={<AioBidApproval />} />
         <Route path="/admin-dashboard/toner-bid-approval" element={<TonerBidApproval />} />
