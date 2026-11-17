@@ -43,6 +43,7 @@ from .views.Printer import (
     generate_printer_certificates,
 )
 from .views import ProductDashboard as product_dashboard
+from .views.AdminBidSearch import admin_bid_search
 from .views.UserDashboard import user_dashboard
 from .views.DailyActivity import daily_activity
 from .views.AnalyserDashboard import analyser_dashboard
@@ -310,6 +311,7 @@ urlpatterns = [
     path("admin/aio-bids/stats/", product_dashboard.admin_aio_stats),
     path("admin/dashboard/<str:product>/participants/", product_dashboard.admin_dashboard_participants),
     path("admin/dashboard/post-bid-summary/", product_dashboard.admin_post_bid_summary),
+    path("admin/dashboard/bid-search/", admin_bid_search),
     path("admin/dashboard/<str:product>/person/<str:endpoint>/", product_dashboard.admin_person_dashboard),
     path("admin/dashboard/<str:product>/bids/", product_dashboard.admin_dashboard_bids),
     path("admin/toner-bids/dashboard-years/", product_dashboard.admin_toner_dashboard_years),

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import DailyActivityChart from "../DailyActivityChart";
+import { BidSearchForm } from "./AdminBidSearch";
 import useDailyActivity from "../../hooks/useDailyActivity";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import useOutsideClick from "../../hooks/useOutsideClick";
@@ -380,7 +381,7 @@ const AdminHome = () => {
   return (
     <div className="space-y-6">
       {}
-      <div className="flex flex-wrap justify-start gap-4">
+      <div className="flex flex-wrap items-center justify-start gap-4">
         {}
         <div ref={productDropdownRef} className="relative">
           <button
@@ -460,6 +461,7 @@ const AdminHome = () => {
             </div>
           )}
         </div>
+        <BidSearchForm />
       </div>
 
       {}
