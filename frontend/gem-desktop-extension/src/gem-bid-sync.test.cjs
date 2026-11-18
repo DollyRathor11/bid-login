@@ -34,7 +34,7 @@ function retentionResult(valueExpression, referenceExpression) {
   return context;
 }
 
-function opportunityResult(itemCategory, quantityText = "", cardQuantity = 0, validityDays = 90) {
+function opportunityResult(itemCategory, quantityText = "", cardQuantity = 0, validityDays = 90, address = "Test Address 1") {
   const dateStart = source.indexOf("function dateFrom");
   const dateEnd = source.indexOf("function productType", dateStart);
   const parserStart = source.indexOf("const OPPORTUNITY_PRODUCTS");
@@ -55,7 +55,7 @@ function opportunityResult(itemCategory, quantityText = "", cardQuantity = 0, va
     raw: `Bid End Date/Time ${indian(end)} 17:00:00 Bid Offer Validity (From End Date) ${validityDays} (Days) `
       + `Department Name Test Department Item Category ${itemCategory} MSE Relaxation No `
       + `${quantityText === "" ? "Total Quantity 30" : quantityText} `
-      + "Consignees/Reporting Officer Test Address 1 Special terms",
+      + `Consignees/Reporting Officer and Quantity ${address} Special terms`,
     ACXXEL_BLOCKED_DELIVERY_PINS: new Set(),
     ACXXEL_BLOCKED_DELIVERY_DISTRICTS: new Set(),
     ACXXEL_BLOCKED_DELIVERY_STATES: new Set(),
@@ -144,6 +144,19 @@ test("removes a Printer bid only when its Printer Technology is just Inkjet", ()
   assert.equal(opportunityResult(desktop, "Total Quantity 30 Printer Technology Inkjet").eligible, true);
 });
 
+test("removes a bid when any one printer in it is Inkjet only, bunch bids included", () => {
+  const printer = "A4 and Legal Size Multifunction Printer (MFP) (Q2)";
+  // GEM/2026/B/8218791: one Laser printer and one Inkjet printer.
+  assert.equal(opportunityResult(printer, "Total Quantity 3 Printing Technology Electrophotography/Xerography (Laser/LED) "
+    + "Type of Printing Monochrome (Black) Printing Technology Inkjet Type of Printing Colour Or higher").reject, "inkjet");
+  // GEM/2026/B/8179256: Inkjet printers bunched with a UPS.
+  assert.equal(opportunityResult(`${printer}, Line Interactive UPS with AVR (V2) (Q2)`,
+    "Total Quantity 3 Printing Technology Inkjet Type of Printing Colour Or higher").reject, "inkjet");
+  // A Laser row followed by a spec that mentions LED is still Laser only.
+  assert.equal(opportunityResult(printer, "Total Quantity 3 Printing Technology Electrophotography/Xerography (Laser/LED) "
+    + "Type of Printing Colour Printing Technology Electrophotography/Xerography (Laser/LED) Type of Printing Monochrome").eligible, true);
+});
+
 test("receives a bunch bid filed under its first category of ours, with no minimum quantity", () => {
   const result = opportunityResult(
     "All in One PC (V2) (Q2), Entry and Mid Level Desktop Computer (Q2), "
@@ -153,6 +166,53 @@ test("receives a bunch bid filed under its first category of ours, with no minim
   assert.equal(result.eligible, true);
   assert.equal(result.is_bunch, true);
   assert.equal(result.product_type, "aio");
+});
+
+test("a bunch follows every rule except quantity", () => {
+  const printer = "A4 and Legal Size Multifunction Printer (MFP) (Q2)";
+  const desktop = "Entry and Mid Level Desktop Computer (Q2)";
+  const ups = "Line Interactive UPS with AVR (V2) (Q2)";
+  assert.equal(opportunityResult(`${printer}, ${desktop}`, "No units listed").eligible, true);
+  // Printer first does not free the Desktop in it from the 120-day limit.
+  assert.equal(opportunityResult(`${printer}, ${desktop}`, "", 0, 180).reject, "over120");
+  // Printers with UPS only are still free of it.
+  assert.equal(opportunityResult(`${printer}, ${ups}`, "", 0, 180).eligible, true);
+});
+
+test("receives A3 MFP only alone, with no rule except delivery in Uttar Pradesh", () => {
+  const a3 = "A3 Size Multifunction Printer (MFP) (Q2)";
+  const lucknow = "1 Collectorate, Lucknow 226001 1 30";
+  const result = opportunityResult(a3, "Total Quantity 1", 0, 90, lucknow);
+  assert.equal(result.eligible, true);
+  assert.equal(result.product_type, "a3_mfp");
+  // No quantity, 120-day or PAC rule.
+  assert.equal(opportunityResult(a3, "No units listed", 0, 180, lucknow).eligible, true);
+  assert.equal(opportunityResult(`${a3} (PAC Only)`, "Total Quantity 1", 0, 90, lucknow).eligible, true);
+  assert.equal(opportunityResult(a3, "Total Quantity 1", 0, 90, "Kalyan Bhawan, Uttar Pradesh").eligible, true);
+  // Anywhere outside UP, Uttarakhand included, or an unreadable address.
+  for (const address of ["New Delhi 110001", "Dehradun 248001", "Roorkee 247667", "Lucknow 226001 and Delhi 110001", "Test Address"]) {
+    assert.equal(opportunityResult(a3, "Total Quantity 1", 0, 90, address).reject, "location", address);
+  }
+  // Other products keep their rules.
+  assert.equal(opportunityResult("High End Desktop Computer (Q2)", "Total Quantity 2", 0, 90, lucknow).reject, "quantity");
+});
+
+test("a bunch with A3 MFP keeps its usual rules and must be delivered in Uttar Pradesh", () => {
+  const a3 = "A3 Size Multifunction Printer (MFP) (Q2)";
+  const desktop = "High End Desktop Computer (Q2)";
+  const ups = "Line Interactive UPS with AVR (V2) (Q2)";
+  const lucknow = "1 Collectorate, Lucknow 226001 1 30";
+  for (const items of [`${a3}, ${ups}`, `${desktop}, ${a3}`, `${a3}, A4 and Legal Size Multifunction Printer (MFP) (Q2)`]) {
+    assert.equal(opportunityResult(items, "No units listed", 0, 90, lucknow).eligible, true, items);
+    assert.equal(opportunityResult(items, "No units listed", 0, 90, "New Delhi 110001").reject, "location", items);
+  }
+  // The Desktop in it still has the 120-day limit; PAC still applies.
+  assert.equal(opportunityResult(`${desktop}, ${a3}`, "", 0, 180, lucknow).reject, "over120");
+  assert.equal(opportunityResult(`${desktop}, ${a3} (PAC Only)`, "", 0, 90, lucknow).reject, "pac");
+  // Any item that is not ours still rejects the bunch.
+  assert.equal(opportunityResult(`${a3}, Laptop (Q2)`, "", 0, 90, lucknow).reject, "product");
+  // Without A3 a bunch keeps the old location rule (Delhi allowed).
+  assert.equal(opportunityResult(`${desktop}, ${ups}`, "", 0, 90, "New Delhi 110001").eligible, true);
 });
 
 test("never receives a bid below five units or with an unreadable quantity", () => {
@@ -181,7 +241,6 @@ test("receives a bunch only when every item is ours or one of the exact UPS name
     assert.equal(result.product_type, productType, category);
   }
   assert.equal(opportunityResult("Laptop (Q2), Tablet (Q2)").reject, "product");
-  assert.equal(opportunityResult("A3 Size Multifunction Printer (MFP) (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2)").reject, "product");
   assert.equal(opportunityResult("Line Interactive UPS With AVR (V3) (Q2), All in One PC (V2) (Q2)").reject, "product");
   assert.equal(opportunityResult("Line Intractive UPS With AVR (Q2), All in One PC (V2) (Q2)").reject, "product");
   assert.equal(opportunityResult("Online UPS (V2) (Q2), All in One PC (V2) (Q2)").reject, "product");
@@ -983,4 +1042,29 @@ test('the price match popup is closed with x / Cancel and never with an accept b
   assert.equal(await closePriceMatchModal(modal), true);
   assert.deepEqual(clicked, ['Cancel']);
   assert.ok(!clicked.some((label) => /accept/i.test(label)));
+});
+
+test("reads My Representations rows, keeping a spanned Bid Section and dropping Read more", () => {
+  const start = source.indexOf("const representationCellText");
+  const end = source.indexOf("// GeM cuts long representations off", start);
+  assert.ok(start >= 0 && end > start, "representation table helpers must remain discoverable");
+  const cell = (innerText, tagName = "TD") => ({ innerText, tagName });
+  const row = (...cells) => ({ innerText: cells.map((item) => item.innerText).join(" "), querySelectorAll: () => cells });
+  const second = cell("Ground 2: Restriction to top 3 IDC brands ...Read more");
+  // As in GeM's popup: Bid Section spans both rows, so the second has two cells.
+  const rows = [
+    row(cell("Bid Section", "TH"), cell("Query/Representation", "TH"), cell("Submitted On", "TH")),
+    row(cell("Bid Eligibility Criteria"), cell("Ground 1: Mandatory US/Europe-based certifications...Read more"), cell("17-11-2026 11:20 AM")),
+    row(second, cell("17-11-2026 11:20 AM")),
+  ];
+  const context = {
+    text: (node) => String(node?.innerText || node?.textContent || "").replace(/\s+/g, " ").trim(),
+    table: { querySelectorAll: () => rows },
+    fullText: new Map([[second, "Ground 2: Restriction to top 3 IDC brands, read in full."]]),
+  };
+  vm.runInNewContext(`${source.slice(start, end)}; result = representationRows(table, fullText);`, context);
+  assert.deepEqual(JSON.parse(JSON.stringify(context.result)), [
+    { bid_section: "Bid Eligibility Criteria", representation: "Ground 1: Mandatory US/Europe-based certifications", submitted_on: "17-11-2026 11:20 AM" },
+    { bid_section: "Bid Eligibility Criteria", representation: "Ground 2: Restriction to top 3 IDC brands, read in full.", submitted_on: "17-11-2026 11:20 AM" },
+  ]);
 });

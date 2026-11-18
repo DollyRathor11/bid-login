@@ -52,7 +52,6 @@ class GemOpportunityProductRulesTests(SimpleTestCase):
             "All in One PC (V2) (Q2), Line Intractive UPS With AVR (Q2)",
             "All in One PC (V2) (Q2), Online UPS (V2) (Q2)",
             "All in One PC (V2) (Q2), Online UPS (Q2)",
-            "A3 Size Multifunction Printer (MFP), A4 and Legal Size Multifunction Printer (MFP)",
             "Line Interactive UPS With AVR (V2) (Q2), "
             "Online UPS (≤10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2)",
         ]:

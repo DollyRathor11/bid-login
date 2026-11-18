@@ -23,3 +23,11 @@ export function findUnpricedComponent(values, pairs) {
     return choice !== "" && choice !== "None" && !(Number.isFinite(price) && price > 0);
   }) || null;
 }
+
+// The user must read EPBG (%) off the bid: 0, a number, or NA. Left blank it
+// used to be saved as 0, which let admin approve without an EPBG price.
+export const EPBG_INPUT_RULES = {
+  required: true,
+  pattern: String.raw`\s*(\d+(\.\d+)?\s*%?|[Nn]\.?\s*\/?\s*[Aa]\.?|[Nn]ot\s+[Aa]pplicable)\s*`,
+  title: "Enter the bid's EPBG: 0, a number such as 3, or NA.",
+};

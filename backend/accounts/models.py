@@ -424,6 +424,33 @@ class GemCounterOffer(models.Model):
         return f"{self.bid_no}: {self.our_offer} vs L1 {self.l1_price}"
 
 
+class GemRepresentationResult(models.Model):
+    """An ongoing bid on which representations were submitted, read by the
+    extension's My Representation scan from the bid card's My Representations
+    popup. GeM shows them only to the login that submitted them, so the scan
+    runs under the "Representation" GeM login."""
+    bid_no = models.CharField(max_length=100, unique=True)
+    product_type = models.CharField(max_length=20, choices=GemBidResult.PRODUCT_CHOICES, default="desktop")
+    item_name = models.CharField(max_length=500, blank=True, default="")
+    quantity = models.PositiveIntegerField(blank=True, null=True)
+    department = models.TextField(blank=True, default="")
+    start_date = models.DateTimeField(blank=True, null=True)
+    end_date = models.DateTimeField(blank=True, null=True)
+    # Rows of the popup's My Representations table: bid_section,
+    # representation, submitted_on.
+    representations = models.JSONField(default=list, blank=True)
+    submitted_at = models.DateTimeField(blank=True, null=True)  # the latest Submitted On
+    last_synced_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "gem_representation_bids"
+        ordering = ["-submitted_at", "-last_synced_at"]
+
+    def __str__(self):
+        return f"{self.bid_no}: {len(self.representations or [])} representation(s)"
+
+
 class GemBidOpportunity(models.Model):
     bid_no = models.CharField(max_length=100, unique=True)
     bid_date = models.DateTimeField(blank=True, null=True)

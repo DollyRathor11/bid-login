@@ -1,6 +1,9 @@
 const DEFAULT_API = "http://127.0.0.1:8000/api";
 const GEM_BID_LIST_URL = "https://bidplus.gem.gov.in/seller-bids";
 const AUTO_SYNC_ALARM = "acxxel-gem-bid-sync";
+// The GeM login whose representations My Representation reads; gem-login-id.js
+// records which User Id logged in last.
+const REPRESENTATION_GEM_USER_ID = "Representation";
 const ACXXEL_APP_URLS = [
   "http://localhost:5173/*",
   "http://127.0.0.1:5173/*",
@@ -647,6 +650,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (["START_GEM_BID_SYNC", "START_GEM_OPPORTUNITY_SYNC"].includes(message.type)) {
       const opportunityScan = message.type === "START_GEM_OPPORTUNITY_SYNC";
       const stateKey = opportunityScan ? "gemOpportunitySync" : "gemBidSync";
+      // GeM shows My Representations only to the login that submitted them.
+      const representationScan = opportunityScan && message.mode === "representation";
+      if (representationScan) {
+        const { gemLoginUserId } = await chrome.storage.local.get("gemLoginUserId");
+        if (String(gemLoginUserId || "").trim().toLowerCase() !== REPRESENTATION_GEM_USER_ID.toLowerCase()) {
+          const loginMessage = `To view My Representation, you must log in to GeM with the "${REPRESENTATION_GEM_USER_ID}" User Id. Log out of GeM, log in with the ${REPRESENTATION_GEM_USER_ID} ID, then scan again.`;
+          // Stored, so the popup keeps showing it instead of its idle text.
+          await chrome.storage.local.set({ gemOpportunitySync: {
+            status: "failed", message: loginMessage, mode: "representation", updatedAt: Date.now(),
+          } });
+          throw new Error(loginMessage);
+        }
+      }
       await recoverAcxxelSession();
       const saved = await settings();
       if (!saved.token) throw new Error("Open Acxxel and log in before syncing GeM bids.");
@@ -666,17 +682,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Retry Sync continues whichever list scan (disqualified/clarification/
       // counter offer) stopped.
       const requestedMode = message.mode || (message.resume ? syncStates.gemBidSync?.mode : "");
-      const scanMode = opportunityScan ? null
+      const scanMode = opportunityScan ? (representationScan ? "representation" : null)
         : ["clarification", "counteroffer"].includes(requestedMode) ? requestedMode : "disqualified";
       const resume = retryState ? {
         page: retryPage, saved: Number(retryState.saved || 0),
         rejected: Number(retryState.rejected || 0), checked: Number(retryState.checked || 0),
         pending: Array.isArray(retryState.pending) ? retryState.pending : [],
       } : opportunityRetry ? { ...opportunityRetry, serverRecoveryAttempts: 0 } : null;
-      const alreadyRunning = [syncStates.gemBidSync, syncStates.gemOpportunitySync]
-        .some((state) => state && ACTIVE_SYNC_STATUSES.has(state.status));
-      if (alreadyRunning) {
-        throw new Error("Another GeM scan is already running or paused. Finish or stop it before starting a second scan.");
+      // Bid To Be Participated and the list scans (Disqualified/Clarification/
+      // Counter Offer) can run at the same time, each in its own Seller Bid
+      // List tab; only a second scan of the same kind is refused.
+      if (ACTIVE_SYNC_STATUSES.has(syncStates[stateKey]?.status)) {
+        throw new Error(opportunityScan
+          ? "A Bid To Be Participated / My Representation scan is already running or paused. Finish or stop it first."
+          : "A Disqualified / Clarification / Counter Offer scan is already running or paused. Finish or stop it first.");
       }
       const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true });
       let sellerTabs = await chrome.tabs.query({ url: "https://bidplus.gem.gov.in/seller-bids*" });
@@ -714,23 +733,43 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const activeSellerTab = activeTabs.find((item) => (
         /^https:\/\/bidplus\.gem\.gov\.in\/seller-bids(?:[/?#]|$)/i.test(item.url || "")
       ));
-      const probes = await Promise.all(sellerTabs.map(async (candidate) => {
+      const allProbes = await Promise.all(sellerTabs.map(async (candidate) => {
         try {
           const result = await chrome.tabs.sendMessage(candidate.id, { type: "PROBE_GEM_BID_SYNC" });
-          return { tab: candidate, cardCount: Number(result?.cardCount || 0), visible: Boolean(result?.visible) };
+          return { tab: candidate, cardCount: Number(result?.cardCount || 0), visible: Boolean(result?.visible), busy: Boolean(result?.syncing) };
         } catch {
-          return { tab: candidate, cardCount: -1, visible: false };
+          return { tab: candidate, cardCount: -1, visible: false, busy: false };
         }
       }));
+      // A tab already running the other kind of scan is left alone.
+      let probes = allProbes.filter((item) => !item.busy);
+      if (!probes.length && allProbes.length) {
+        if (opportunityScan) {
+          throw new Error("The open Seller Bid List tab is busy with another scan. Open Seller Bid List in a new tab, "
+            + "select the GeM categories there, then click Scan again.");
+        }
+        // The list scans set their own filters, so they get a new tab of
+        // their own on the already logged-in bidplus session.
+        await chrome.storage.local.set({ [stateKey]: {
+          status: "starting", message: "Opening a second GeM Seller Bid List tab...", updatedAt: Date.now(),
+        } });
+        const created = await chrome.tabs.create({ url: SELLER_BID_LIST_URL, active: false });
+        const keepStarting = () => chrome.storage.local.set({ [stateKey]: {
+          status: "starting", message: "Opening a second GeM Seller Bid List tab...", updatedAt: Date.now(),
+        } });
+        const opened = await waitForSellerBidList(new Set([created.id]), keepStarting, false);
+        probes = [{ tab: opened, cardCount: 0, visible: false, busy: false }];
+      }
       probes.sort((a, b) => (b.cardCount - a.cardCount) || (Number(b.visible) - Number(a.visible)));
       const activeProbe = probes.find((item) => item.tab.id === activeSellerTab?.id);
-      const tab = activeProbe?.cardCount > 0 ? activeSellerTab : probes[0]?.tab || activeSellerTab || sellerTabs[0];
+      const tab = activeProbe?.cardCount > 0 ? activeSellerTab : probes[0]?.tab;
       if (!tab?.id) {
         throw new Error("Open Seller Bid List from the logged-in GeM Bids menu, then click Sync. Your current tab was not redirected.");
       }
       await chrome.storage.local.set({ [stateKey]: {
         status: "starting",
-        message: opportunityScan
+        message: representationScan ? "Starting My Representation scan..."
+          : opportunityScan
           ? resume ? `Resuming Bid To Be Participated scan from page ${resume.page}...` : "Starting Bid To Be Participated scan..."
           : resume ? `Resuming ${scanMode} bid sync from page ${resume.page}...` : `Starting ${scanMode} bid sync...`,
         page: resume?.page || 0,
@@ -907,6 +946,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const body = JSON.stringify({ results: message.results || [] });
       const result = await api("/gem/clarification-results/", { method: "POST", body });
       await mirrorToOtherBackends("/gem/clarification-results/", body);
+      return {
+        ok: true,
+        saved: result.saved || 0,
+        created: result.created || 0,
+        updated: result.updated || 0,
+        rejected: result.rejected || 0,
+        rejections: result.rejections || [],
+      };
+    }
+    if (message.type === "SAVE_GEM_REPRESENTATIONS") {
+      const body = JSON.stringify({ results: message.results || [] });
+      const result = await api("/gem/representation-results/", { method: "POST", body });
+      await mirrorToOtherBackends("/gem/representation-results/", body);
       return {
         ok: true,
         saved: result.saved || 0,

@@ -183,6 +183,7 @@ urlpatterns = [
     path("gem/clarification-results/<int:result_id>/", views.delete_gem_clarification_result, name="delete_gem_clarification_result"),
     path("gem/counter-offers/", views.gem_counter_offers, name="gem_counter_offers"),
     path("gem/counter-offers/<int:result_id>/", views.delete_gem_counter_offer, name="delete_gem_counter_offer"),
+    path("gem/representation-results/", views.gem_representation_results, name="gem_representation_results"),
     path("gem/bid-opportunities/", views.gem_bid_opportunities, name="gem_bid_opportunities"),
     path("gem/bid-opportunities/parse-pdf/", views.parse_gem_bid_pdf, name="parse_gem_bid_pdf"),
     path("gem/bid-links/", views.gem_bid_links, name="gem_bid_links"),

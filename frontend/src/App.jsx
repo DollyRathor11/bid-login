@@ -56,19 +56,12 @@ import DocumentPrintView from "./pages/Documents/DocumentPrintView";
 import DisqualifiedBidsPanel from "./pages/Desktop/Analyser/DisqualifiedBidsPanel";
 import ClarificationBidsPanel from "./pages/Desktop/Analyser/ClarificationBidsPanel";
 import MatchPricePanel from "./pages/Desktop/Analyser/MatchPricePanel";
+import RepresentationBidsPanel from "./pages/Desktop/Analyser/RepresentationBidsPanel";
 import FinancialRankingPanel from "./pages/Desktop/Analyser/FinancialRankingPanel";
 import AdminBidToBeParticipated from "./pages/Admin/AdminBidToBeParticipated";
 import ComponentRates from "./pages/Admin/ComponentRates.jsx";
 import AddComponent from "./pages/Admin/AddComponent.jsx";
 import UserAssignedBids from "./pages/User/UserAssignedBids.jsx";
-
-const ComingSoon = ({ product }) => (
-  <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-    <div className="text-6xl">🚧</div>
-    <h2 className="text-2xl font-bold text-gray-600">{product} — Coming Soon</h2>
-    <p className="text-gray-400 text-sm">This section is currently under development.</p>
-  </div>
-);
 
 const AdminWelcome = () => (
   <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
@@ -87,7 +80,7 @@ function App() {
         <Route path="/login/post-bid" element={<Login showRoleSelector={false} fixedRole="management" />} />
         <Route path="/management-dashboard" element={<ManagementNavbar />}>
           <Route index element={null} />
-          <Route path="my-representation" element={<ComingSoon product="My Representation" />} />
+          <Route path="my-representation" element={<RepresentationBidsPanel />} />
           <Route path="match-price" element={<MatchPricePanel />} />
           <Route path="disqualified-bids" element={<DisqualifiedBidsPanel showProductFilter />} />
           <Route path="clarification-bids" element={<ClarificationBidsPanel />} />

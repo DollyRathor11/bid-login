@@ -296,6 +296,9 @@
   // Bids read by the scan in progress. They only become "known" once that
   // scan completes; an interrupted run must not hide the pages it never read.
   const OPPORTUNITY_RUN_BIDS_KEY = "gemOpportunityRunBids";
+  // Every bid the current Bid To Be Participated scan did not save, with the
+  // reason, for the popup's Copy status. Cleared when a new scan starts.
+  const OPPORTUNITY_REJECTED_LOG_KEY = "gemOpportunityRejectedBids";
   const OPPORTUNITY_KNOWN_PAGES_TO_STOP = 2;
   // Scans that stopped before the end, per category set: the page where each
   // stopped and the bids it read. The next scan of those categories reads the
@@ -343,6 +346,9 @@
     ["toner", "toner cartridges / ink cartridges"],
     ["printer", "a4 and legal size multifunction printer (mfp)"],
   ];
+  const A3_CARD_ITEM_NAMES = [
+    ["a3_mfp", "a3 size multifunction printer (mfp)"],
+  ];
   const BUNCH_ONLY_CARD_ITEM_NAMES = [
     ["ups", "line interactive ups with avr (v2)"],
     ["ups", "online ups (≤10 kva) with battery conforming to is 16242 (part 1)"],
@@ -362,10 +368,10 @@
     const isBunch = items.length > 1;
     const productOf = (item) => {
       const lower = item.toLowerCase();
-      const patterns = isBunch ? [...OPPORTUNITY_PRODUCTS, ...BUNCH_ONLY_PRODUCTS] : OPPORTUNITY_PRODUCTS;
+      const patterns = [...OPPORTUNITY_PRODUCTS, ...A3_PRODUCTS, ...(isBunch ? BUNCH_ONLY_PRODUCTS : [])];
       const byPattern = patterns.find(([, pattern]) => pattern.test(item))?.[0];
       if (byPattern) return byPattern;
-      const names = isBunch ? [...OPPORTUNITY_CARD_ITEM_NAMES, ...BUNCH_ONLY_CARD_ITEM_NAMES] : OPPORTUNITY_CARD_ITEM_NAMES;
+      const names = [...OPPORTUNITY_CARD_ITEM_NAMES, ...A3_CARD_ITEM_NAMES, ...(isBunch ? BUNCH_ONLY_CARD_ITEM_NAMES : [])];
       return names.find(([, name]) => name.startsWith(lower) || lower.startsWith(name))?.[0] || null;
     };
     // A very short visible name could still be one of ours; leave it alone.
@@ -932,6 +938,105 @@
     return clarificationPopupRows(control, CLARIFICATION_DETAILS_TITLE, "clarification request details");
   }
 
+  // "My Representations" on an Ongoing Bids card opens the "Publish
+  // Representations" popup: a Create Representation form, then the
+  // My Representations table (Bid Section | Query/Representation | Submitted On).
+  const REPRESENTATION_MODAL_TITLE = /publish\s+representations?/i;
+
+  function representationControl(card) {
+    return [...card.querySelectorAll("a, button, [role=button], [ng-click], [data-ng-click]")]
+      .find((node) => visible(node) && /^my\s+representations?$/i.test(text(node))) || null;
+  }
+
+  const representationCellText = (cell) => text(cell)
+    .replace(/\s*(?:\.\.\.|…)?\s*read\s+(?:more|less)\s*$/i, "")
+    .trim();
+
+  function representationTable(modal) {
+    return [...modal.querySelectorAll("table")]
+      .find((table) => !table.querySelector("table, textarea, select") && /submitted\s+on/i.test(text(table))) || null;
+  }
+
+  // One row per representation. Bid Section spans the rows of its section,
+  // so a row with fewer cells belongs to the section above it. fullText holds
+  // the text of cells whose "Read more" opened a popup of its own.
+  function representationRows(table, fullText = new Map()) {
+    const allRows = [...table.querySelectorAll("tr")];
+    const headerIndex = allRows.findIndex((row) => /submitted\s+on/i.test(text(row)));
+    const rows = [];
+    let section = "";
+    for (const row of allRows.slice(headerIndex + 1)) {
+      const cells = [...row.querySelectorAll(":scope > td, :scope > th")];
+      const values = cells.map(representationCellText);
+      if (cells.length < 2 || values.every((value) => !value)) continue;
+      if (cells.length >= 3) section = values[0] || section;
+      const representation = fullText.get(cells[cells.length - 2]) || values[values.length - 2];
+      if (representation) rows.push({ bid_section: section, representation, submitted_on: values[values.length - 1] });
+    }
+    return rows;
+  }
+
+  // GeM cuts long representations off at "...Read more". Click each one so the
+  // full text is read: it either expands in place or opens its own popup,
+  // whose text then replaces the cut-off cell.
+  async function expandRepresentations(modal, table) {
+    const fullText = new Map();
+    const links = [...table.querySelectorAll("a, span, button")]
+      .filter((node) => visible(node) && /^read\s+more$/i.test(text(node)));
+    for (const link of links) {
+      stopIfRequested();
+      const cell = link.closest("td");
+      const others = new Set(document.querySelectorAll("[role=dialog], .modal, .modal-content, .ngdialog-content"));
+      activateControl(link);
+      await sleep(600);
+      const popup = [...document.querySelectorAll("[role=dialog], .modal, .modal-content, .ngdialog-content")]
+        .find((node) => !others.has(node) && visible(node) && !node.contains(modal) && !modal.contains(node));
+      if (popup) {
+        if (cell) fullText.set(cell, text(popup).replace(/\s*(?:close|×)\s*$/i, "").trim());
+        await closeModal(popup);
+        await sleep(300);
+      }
+    }
+    return fullText;
+  }
+
+  async function representationsFor(card) {
+    const control = representationControl(card);
+    if (!control) return { rows: [], error: "" };
+    const stale = openClarificationModal(REPRESENTATION_MODAL_TITLE);
+    if (stale && !await closeModal(stale)) return { rows: [], error: "previous representation popup is still open" };
+    if (gemTransientErrorMessage()) return { rows: [], error: "GeM temporarily rejected the representation request" };
+    await waitForGemRemoteActionSlot();
+    activateControl(control);
+    let modal = null;
+    const openEnd = Date.now() + 8000;
+    while (!modal && Date.now() < openEnd) {
+      stopIfRequested();
+      throwIfGemTransientError();
+      await sleep(250);
+      modal = openClarificationModal(REPRESENTATION_MODAL_TITLE);
+    }
+    if (!modal) return { rows: [], error: `representation popup did not open; control: ${describeControl(control)}` };
+    // The table loads after the popup opens; a popup with none after a few
+    // seconds has no representations.
+    let table = null;
+    const tableEnd = Date.now() + 4000;
+    while (!table && Date.now() < tableEnd) {
+      stopIfRequested();
+      throwIfGemTransientError();
+      await sleep(250);
+      table = representationTable(modal);
+    }
+    let rows = [];
+    if (table) {
+      const fullText = await expandRepresentations(modal, table);
+      rows = representationRows(representationTable(modal) || table, fullText);
+    }
+    if (!await closeModal(modal)) return { rows: [], error: "representation popup could not be closed" };
+    await sleep(350);
+    return { rows, error: "" };
+  }
+
   // "Counter Offer Confirmation: Accepted" on a card is already decided; any
   // other value (a link to answer GeM's L1 price) is a pending counter offer.
   const COUNTER_OFFER_LABEL = /counter\s*offer\s*confirmation\s*:?\s*/i;
@@ -1465,6 +1570,15 @@
       activateControl(next);
       if (await waitForPageChange(signature, 15000)) return { advanced: true };
     }
+    // A short result list (for example a single small category such as A3
+    // MFP) fits on one page and GeM draws no pager at all. Cards that are
+    // rendered, fewer than a full page of 10, with no pager, are the end.
+    if (lastReason === "missing" && !gemTransientErrorMessage()) {
+      const cards = currentCards();
+      if (cards.length > 0 && cards.length < 10 && paginationTotalPages() <= page) {
+        return { advanced: false, reason: "end" };
+      }
+    }
     // GeM occasionally leaves the Next control visually enabled while its
     // Angular click handler stops responding. Its seller list also supports a
     // page hash, so use that as a final navigation fallback and still verify
@@ -1956,6 +2070,11 @@
     ["toner", /^toner\s+cartridges?\s*(?:\/|and)\s*ink\s+cartridges?$/i],
     ["printer", /^a4\b(?=[\s\S]*(?:multifunction|\bmfp\b))(?=[\s\S]*(?:printer|\bp\b))[\s\S]*$/i],
   ];
+  // A3 MFP: alone it follows no rule but delivery in Uttar Pradesh; inside a
+  // bunch the bunch keeps its usual rules and must also be delivered in UP.
+  const A3_PRODUCTS = [
+    ["a3_mfp", /^a3\b(?=[\s\S]*(?:multifunction|\bmfp\b))(?=[\s\S]*(?:printer|\bp\b))[\s\S]*$/i],
+  ];
   // UPS categories are received only inside a bunch bid, never on their own,
   // and only under these exact GeM names.
   const BUNCH_ONLY_PRODUCTS = [
@@ -1969,21 +2088,36 @@
     ["Printer", "A4 and Legal Size Multifunction Printer", /a4\s+and\s+legal\s+size\s+multifunction\s+printer/i],
     ["Toner", "Toner Cartridges / Ink Cartridges", /toner\s+cartridges?\s*(?:\/|and)\s*ink\s+cartridges?/i],
     ["AIO", "All in One PC", /all\s+in\s+one\s+pc/i],
+    ["A3 MFP", "A3 Size Multifunction Printer", /a3\s+size\s+multifunction\s+printer/i],
   ];
 
   // Printer bids are received at any quantity and however far off they end;
   // Workstation bids at any quantity. Every other rule still applies.
-  const NO_MINIMUM_QUANTITY_PRODUCTS = new Set(["printer", "workstation"]);
-  const NO_DAY_LIMIT_PRODUCTS = new Set(["printer"]);
+  // A3 MFP has neither rule (its only rule is delivery in Uttar Pradesh).
+  const NO_MINIMUM_QUANTITY_PRODUCTS = new Set(["printer", "workstation", "a3_mfp"]);
+  const NO_DAY_LIMIT_PRODUCTS = new Set(["printer", "a3_mfp"]);
 
-  // A Printer bid whose Printer Technology is only Inkjet is not received;
-  // one that also allows Electrophotography/Xerography (Laser/LED) is kept,
-  // and so is one whose technology could not be read.
+  // Uttar Pradesh PIN codes: 201xxx-285xxx, less the Uttarakhand ranges
+  // inside them (246, 248, 249, 263 and parts of 244, 247 and 262).
+  function upDeliveryPin(pin) {
+    const value = Number(pin);
+    const prefix = Math.floor(value / 1000);
+    if (prefix < 201 || prefix > 285) return false;
+    if ([246, 248, 249, 263].includes(prefix)) return false;
+    if (value >= 244712 && value <= 244717) return false;
+    if (value >= 247656 && value <= 247699) return false;
+    if ((value >= 262308 && value <= 262311) || (value >= 262401 && value <= 262406) || (value >= 262501 && value <= 262599)) return false;
+    return true;
+  }
+
+  // A Printer bid in which any printer's Printer Technology is only Inkjet is
+  // not received, even when another printer in it is Laser. A printer whose
+  // own row also allows Electrophotography/Xerography (Laser/LED) is fine,
+  // and so is a bid whose technology could not be read.
   function inkjetOnlyPrinter(flat) {
-    const values = [...flat.matchAll(/Print(?:er|ing)?\s+Technology\s*:?\s*(.{0,120})/gi)].map((match) => match[1]);
-    if (!values.length) return false;
-    const text = values.join(" ");
-    return /ink\s*-?\s*jet/i.test(text) && !/laser|\bled\b|electro\s*-?\s*photo|xerograph/i.test(text);
+    return [...flat.matchAll(/Print(?:er|ing)?\s+Technology\s*:?\s*((?:(?!Print(?:er|ing)?\s+Technology).){0,120})/gi)]
+      .map((match) => match[1].split(/Type\s+of\s+Printing/i, 1)[0])
+      .some((value) => /ink\s*-?\s*jet/i.test(value) && !/laser|\bled\b|electro\s*-?\s*photo|xerograph/i.test(value));
   }
 
   function opportunityFromText(bidNo, raw, cardStartDate = "", cardQuantity = 0) {
@@ -1992,18 +2126,11 @@
     const quantity = Number(flat.match(/\bTotal\s+Quantity\s*:?\s*(\d+)\b/i)?.[1]
       || cardQuantity
       || flat.match(/\bQuantity\s*:?\s*(\d+)\b/i)?.[1] || 0);
-    // A bid whose quantity could not be read is rejected rather than risk
-    // saving a small one; the minimum itself depends on the product (below).
-    if (!quantity) return { reject: "quantity_unread" };
     const itemName = bounded(
       "Item\\s+Category",
       "(?:Minimum\\s+Average|Years?\\s+of\\s+Past|MSE\\s+Relaxation|Startup\\s+Relaxation|Bidder\\s+Turnover|$)"
     ) || bounded("Items?", "(?:Quantity|Department|Start\\s+Date|End\\s+Date|$)");
     const englishItemName = itemName.split(/[\u0900-\u097f]/, 1)[0];
-    if (
-      /(?:\(\s*PAC\s*Only\s*\)|\bPAC\s*Only\b)/i.test(englishItemName)
-      || /\bIs\s+PAC\s*:?\s*(?:Yes|True)\b/i.test(flat)
-    ) return { reject: "pac" };
     const qMarkers = [...englishItemName.matchAll(/\(Q\d+\)/gi)];
     const cleanItemName = (qMarkers.length ? englishItemName.slice(0, qMarkers.at(-1).index + qMarkers.at(-1)[0].length) : englishItemName)
       .replace(/\s*\(Q\d+\)\s*/gi, "")
@@ -2011,27 +2138,49 @@
       .trim().replace(/^,|,$/g, "").trim();
     const categories = cleanItemName.split(/\s*,\s*/).map((value) => value.trim()).filter(Boolean);
     const isBunch = categories.length > 1;
+    // A3 MFP alone follows no rule except delivery in Uttar Pradesh: no PAC,
+    // quantity, blocked-location or 120-day rule.
+    const isA3 = !isBunch && A3_PRODUCTS.some(([, pattern]) => pattern.test(categories[0] || ""));
+    if (
+      !isA3 && (
+        /(?:\(\s*PAC\s*Only\s*\)|\bPAC\s*Only\b)/i.test(englishItemName)
+        || /\bIs\s+PAC\s*:?\s*(?:Yes|True)\b/i.test(flat)
+      )
+    ) return { reject: "pac" };
     const matchedProducts = categories.map((category) => (
       OPPORTUNITY_PRODUCTS.find(([, pattern]) => pattern.test(category))
+      || A3_PRODUCTS.find(([, pattern]) => pattern.test(category))
       || (isBunch ? BUNCH_ONLY_PRODUCTS.find(([, pattern]) => pattern.test(category)) : null)
       || null
     ));
+    const hasA3 = matchedProducts.some((match) => match?.[0] === "a3_mfp");
     // Every category must be one of ours; inside a bunch bid (several item
     // categories) a UPS category is allowed too. A bunch needs at least one
     // of our products and is filed under the first one.
     const product = matchedProducts.find((match) => match && match[0] !== "ups");
     if (!categories.length || matchedProducts.some((match) => !match) || !product) return { reject: "product" };
-    // Bids below 5 units are not received, except Printer and Workstation.
-    // A bunch lists a quantity per item (often 1 each), so it has no minimum.
+    // No quantity rule applies to a bunch, which lists a quantity per item
+    // (often 1 each). A single item whose quantity could not be read is
+    // rejected rather than risk saving a small one; bids below 5 units are
+    // not received, except Printer and Workstation.
+    if (!isBunch && !isA3 && !quantity) return { reject: "quantity_unread" };
     if (!isBunch && quantity < 5 && !NO_MINIMUM_QUANTITY_PRODUCTS.has(product[0])) return { reject: "quantity" };
-    if (!isBunch && product[0] === "printer" && inkjetOnlyPrinter(flat)) return { reject: "inkjet" };
+    // Bunch bids too: a printer anywhere in the bid is checked.
+    if (matchedProducts.some((match) => match?.[0] === "printer") && inkjetOnlyPrinter(flat)) return { reject: "inkjet" };
     const deliveryText = bounded(
       "Consignees?/Reporting\\s+Officer\\s+and\\s+Quantity",
       "(?:Special\\s+terms|Buyer\\s+Added|Technical\\s+Specifications|$)"
     ) || bounded("(?:Consignee|Delivery)\\s+Address", "(?:Quantity|Delivery\\s+Days|$)");
     const pins = deliveryText.match(/\b[1-9]\d{5}\b/g) || [];
     const normalizedDelivery = deliveryText.toLowerCase();
-    if (pins.length) {
+    if (hasA3) {
+      // Any bid with an A3 MFP (alone or in a bunch): every consignee must be
+      // in Uttar Pradesh; an unreadable address is not received.
+      const inUp = pins.length
+        ? pins.every(upDeliveryPin)
+        : /uttar\s*pradesh/i.test(deliveryText) && !/uttara?khand/i.test(deliveryText);
+      if (!inUp) return { reject: "location" };
+    } else if (pins.length) {
       if (pins.some((pin) => ACXXEL_BLOCKED_DELIVERY_PINS.has(pin))) return { reject: "location" };
     } else {
       const blockedDistrict = [...ACXXEL_BLOCKED_DELIVERY_DISTRICTS].some((district) => normalizedDelivery.includes(district));
@@ -2053,8 +2202,9 @@
     const endTime = Date.parse(endDate || "");
     if (endTime && endTime <= Date.now()) return { reject: "expired" };
     if (!endTime && !validityDays) return { reject: "date" };
+    // A bunch is free of the day limit only when every product in it is.
     if (
-      !NO_DAY_LIMIT_PRODUCTS.has(product[0])
+      matchedProducts.some((match) => match[0] !== "ups" && !NO_DAY_LIMIT_PRODUCTS.has(match[0]))
       && (validityDays > 120 || (endTime && endTime - Date.now() > 120 * 86400000))
     ) return { reject: "over120" };
     // The seller-list card is the authoritative current Start Date, including
@@ -2553,6 +2703,13 @@
         ? unfinishedScans[categoryKey] : null;
       const runBids = resume ? await storedBidMap(OPPORTUNITY_RUN_BIDS_KEY) : { ...(unfinished?.bids || {}) };
       if (!resume) await storeBidMap(OPPORTUNITY_RUN_BIDS_KEY, runBids);
+      const rejectedLog = resume ? await storedBidMap(OPPORTUNITY_REJECTED_LOG_KEY) : {};
+      if (!resume) await storeBidMap(OPPORTUNITY_REJECTED_LOG_KEY, rejectedLog);
+      const logRejected = async (bidNo, card, reason, from) => {
+        const items = text(card).match(/\bItems?\s*:\s*(.+?)\s*\bQuantity\s*:/i)?.[1] || "";
+        rejectedLog[bidNo] = { reason, from, items: items.slice(0, 160), page, at: Date.now() };
+        await storeBidMap(OPPORTUNITY_REJECTED_LOG_KEY, rejectedLog);
+      };
       let jumpTarget = Number(unfinished?.page || 0);
       let readBeforePages = 0;
       const saveUnfinished = async (remove = false) => {
@@ -2685,8 +2842,12 @@
             rejected.api += response.rejected || 0;
             for (const item of response.rejections || []) {
               (apiReasons[item.reason] ||= []).push(item.bid_no || bidNo);
+              await logRejected(item.bid_no || bidNo, card, item.reason, "api");
             }
-          } else if (row?.reject) rejected[row.reject] += 1;
+          } else if (row?.reject) {
+            rejected[row.reject] += 1;
+            await logRejected(bidNo, card, row.reject, cardReject ? "card" : "pdf");
+          }
           // A failed detail download is retried by the next scan. Stored after
           // every bid so a retry of this page skips the bids already read.
           if (row?.reject !== "detail") {
@@ -2755,6 +2916,98 @@
       syncing = false;
       activeScanType = "";
       opportunityRetryState = null;
+    }
+  }
+
+  // My Representation scan: walks the same Ongoing Bids list as Bid To Be
+  // Participated (with the categories selected on the page) and saves every
+  // bid whose My Representations table has rows. The background starts it
+  // only under the "Representation" GeM login, the one GeM shows them to.
+  async function scanRepresentationPages() {
+    if (syncing) throw new Error("A GeM bid sync is already running in this tab.");
+    syncing = true;
+    activeScanType = "opportunity";
+    stopRequested = false;
+    pauseRequested = false;
+    let page = 1;
+    let saved = 0;
+    let checked = 0;
+    let failed = 0;
+    let failedInARow = 0;
+    const say = (status, message) => progress(status, `[My Representation] ${message}`, { page, saved, checked, mode: "representation" });
+    try {
+      await say("running", "Preparing GeM Ongoing Bids...");
+      await applyOpportunityFilters();
+      const visited = new Set();
+      while (true) {
+        stopIfRequested();
+        const cards = await waitForBidCards(180000, async (seconds) => {
+          await say("running", `Waiting for GeM bid cards on page ${page} to load (${seconds}s)...`);
+        });
+        const signature = cards.map((item) => item.bidNo).join("|");
+        if (!signature) throw new Error(`GeM bid cards did not load on page ${page}.`);
+        if (visited.has(signature)) throw new Error(`My Representation scan repeated page ${page}.`);
+        visited.add(signature);
+        for (const { bidNo } of cards) {
+          stopIfRequested();
+          await waitWhilePaused({ page, saved, checked });
+          const card = currentCards().find((item) => item.bidNo === bidNo)?.card;
+          if (!card) continue;
+          checked += 1;
+          const result = await representationsFor(card);
+          if (result.error) {
+            failed += 1;
+            failedInARow += 1;
+            if (failedInARow >= 3) throw new Error(`My Representations could not be read for ${bidNo}: ${result.error}`);
+            await say("running", `Skipped ${bidNo}: ${result.error}.`);
+            continue;
+          }
+          failedInARow = 0;
+          if (!result.rows.length) continue;
+          const raw = text(card);
+          const itemName = valueAfterLabel(raw, ["Items", "Item", "Product Name", "Product"]).replace(/^s\s*:\s*/i, "");
+          const quantityText = valueAfterLabel(raw, ["Quantity"]);
+          const record = {
+            bid_no: bidNo,
+            product_type: productType(raw, itemName),
+            item_name: itemName,
+            quantity: Number((quantityText.match(/\d+/) || [])[0]) || null,
+            department: valueAfterLabel(raw, ["Department Name And Address", "Department Name & Address", "Department"]),
+            start_date: dateFrom(valueAfterLabel(raw, ["Start Date", "Bid Start Date"])),
+            end_date: dateFrom(valueAfterLabel(raw, ["End Date", "Bid End Date"])),
+            representations: result.rows,
+            submitted_at: result.rows.map((row) => dateFrom(row.submitted_on)).filter(Boolean).sort().pop() || "",
+          };
+          const response = await runtimeMessage({ type: "SAVE_GEM_REPRESENTATIONS", results: [record] });
+          if (!response.saved) {
+            const reason = (response.rejections || []).map((item) => item.reason).join(", ");
+            throw new Error(`${bidNo}: representation save not confirmed by dashboard API${reason ? ` (${reason})` : ""}.`);
+          }
+          saved += response.saved;
+          await say("running", `Saved ${bidNo}: ${result.rows.length} representation(s).`);
+        }
+        await say("running", `Page ${page} done: checked ${checked}, ${saved} with representations${failed ? `, ${failed} not read` : ""}.`);
+        // Same pause as the other scans: GeM rate-limits rapid page changes.
+        await sleep(3000 + Math.floor(Math.random() * 2000));
+        stopIfRequested();
+        const advance = await advancePageWithRecovery(signature, page, async (attempt, reason) => {
+          await say("running", `GeM pagination on page ${page} is ${reason}; retrying (${attempt}/${MAX_PAGINATION_RECOVERY_ATTEMPTS})...`);
+        });
+        if (!advance.advanced) break;
+        page += 1;
+      }
+      await say("complete", `Scan complete. Checked ${checked} bids; ${saved} with representations saved${failed ? `; ${failed} could not be read` : ""}.`);
+    } catch (error) {
+      if (error.code === "GEM_SYNC_STOPPED") {
+        await say("stopped", `Scan stopped after ${checked} bids; ${saved} with representations saved.`);
+        return;
+      }
+      await say("failed", `${error.message || "My Representation scan failed."} Already saved bids are kept.`);
+      error.syncProgressReported = true;
+      throw error;
+    } finally {
+      syncing = false;
+      activeScanType = "";
     }
   }
 
@@ -3007,7 +3260,9 @@
     const cardCount = currentCards().length;
     sendResponse({ ok: true, started: true, cardCount });
     window.setTimeout(() => {
-      const runner = message.type === "START_GEM_OPPORTUNITY_SYNC" ? scanOpportunityPages : scanAllPages;
+      const runner = message.type === "START_GEM_OPPORTUNITY_SYNC"
+        ? message.mode === "representation" ? scanRepresentationPages : scanOpportunityPages
+        : scanAllPages;
       if (message.type === "START_GEM_BID_SYNC") {
         disqualifiedScanMode = listScanMode(message.mode);
       }

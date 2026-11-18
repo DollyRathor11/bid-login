@@ -15,12 +15,13 @@ from .GemOpportunityCleanup import (
     MINIMUM_QUANTITY,
     NO_DAY_LIMIT_PRODUCTS,
     NO_MINIMUM_QUANTITY_PRODUCTS,
+    day_limit_product,
     valid_opportunity_dates,
 )
 from .GemOpportunityRules import classify_opportunity_item, clean_opportunity_item
 
 
-SUPPORTED_PRODUCT_TYPES = {"desktop", "workstation", "toner", "printer", "aio"}
+SUPPORTED_PRODUCT_TYPES = {"desktop", "workstation", "toner", "printer", "aio", "a3_mfp"}
 OPPORTUNITY_MANAGEMENT_ROLES = {"admin", "management"}
 
 
@@ -110,7 +111,10 @@ def gem_bid_opportunities(request):
         )
         visible = [
             row for row in rows[:5000]
-            if valid_opportunity_dates(row.bid_date, row.end_date, now, row.product_type)
+            if valid_opportunity_dates(
+                row.bid_date, row.end_date, now,
+                day_limit_product(classify_opportunity_item(row.product_name), row.product_type),
+            )
         ]
         return JsonResponse({"results": [_data(row) for row in visible]})
     try:
@@ -189,20 +193,24 @@ def gem_bid_opportunities(request):
         bid_date = _date(item.get("bid_date"))
         end_date = _date(item.get("end_date"))
         product_type = classification["product_type"]
-        if not valid_opportunity_dates(bid_date, end_date, now, product_type):
+        limited_type = day_limit_product(classification)
+        if not valid_opportunity_dates(bid_date, end_date, now, limited_type):
             rejections.append({"bid_no": bid_no, "reason": "invalid_date"})
             continue
         validity = item.get("offer_validity_days")
-        max_validity = None if product_type in NO_DAY_LIMIT_PRODUCTS else MAX_DAYS
+        max_validity = None if limited_type in NO_DAY_LIMIT_PRODUCTS else MAX_DAYS
         if validity is not None and (
             type(validity) is not int or validity < 1 or (max_validity and validity > max_validity)
         ):
             rejections.append({"bid_no": bid_no, "reason": "invalid_offer_validity"})
             continue
         quantity = item.get("quantity")
-        # A bunch bid lists each item's own quantity (often 1 each), so the
-        # 5-unit minimum applies only to single-product bids.
-        min_quantity = 1 if product_type in NO_MINIMUM_QUANTITY_PRODUCTS or classification["is_bunch"] else MINIMUM_QUANTITY
+        # A bunch bid lists each item's own quantity (often 1 each), so no
+        # quantity rule applies to it, not even a readable quantity.
+        if classification["is_bunch"] or product_type == "a3_mfp":
+            min_quantity = 0
+        else:
+            min_quantity = 1 if product_type in NO_MINIMUM_QUANTITY_PRODUCTS else MINIMUM_QUANTITY
         if type(quantity) is not int or quantity < min_quantity:
             rejections.append({"bid_no": bid_no, "reason": "minimum_quantity_5"})
             continue
