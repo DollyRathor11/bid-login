@@ -1,6 +1,12 @@
-from django.test import SimpleTestCase
+from unittest.mock import patch
 
-from accounts.views.GemRepresentations import _apply_replies, _carry_replies, _has_pending_reply
+from django.test import SimpleTestCase
+from django.utils import timezone
+
+from accounts.models import GemRepresentationResult
+from accounts.views.GemRepresentations import (
+    _apply_replies, _carry_replies, _has_pending_reply, delete_ended_representations,
+)
 
 
 class RepresentationReplyTests(SimpleTestCase):
@@ -29,3 +35,12 @@ class RepresentationReplyTests(SimpleTestCase):
         self.assertEqual(fresh[0]["reply"], "Yes")
         self.assertEqual(fresh[0]["reply_published_on"], "d")
         self.assertNotIn("reply", fresh[1])
+
+
+class EndedRepresentationTests(SimpleTestCase):
+    def test_bids_whose_end_date_has_passed_are_deleted(self):
+        now = timezone.now()
+        with patch.object(GemRepresentationResult.objects, "filter") as rows:
+            rows.return_value.delete.return_value = (2, {})
+            self.assertEqual(delete_ended_representations(now), 2)
+        rows.assert_called_once_with(end_date__lt=now)

@@ -2,6 +2,7 @@ import json
 import re
 
 from django.db import transaction
+from django.utils import timezone
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -9,6 +10,13 @@ from django.views.decorators.http import require_http_methods
 from ..models import GemBidResult, GemRepresentationResult
 from .Gem import _require_role
 from .GemResults import _parse_datetime
+
+
+# A bid is deleted from the representation list once its GeM End Date has
+# passed (a bid whose End Date was not read stays).
+def delete_ended_representations(now=None):
+    deleted, _ = GemRepresentationResult.objects.filter(end_date__lt=now or timezone.now()).delete()
+    return deleted
 
 
 def _representation_data(result):
@@ -122,6 +130,7 @@ def gem_representation_results(request):
         return error
 
     if request.method == "GET":
+        delete_ended_representations()
         scope = GemRepresentationResult.objects.all()
         if request.GET.get("pending_replies"):
             return JsonResponse({"bid_numbers": [
