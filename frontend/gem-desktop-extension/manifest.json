@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Acxxel GeM Desktop Workflow",
-  "version": "3.75.0",
+  "version": "3.78.0",
   "description": "Fills approved Desktop jobs and reads awarded Bid/RA rankings and seller statuses in an authenticated GeM tab.",
   "permissions": ["storage", "tabs", "alarms", "scripting"],
   "host_permissions": [
@@ -46,6 +46,11 @@
     {
       "matches": ["https://*.gem.gov.in/*"],
       "js": ["src/gem-content.js", "src/blocked-pins.js", "src/gem-bid-sync.js", "src/gem-login-id.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://bidplus.gem.gov.in/all-bids*"],
+      "js": ["src/gem-representation-replies.js"],
       "run_at": "document_idle"
     }
   ]

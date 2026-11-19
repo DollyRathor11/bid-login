@@ -538,6 +538,58 @@ async function startJob(jobId, product) {
   return { waitingForForm: true, tabId: gemTab.id };
 }
 
+// Representation Replies reads the public All Bids page in a tab of its own,
+// searching only the bids that still wait for a reply.
+const GEM_ALL_BIDS_URL = "https://bidplus.gem.gov.in/all-bids";
+const REPLY_STATE_KEY = "gemRepresentationReplySync";
+
+async function waitForTabLoaded(tabId, timeoutMs = 30000) {
+  const end = Date.now() + timeoutMs;
+  while (Date.now() < end) {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.status === "complete") return tab;
+    await new Promise((resolve) => setTimeout(resolve, 300));
+  }
+  throw new Error("The GeM All Bids page did not finish loading.");
+}
+
+async function startRepresentationReplies() {
+  await recoverAcxxelSession();
+  if (!(await settings()).token) throw new Error("Open Acxxel and log in before scanning replies.");
+  const { [REPLY_STATE_KEY]: current } = await chrome.storage.local.get(REPLY_STATE_KEY);
+  if (["starting", "running"].includes(current?.status) && Date.now() - Number(current.updatedAt || 0) < 120000) {
+    throw new Error("Representation Replies is already running.");
+  }
+  const setState = (status, text) => chrome.storage.local.set({ [REPLY_STATE_KEY]: { status, message: text, updatedAt: Date.now() } });
+  await chrome.storage.local.remove("gemRepresentationReplyStop");
+  await setState("starting", "Finding bids waiting for a reply...");
+  let tabId = null;
+  try {
+    const { bid_numbers: bidNumbers = [] } = await api("/gem/representation-results/?pending_replies=1");
+    if (!bidNumbers.length) {
+      await setState("complete", "No bid is waiting for a reply. Run My Representation first if new representations were made.");
+      return { ok: true };
+    }
+    await setState("starting", `Opening GeM All Bids for ${bidNumbers.length} bids...`);
+    tabId = (await chrome.tabs.create({ url: GEM_ALL_BIDS_URL, active: false })).id;
+    const tab = await waitForTabLoaded(tabId);
+    if (!String(tab.url || "").startsWith(GEM_ALL_BIDS_URL)) {
+      throw new Error("GeM did not open All Bids. Log out of GeM, or use a Chrome profile not logged in to GeM.");
+    }
+    let response = null;
+    for (let attempt = 0; attempt < 10 && !response; attempt += 1) {
+      response = await chrome.tabs.sendMessage(tabId, { type: "RUN_GEM_REPRESENTATION_REPLIES", bidNumbers }).catch(() => null);
+      if (!response) await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (!response?.ok) throw new Error(response?.error || "The All Bids page did not respond. Reload the extension and try again.");
+    return { ok: true };
+  } catch (error) {
+    await setState("failed", error.message);
+    if (tabId) await chrome.tabs.remove(tabId).catch(() => {});
+    throw error;
+  }
+}
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     if (message.type === "GEM_SYNC_WAKE") {
@@ -682,7 +734,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // Retry Sync continues whichever list scan (disqualified/clarification/
       // counter offer) stopped.
       const requestedMode = message.mode || (message.resume ? syncStates.gemBidSync?.mode : "");
-      const scanMode = opportunityScan ? (representationScan ? "representation" : null)
+      const scanMode = opportunityScan ? (representationScan || opportunityRetry?.mode === "representation" ? "representation" : null)
         : ["clarification", "counteroffer"].includes(requestedMode) ? requestedMode : "disqualified";
       const resume = retryState ? {
         page: retryPage, saved: Number(retryState.saved || 0),
@@ -768,7 +820,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       await chrome.storage.local.set({ [stateKey]: {
         status: "starting",
-        message: representationScan ? "Starting My Representation scan..."
+        message: scanMode === "representation"
+          ? resume ? `Resuming My Representation scan from page ${resume.page}...` : "Starting My Representation scan..."
           : opportunityScan
           ? resume ? `Resuming Bid To Be Participated scan from page ${resume.page}...` : "Starting Bid To Be Participated scan..."
           : resume ? `Resuming ${scanMode} bid sync from page ${resume.page}...` : `Starting ${scanMode} bid sync...`,
@@ -867,7 +920,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const stored = (await chrome.storage.local.get("gemOpportunitySync")).gemOpportunitySync;
       const retry = stored?.retry;
       if (!retry?.page) throw new Error("This scan has no saved page to retry from.");
-      if (!retry.categoryQueries?.length) {
+      if (!retry.categoryQueries?.length && retry.mode !== "representation") {
         throw new Error("The GeM categories of this scan are not known. Refresh GeM, select the categories again and click Retry Scan.");
       }
       const tabs = await chrome.tabs.query({ url: "https://bidplus.gem.gov.in/seller-bids*" });
@@ -967,6 +1020,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         rejected: result.rejected || 0,
         rejections: result.rejections || [],
       };
+    }
+    if (message.type === "START_GEM_REPRESENTATION_REPLIES") {
+      return startRepresentationReplies();
+    }
+    if (message.type === "SAVE_GEM_REPRESENTATION_REPLIES") {
+      const body = JSON.stringify({ action: "replies", results: message.results || [] });
+      const result = await api("/gem/representation-results/", { method: "POST", body });
+      await mirrorToOtherBackends("/gem/representation-results/", body);
+      return { ok: true, replies: result.replies || 0 };
+    }
+    if (message.type === "GEM_REPRESENTATION_REPLIES_DONE") {
+      if (sender.tab?.id) await chrome.tabs.remove(sender.tab.id).catch(() => {});
+      return { ok: true };
     }
     if (message.type === "SAVE_GEM_BID_OPPORTUNITIES") {
       const body = JSON.stringify({ results: message.results || [] });

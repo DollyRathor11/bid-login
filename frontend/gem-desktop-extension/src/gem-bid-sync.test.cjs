@@ -1068,3 +1068,15 @@ test("reads My Representations rows, keeping a spanned Bid Section and dropping 
     { bid_section: "Bid Eligibility Criteria", representation: "Ground 2: Restriction to top 3 IDC brands, read in full.", submitted_on: "17-11-2026 11:20 AM" },
   ]);
 });
+
+test("My Representation scan recovers at the same page and can be retried", () => {
+  const start = source.indexOf("async function scanRepresentationPages");
+  const end = source.indexOf("async function reloadAndResumeOpportunityScan", start);
+  const scan = source.slice(start, end);
+  assert.match(scan, /scanRepresentationPages\(resume = null\)/);
+  assert.match(scan, /mode: "representation",\s+page: resumePage/);
+  assert.match(scan, /opportunityRetryState = \(\) => resumeState\(\)/);
+  assert.match(scan, /failedInARow >= 3[\s\S]*reloadOrFail\(page, failure, failure\)/);
+  assert.match(scan, /catch \(paginationError\)[\s\S]*reloadOrFail\(page \+ 1/);
+  assert.match(source, /resume\.mode === "representation" \? scanRepresentationPages : scanOpportunityPages/);
+});

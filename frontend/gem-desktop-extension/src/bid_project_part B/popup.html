@@ -33,6 +33,18 @@
     <p id="opportunity-state" class="sync-state"></p>
   </section>
   <section class="sync-section">
+    <strong>Representation Replies</strong>
+    <ul class="uses">
+      <li><b>Scan Representation Replies</b> – searches GeM All Bids by bid number, only for our bids still waiting for a reply, and saves the replies to Post Bid &gt; My Representation. Log out of GeM first, or use a Chrome profile not logged in to GeM.</li>
+    </ul>
+    <div class="button-row">
+      <button id="replies-start" type="button">Scan Representation Replies</button>
+      <button id="replies-stop" type="button" class="secondary" disabled>Stop</button>
+      <button id="replies-copy" type="button" class="secondary">Copy status</button>
+    </div>
+    <p id="replies-state" class="sync-state" role="status"></p>
+  </section>
+  <section class="sync-section">
     <strong>Awarded Bid/RA Ranking</strong>
     <ul class="uses">
       <li><b>Scan All Awarded Bid/RA Results</b> – saves every seller's rank and price (L1, L2…) of awarded bids to Financial Rankings.</li>
@@ -70,4 +82,4 @@
     <p id="product-state" class="sync-state" role="status"></p>
   </section>
   <p id="message"></p>
-</main><script src="../popup.js"></script><script src="financial-ranking-popup.js"></script><script src="product-scan-popup.js"></script></body></html>
+</main><script src="../popup.js"></script><script src="financial-ranking-popup.js"></script><script src="product-scan-popup.js"></script><script src="representation-replies-popup.js"></script></body></html>

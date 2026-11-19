@@ -6,7 +6,10 @@ const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem("tok
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-");
 const formatDateTime = (value) => (value ? new Date(value).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-");
 
-function RepresentationsModal({ bid, onClose }) {
+const repliedRows = (bid) => (bid.representations || []).filter((row) => row.reply);
+
+function RepresentationsModal({ bid, repliesOnly, onClose }) {
+  const rows = repliesOnly ? repliedRows(bid) : bid.representations || [];
   useEffect(() => {
     const onKeyDown = (event) => event.key === "Escape" && onClose();
     document.addEventListener("keydown", onKeyDown);
@@ -22,7 +25,7 @@ function RepresentationsModal({ bid, onClose }) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/45 p-4" onMouseDown={onClose}>
       <div className="flex max-h-[85vh] w-full max-w-6xl flex-col overflow-hidden bg-white shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
         <div className="flex shrink-0 items-center justify-between border-b border-gray-200 px-6 py-5">
-          <h2 className="text-base font-bold text-sky-800">My Representations</h2>
+          <h2 className="text-base font-bold text-sky-800">{repliesOnly ? "GeM Replies" : "My Representations"}</h2>
           <button type="button" onClick={onClose} aria-label="Close" className="text-2xl font-bold text-gray-400 hover:text-gray-700">&times;</button>
         </div>
         <div className="min-h-0 flex-1 overflow-auto p-6">
@@ -47,15 +50,17 @@ function RepresentationsModal({ bid, onClose }) {
                 <tr>
                   <th className="w-48 px-3 py-3 font-semibold">Bid Section</th>
                   <th className="px-3 py-3 font-semibold">Query/Representation</th>
-                  <th className="w-44 px-3 py-3 font-semibold">Submitted On</th>
+                  {repliesOnly && <th className="px-3 py-3 font-semibold">Reply</th>}
+                  <th className="w-44 px-3 py-3 font-semibold">{repliesOnly ? "Published On" : "Submitted On"}</th>
                 </tr>
               </thead>
               <tbody>
-                {(bid.representations || []).map((row, index) => (
+                {rows.map((row, index) => (
                   <tr key={index} className="border-b border-gray-100 align-top">
                     <td className="px-3 py-3 text-gray-700">{row.bid_section || "-"}</td>
                     <td className="whitespace-pre-line px-3 py-3 text-gray-700">{row.representation}</td>
-                    <td className="px-3 py-3 text-gray-700">{row.submitted_on || "-"}</td>
+                    {repliesOnly && <td className="whitespace-pre-line px-3 py-3 text-gray-700">{row.reply}</td>}
+                    <td className="px-3 py-3 text-gray-700">{(repliesOnly ? row.reply_published_on : row.submitted_on) || "-"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -70,6 +75,7 @@ function RepresentationsModal({ bid, onClose }) {
 export default function RepresentationBidsPanel() {
   const [rows, setRows] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [showReplies, setShowReplies] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -147,18 +153,18 @@ export default function RepresentationBidsPanel() {
           </button>
         )}
       </div>
-      <div className="overflow-x-auto">
-      <table className="min-w-[1040px] w-full text-left">
+      <table className="w-full table-fixed text-left [overflow-wrap:anywhere]">
         <thead className="bg-slate-800 text-[11px] uppercase tracking-wider text-white">
           <tr>
-            <th className="w-12 px-4 py-4">S.No.</th>
-            <th className="w-48 px-4 py-4">Bid No.</th>
-            <th className="px-4 py-4">Department Name And Address</th>
-            <th className="w-56 px-4 py-4">Items</th>
-            <th className="w-36 px-4 py-4">End Date</th>
-            <th className="w-40 px-4 py-4">Submitted On</th>
-            <th className="w-40 px-4 py-4">Representations</th>
-            <th className="w-28 px-4 py-4 text-center">
+            <th className="w-[5%] px-2 py-3">S.No.</th>
+            <th className="w-[16%] px-2 py-3">Bid No.</th>
+            <th className="w-[14%] px-2 py-3">Department Name And Address</th>
+            <th className="w-[14%] px-2 py-3">Items</th>
+            <th className="w-[8%] px-2 py-3">End Date</th>
+            <th className="w-[9%] px-2 py-3">Submitted On</th>
+            <th className="w-[15%] px-2 py-3">Representations</th>
+            <th className="w-[8%] px-2 py-3">Reply</th>
+            <th className="w-[11%] px-2 py-3 text-center">
               <div className="flex items-center justify-center gap-3">
                 <input
                   type="checkbox"
@@ -175,23 +181,48 @@ export default function RepresentationBidsPanel() {
         <tbody>
           {rows.map((row, index) => (
             <tr key={row.id} className="border-b border-gray-100 align-top hover:bg-gray-50">
-              <td className="px-4 py-4 text-sm font-bold text-gray-700">{index + 1}</td>
-              <td className="px-4 py-4 text-sm font-bold text-blue-700">{row.bid_no}</td>
-              <td className="px-4 py-4 text-sm text-gray-700">{row.department || "-"}</td>
-              <td className="px-4 py-4 text-sm font-medium text-gray-800">{row.item_name || "-"}</td>
-              <td className="px-4 py-4 text-sm text-gray-700">{formatDate(row.end_date)}</td>
-              <td className="px-4 py-4 text-sm text-gray-700">{formatDateTime(row.submitted_at)}</td>
-              <td className="px-4 py-4">
+              <td className="px-2 py-3 text-sm font-bold text-gray-700">{index + 1}</td>
+              <td className="px-2 py-3 text-sm font-bold text-blue-700">{row.bid_no}</td>
+              <td className="px-2 py-3 text-sm text-gray-700">{row.department || "-"}</td>
+              <td className="px-2 py-3 text-sm font-medium text-gray-800">{row.item_name || "-"}</td>
+              <td className="px-2 py-3 text-sm text-gray-700">{formatDate(row.end_date)}</td>
+              <td className="px-2 py-3 text-sm text-gray-700">{formatDateTime(row.submitted_at)}</td>
+              <td className="px-2 py-3">
                 <button
                   type="button"
-                  onClick={() => setSelected(row)}
-                  className="inline-flex items-center gap-1.5 text-left font-bold text-sky-700 hover:text-sky-900"
+                  onClick={() => { setShowReplies(false); setSelected(row); }}
+                  className="inline-flex flex-wrap items-center gap-2 text-left text-sm font-bold text-sky-700 hover:text-sky-900"
+                  aria-label={`View ${(row.representations || []).length} representations for bid ${row.bid_no}`}
                 >
-                  <span>{(row.representations || []).length} Representation{(row.representations || []).length === 1 ? "" : "s"}</span>
-                  <FaEye className="shrink-0 text-lg text-blue-600" aria-hidden="true" />
+                  <span>Representation</span>
+                  <span className="relative inline-flex shrink-0 pr-1.5 pt-1.5">
+                    <FaEye className="text-lg text-blue-600" aria-hidden="true" />
+                    <span className="absolute right-[-3px] top-[-3px] flex h-4 min-w-4 items-center justify-center rounded-full bg-green-500 px-1 text-[10px] font-bold leading-none text-white ring-2 ring-white">
+                      {(row.representations || []).length}
+                    </span>
+                  </span>
                 </button>
               </td>
-              <td className="px-4 py-4 text-center">
+              <td className="px-2 py-3">
+                {repliedRows(row).length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => { setShowReplies(true); setSelected(row); }}
+                    className="inline-flex items-center gap-1.5 text-sm font-bold text-sky-700 hover:text-sky-900"
+                    title="View GeM replies"
+                    aria-label={`View GeM replies for bid ${row.bid_no}`}
+                  >
+                    <span>Reply</span>
+                    <FaEye className="shrink-0 text-lg text-blue-600" aria-hidden="true" />
+                  </button>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 text-sm font-bold text-red-600" title="Reply awaited">
+                    <span>Reply</span>
+                    <FaEye className="shrink-0 text-lg" aria-hidden="true" />
+                  </span>
+                )}
+              </td>
+              <td className="px-2 py-3 text-center">
                 <div className="flex items-center justify-center gap-3">
                   <input
                     type="checkbox"
@@ -219,14 +250,13 @@ export default function RepresentationBidsPanel() {
             </tr>
           ))}
           {rows.length === 0 && (
-            <tr><td colSpan="8" className="py-16 text-center text-sm text-gray-500">
+            <tr><td colSpan="9" className="py-16 text-center text-sm text-gray-500">
               No representations yet. Log in to GeM with the Representation ID and click My Representation in the extension.
             </td></tr>
           )}
         </tbody>
       </table>
-      </div>
-      {selected && <RepresentationsModal bid={selected} onClose={() => setSelected(null)} />}
+      {selected && <RepresentationsModal bid={selected} repliesOnly={showReplies} onClose={() => setSelected(null)} />}
     </div>
   );
 }

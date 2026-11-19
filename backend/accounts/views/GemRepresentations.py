@@ -43,6 +43,77 @@ def _clean_rows(value):
     return rows
 
 
+def _query_key(value):
+    return re.sub(r"[^a-z0-9]+", "", str(value or "").lower())
+
+
+def _same_query(ours, theirs):
+    """GeM's public list holds every seller's queries, so only the same text is
+    ours. Either side may be cut off, but a short prefix proves nothing."""
+    first, second = _query_key(ours), _query_key(theirs)
+    if not first or not second:
+        return False
+    if first == second:
+        return True
+    shorter, longer = sorted((first, second), key=len)
+    return len(shorter) >= 40 and longer.startswith(shorter)
+
+
+def _has_pending_reply(rows):
+    return any(isinstance(row, dict) and not row.get("reply") for row in rows or [])
+
+
+def _apply_replies(rows, replies, published_on):
+    """Puts each published reply on our matching representation; returns how
+    many of our representations received one."""
+    count = 0
+    for row in rows:
+        match = next((item for item in replies if _same_query(row.get("representation"), item.get("query"))), None)
+        reply = str((match or {}).get("reply", "")).strip()
+        if reply:
+            row["reply"] = reply
+            row["reply_published_on"] = published_on
+            count += 1
+    return count
+
+
+def _carry_replies(rows, existing):
+    """A new My Representation scan must not lose replies already saved."""
+    for row in rows:
+        previous = next((item for item in existing or [] if item.get("reply")
+                         and _same_query(row.get("representation"), item.get("representation"))), None)
+        if previous:
+            row["reply"] = previous["reply"]
+            row["reply_published_on"] = previous.get("reply_published_on", "")
+
+
+def _save_replies(body):
+    results = body.get("results", [])
+    if not isinstance(results, list):
+        return JsonResponse({"error": "results must be a list."}, status=400)
+    replies = 0
+    bids = []
+    with transaction.atomic():
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            rows = item.get("rows")
+            result = GemRepresentationResult.objects.select_for_update().filter(
+                bid_no=str(item.get("bid_no", "")).strip(),
+            ).first()
+            if result is None or not isinstance(rows, list):
+                continue
+            published = [row for row in rows if isinstance(row, dict)]
+            ours = result.representations if isinstance(result.representations, list) else []
+            count = _apply_replies(ours, published, str(item.get("published_on", "")).strip())
+            if count:
+                result.representations = ours
+                result.save(update_fields=["representations", "last_synced_at"])
+                replies += count
+                bids.append(result.bid_no)
+    return JsonResponse({"replies": replies, "bid_numbers": bids})
+
+
 @csrf_exempt
 @require_http_methods(["GET", "POST", "DELETE"])
 def gem_representation_results(request):
@@ -52,6 +123,10 @@ def gem_representation_results(request):
 
     if request.method == "GET":
         scope = GemRepresentationResult.objects.all()
+        if request.GET.get("pending_replies"):
+            return JsonResponse({"bid_numbers": [
+                item.bid_no for item in scope if _has_pending_reply(item.representations)
+            ]})
         product_type = request.GET.get("product", "").strip().lower()
         if product_type in dict(GemBidResult.PRODUCT_CHOICES):
             scope = scope.filter(product_type=product_type)
@@ -82,6 +157,9 @@ def gem_representation_results(request):
         rows.delete()
         return JsonResponse({"deleted": len(deleted_ids), "deleted_ids": deleted_ids})
 
+    if isinstance(body, dict) and body.get("action") == "replies":
+        return _save_replies(body)
+
     rows = body.get("results", body if isinstance(body, list) else [])
     if not isinstance(rows, list):
         return JsonResponse({"error": "results must be a list."}, status=400)
@@ -103,6 +181,9 @@ def gem_representation_results(request):
             if not representations:
                 rejections.append({"bid_no": bid_no, "reason": "no_representations"})
                 continue
+            existing = GemRepresentationResult.objects.filter(bid_no=bid_no).first()
+            if existing:
+                _carry_replies(representations, existing.representations)
             product_type = str(row.get("product_type", "desktop")).lower()
             defaults = {
                 "product_type": product_type if product_type in dict(GemBidResult.PRODUCT_CHOICES) else "other",

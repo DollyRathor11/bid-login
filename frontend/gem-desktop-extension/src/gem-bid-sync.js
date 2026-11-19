@@ -1000,23 +1000,41 @@
     return fullText;
   }
 
+  // The popup is fetched from GeM when clicked and can take many seconds when
+  // GeM is busy, so wait for it, then click once more before giving up. The
+  // action slot backs off while GeM shows its "try again later" banner.
+  async function openRepresentationModal(control) {
+    const waitForModal = async (ms) => {
+      const end = Date.now() + ms;
+      let modal = openClarificationModal(REPRESENTATION_MODAL_TITLE);
+      while (!modal && Date.now() < end) {
+        stopIfRequested();
+        await sleep(250);
+        modal = openClarificationModal(REPRESENTATION_MODAL_TITLE);
+      }
+      return modal;
+    };
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      await waitForGemRemoteActionSlot();
+      if (gemTransientErrorMessage()) continue;
+      activateControl(control);
+      const modal = await waitForModal(15000) || await waitForModal(3000);
+      if (modal) return modal;
+    }
+    return null;
+  }
+
   async function representationsFor(card) {
     const control = representationControl(card);
     if (!control) return { rows: [], error: "" };
     const stale = openClarificationModal(REPRESENTATION_MODAL_TITLE);
     if (stale && !await closeModal(stale)) return { rows: [], error: "previous representation popup is still open" };
-    if (gemTransientErrorMessage()) return { rows: [], error: "GeM temporarily rejected the representation request" };
-    await waitForGemRemoteActionSlot();
-    activateControl(control);
-    let modal = null;
-    const openEnd = Date.now() + 8000;
-    while (!modal && Date.now() < openEnd) {
-      stopIfRequested();
-      throwIfGemTransientError();
-      await sleep(250);
-      modal = openClarificationModal(REPRESENTATION_MODAL_TITLE);
+    const modal = await openRepresentationModal(control);
+    if (!modal) {
+      return { rows: [], error: gemTransientErrorMessage()
+        ? "GeM temporarily rejected the representation request"
+        : `representation popup did not open; control: ${describeControl(control)}` };
     }
-    if (!modal) return { rows: [], error: `representation popup did not open; control: ${describeControl(control)}` };
     // The table loads after the popup opens; a popup with none after a few
     // seconds has no representations.
     let table = null;
@@ -1572,10 +1590,11 @@
     }
     // A short result list (for example a single small category such as A3
     // MFP) fits on one page and GeM draws no pager at all. Cards that are
-    // rendered, fewer than a full page of 10, with no pager, are the end.
+    // rendered on page 1, fewer than a full page of 10, with no pager, are the
+    // end. On a later page a missing pager is only GeM still loading.
     if (lastReason === "missing" && !gemTransientErrorMessage()) {
       const cards = currentCards();
-      if (cards.length > 0 && cards.length < 10 && paginationTotalPages() <= page) {
+      if (page === 1 && cards.length > 0 && cards.length < 10 && paginationTotalPages() <= page) {
         return { advanced: false, reason: "end" };
       }
     }
@@ -2923,29 +2942,73 @@
   // Participated (with the categories selected on the page) and saves every
   // bid whose My Representations table has rows. The background starts it
   // only under the "Representation" GeM login, the one GeM shows them to.
-  async function scanRepresentationPages() {
+  // Like Bid To Be Participated it recovers by reloading GeM and continuing at
+  // the same page, and Retry Scan continues from there.
+  async function scanRepresentationPages(resume = null) {
     if (syncing) throw new Error("A GeM bid sync is already running in this tab.");
     syncing = true;
     activeScanType = "opportunity";
     stopRequested = false;
-    pauseRequested = false;
-    let page = 1;
-    let saved = 0;
-    let checked = 0;
-    let failed = 0;
+    pauseRequested = Boolean(resume?.paused);
+    let page = Number(resume?.page || 1);
+    let saved = Number(resume?.saved || 0);
+    let checked = Number(resume?.checked || 0);
+    let failed = Number(resume?.failed || 0);
     let failedInARow = 0;
+    let serverRecoveryAttempts = Number(resume?.serverRecoveryAttempts || 0);
+    // A page is read again from its start, so it resumes with the counts it began with.
+    let pageStart = { saved, checked, failed };
+    const categoryQueries = resume?.categoryQueries || selectedOpportunityCategories();
     const say = (status, message) => progress(status, `[My Representation] ${message}`, { page, saved, checked, mode: "representation" });
+    const resumeState = (resumePage = page, attempts = 0) => ({
+      mode: "representation",
+      page: resumePage,
+      ...(resumePage === page ? pageStart : { saved, checked, failed }),
+      categoryQueries,
+      serverRecoveryAttempts: attempts,
+    });
+    const reloadOrFail = async (resumePage, reason, failure) => {
+      if (serverRecoveryAttempts < MAX_SERVER_RECOVERY_ATTEMPTS) {
+        await reloadAndResumeOpportunityScan(
+          resumeState(resumePage, serverRecoveryAttempts + 1),
+          `[My Representation] ${reason} Reloading GeM and continuing at page ${resumePage} automatically (${serverRecoveryAttempts + 1}/${MAX_SERVER_RECOVERY_ATTEMPTS})...`,
+        );
+      }
+      throw new Error(failure);
+    };
+    opportunityRetryState = () => resumeState();
     try {
-      await say("running", "Preparing GeM Ongoing Bids...");
+      await say("running", resume ? `Restoring page ${page}...` : "Preparing GeM Ongoing Bids...");
       await applyOpportunityFilters();
+      if (resume && categoryQueries.length) {
+        await say("running", `Selecting GeM categories again: ${categoryQueries.join(", ")}...`);
+        await selectOpportunityCategories(categoryQueries);
+      }
+      if (page > 1) {
+        const firstPageCards = await waitForBidCards(60000, async (seconds) => {
+          await say("running", `Restoring page ${page}: waiting for GeM page 1 to load (${seconds}s)...`);
+        });
+        const firstPageSignature = firstPageCards.map((item) => item.bidNo).join("|");
+        if (!firstPageSignature) {
+          await reloadOrFail(page, `GeM page 1 did not load while restoring page ${page}.`, "GeM page 1 did not load while restoring the scan.");
+        }
+        const restore = await restoreSavedPage(page, firstPageSignature, (message) => say("running", message));
+        if (!restore.restored) {
+          await reloadOrFail(page, `GeM did not show saved page ${page} (${restore.failure}).`, `GeM did not restore page ${page}.`);
+        }
+        await sleep(1500);
+      }
       const visited = new Set();
       while (true) {
         stopIfRequested();
+        pageStart = { saved, checked, failed };
         const cards = await waitForBidCards(180000, async (seconds) => {
           await say("running", `Waiting for GeM bid cards on page ${page} to load (${seconds}s)...`);
         });
         const signature = cards.map((item) => item.bidNo).join("|");
-        if (!signature) throw new Error(`GeM bid cards did not load on page ${page}.`);
+        if (!signature) {
+          await reloadOrFail(page, `GeM stopped showing bid cards on page ${page}.`, `GeM bid cards did not load on page ${page}.`);
+        }
         if (visited.has(signature)) throw new Error(`My Representation scan repeated page ${page}.`);
         visited.add(signature);
         for (const { bidNo } of cards) {
@@ -2958,7 +3021,10 @@
           if (result.error) {
             failed += 1;
             failedInARow += 1;
-            if (failedInARow >= 3) throw new Error(`My Representations could not be read for ${bidNo}: ${result.error}`);
+            if (failedInARow >= 3) {
+              const failure = `My Representations could not be read for ${bidNo}: ${result.error}.`;
+              await reloadOrFail(page, failure, failure);
+            }
             await say("running", `Skipped ${bidNo}: ${result.error}.`);
             continue;
           }
@@ -2990,30 +3056,43 @@
         // Same pause as the other scans: GeM rate-limits rapid page changes.
         await sleep(3000 + Math.floor(Math.random() * 2000));
         stopIfRequested();
-        const advance = await advancePageWithRecovery(signature, page, async (attempt, reason) => {
-          await say("running", `GeM pagination on page ${page} is ${reason}; retrying (${attempt}/${MAX_PAGINATION_RECOVERY_ATTEMPTS})...`);
-        });
+        serverRecoveryAttempts = 0;
+        let advance;
+        try {
+          advance = await advancePageWithRecovery(signature, page, async (attempt, reason) => {
+            await say("running", `GeM pagination on page ${page} is ${reason}; retrying (${attempt}/${MAX_PAGINATION_RECOVERY_ATTEMPTS})...`);
+          });
+        } catch (paginationError) {
+          if (paginationError.code === "GEM_SYNC_STOPPED") throw paginationError;
+          await reloadOrFail(page + 1, `GeM pagination failed on page ${page}.`, paginationError.message);
+        }
         if (!advance.advanced) break;
         page += 1;
       }
+      opportunityRetryState = null;
+      sessionStorage.removeItem("acxxelOpportunityResume");
       await say("complete", `Scan complete. Checked ${checked} bids; ${saved} with representations saved${failed ? `; ${failed} could not be read` : ""}.`);
     } catch (error) {
+      sessionStorage.removeItem("acxxelOpportunityResume");
       if (error.code === "GEM_SYNC_STOPPED") {
-        await say("stopped", `Scan stopped after ${checked} bids; ${saved} with representations saved.`);
+        await say("stopped", `Scan stopped after ${checked} bids; ${saved} with representations saved. Retry Scan continues from page ${page}.`);
         return;
       }
-      await say("failed", `${error.message || "My Representation scan failed."} Already saved bids are kept.`);
+      await say("failed", `${error.message || "My Representation scan failed."} Already saved bids are kept; click Retry Scan to continue from page ${page}.`);
       error.syncProgressReported = true;
       throw error;
     } finally {
       syncing = false;
       activeScanType = "";
+      opportunityRetryState = null;
     }
   }
 
   async function reloadAndResumeOpportunityScan(state, message) {
     sessionStorage.setItem("acxxelOpportunityResume", JSON.stringify({ ...state, paused: pauseRequested, savedAt: Date.now() }));
-    await progress("recovering", message, { page: state.page, saved: state.saved, checked: state.checked });
+    await progress("recovering", message, {
+      page: state.page, saved: state.saved, checked: state.checked, ...(state.mode ? { mode: state.mode } : {}),
+    });
     // An immediate reload after GeM's generic error tends to reproduce it.
     await sleep(Math.min(8000 + Number(state.serverRecoveryAttempts || 0) * 5000, 30000));
     location.reload();
@@ -3261,7 +3340,8 @@
     sendResponse({ ok: true, started: true, cardCount });
     window.setTimeout(() => {
       const runner = message.type === "START_GEM_OPPORTUNITY_SYNC"
-        ? message.mode === "representation" ? scanRepresentationPages : scanOpportunityPages
+        ? message.mode === "representation" || message.resume?.mode === "representation"
+          ? scanRepresentationPages : scanOpportunityPages
         : scanAllPages;
       if (message.type === "START_GEM_BID_SYNC") {
         disqualifiedScanMode = listScanMode(message.mode);
@@ -3306,7 +3386,7 @@
     if (resume && Date.now() - Number(resume.savedAt || 0) < 30 * 60 * 1000) {
       sessionStorage.removeItem("acxxelOpportunityResume");
       window.setTimeout(() => {
-        scanOpportunityPages(resume).catch(async (error) => {
+        (resume.mode === "representation" ? scanRepresentationPages : scanOpportunityPages)(resume).catch(async (error) => {
           console.error("Acxxel GeM opportunity resume failed:", error);
           if (error.syncProgressReported) return;
           await progress("failed", error.message || "GeM opportunity scan could not resume.", {
