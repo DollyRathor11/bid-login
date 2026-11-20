@@ -46,3 +46,12 @@ test("shows an all-approved bunch as Bunch Bid, A3 alone as A3 MFP, A3 in a bunc
   }), "other");
 });
 
+
+test("shows a schedule-wise bunch with one of our items as Schedule Bids", () => {
+  const name = "A3 Size Multifunction Printer (MFP), A4 And Legal Size Multifunction Printer (MFP), Computer Printer (V2)";
+  assert.equal(itemCategory({ product_name: name, schedule_wise: true }), "schedule_bid");
+  assert.equal(itemCategory({ product_name: name }), "other");
+  assert.equal(itemCategory({ product_name: "All in One PC (V2), Line Interactive UPS with AVR (V2)", schedule_wise: true }), "schedule_bid");
+  assert.equal(itemCategory({ product_name: "Laptop, Line Interactive UPS with AVR (V2)", schedule_wise: true }), "other");
+  assert.equal(itemCategory({ product_name: "All in One PC (V2)", schedule_wise: true }), "aio");
+});

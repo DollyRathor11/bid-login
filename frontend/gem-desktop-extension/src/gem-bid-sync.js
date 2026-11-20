@@ -290,9 +290,10 @@
 
   // Bid numbers read by the last completed opportunity scan, including bids
   // that were rejected, so a later scan can tell where the new bids end.
-  // Renamed when bunch bids started being received, so bunch bids rejected by
-  // earlier scans are read again once.
-  const OPPORTUNITY_KNOWN_BIDS_KEY = "gemOpportunityKnownBidsV2";
+  // Renamed when bunch bids started being received, and again for
+  // schedule-wise bunches, so bunch bids rejected by earlier scans are read
+  // again once.
+  const OPPORTUNITY_KNOWN_BIDS_KEY = "gemOpportunityKnownBidsV3";
   // Bids read by the scan in progress. They only become "known" once that
   // scan completes; an interrupted run must not hide the pages it never read.
   const OPPORTUNITY_RUN_BIDS_KEY = "gemOpportunityRunBids";
@@ -377,9 +378,12 @@
     // A very short visible name could still be one of ours; leave it alone.
     if (items.some((item) => item.length < 8)) return "";
     const products = items.map(productOf);
+    // A bunch with one of our products may be schedule-wise (item wise
+    // evaluation), where its other items do not matter; only the bid's PDF
+    // tells, so it is decided from the detail. A bunch with none of our
+    // products (UPS alone is not one) is rejected here.
+    if (isBunch) return products.some((product) => product && product !== "ups") ? "" : "product";
     if (products.some((product) => !product)) return "product";
-    // A bunch of only UPS items has none of our products.
-    if (isBunch) return products.every((product) => product === "ups") ? "product" : "";
     const quantity = opportunityCardQuantity(card);
     if (quantity > 0 && quantity < 5 && !NO_MINIMUM_QUANTITY_PRODUCTS.has(products[0])) return "quantity";
     return "";
@@ -2173,11 +2177,20 @@
       || null
     ));
     const hasA3 = matchedProducts.some((match) => match?.[0] === "a3_mfp");
+    // GeM "Evaluation Method: Item wise evaluation": every item is its own
+    // schedule and a seller quotes only its own items, so the bunch's other
+    // categories do not matter. GeM writes it as "Evaluation Method Item wise
+    // evaluation" or "Evaluation Method ( Item Wise Evaluation Method )".
+    // ("Contract will be awarded schedulewise" is printed for group wise
+    // evaluation too, so it does not tell.)
+    const scheduleWise = isBunch
+      && /Evaluation\s+Method\s*:?\s*\(?\s*Item\s*-?\s*wise\s+evaluation/i.test(flat);
     // Every category must be one of ours; inside a bunch bid (several item
-    // categories) a UPS category is allowed too. A bunch needs at least one
-    // of our products and is filed under the first one.
+    // categories) a UPS category is allowed too, and in a schedule-wise bunch
+    // any category. A bunch needs at least one of our products and is filed
+    // under the first one.
     const product = matchedProducts.find((match) => match && match[0] !== "ups");
-    if (!categories.length || matchedProducts.some((match) => !match) || !product) return { reject: "product" };
+    if (!categories.length || (!scheduleWise && matchedProducts.some((match) => !match)) || !product) return { reject: "product" };
     // No quantity rule applies to a bunch, which lists a quantity per item
     // (often 1 each). A single item whose quantity could not be read is
     // rejected rather than risk saving a small one; bids below 5 units are
@@ -2223,7 +2236,7 @@
     if (!endTime && !validityDays) return { reject: "date" };
     // A bunch is free of the day limit only when every product in it is.
     if (
-      matchedProducts.some((match) => match[0] !== "ups" && !NO_DAY_LIMIT_PRODUCTS.has(match[0]))
+      matchedProducts.some((match) => match && match[0] !== "ups" && !NO_DAY_LIMIT_PRODUCTS.has(match[0]))
       && (validityDays > 120 || (endTime && endTime - Date.now() > 120 * 86400000))
     ) return { reject: "over120" };
     // The seller-list card is the authoritative current Start Date, including
@@ -2246,6 +2259,7 @@
       product_name: cleanItemName.slice(0, 500),
       product_type: product[0],
       is_bunch: isBunch,
+      schedule_wise: scheduleWise,
       quantity,
       offer_validity_days: validityDays || null,
       department: bounded("Department\\s+Name", "(?:Organisation|Office|Contact|Buyer|Item\\s+Category|$)"),

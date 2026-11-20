@@ -4,6 +4,7 @@ import { isSupportedOpportunity, itemCategory } from "./bidOpportunityCategory";
 import { BidNoCell, CorrigendumCell, DateCell } from "./BidTableCells";
 import PostBidPagination from "../../components/Management/PostBidPagination";
 import { paginate } from "../../components/Management/paginateRows";
+import ScheduleBidTag from "../../utils/ScheduleBidTag";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 export default function AdminBidToBeParticipated() {
@@ -26,8 +27,9 @@ export default function AdminBidToBeParticipated() {
     entry_mid_desktop: "Entry and Mid Level Desktop Computer",
     printer: "A4 and Legal Size MFP", aio: "All in One PC (V2)", workstation: "Fixed Computer Workstation",
     toner: "Toner / Ink Cartridges", a3_mfp: "A3 Size Printer MFP", bunch_bid: "Bunch Bid",
+    schedule_bid: "Schedule Bids",
   };
-  const itemOrder = ["high_end_desktop", "entry_mid_desktop", "printer", "a3_mfp", "aio", "workstation", "toner", "bunch_bid"];
+  const itemOrder = ["high_end_desktop", "entry_mid_desktop", "printer", "a3_mfp", "aio", "workstation", "toner", "bunch_bid", "schedule_bid"];
   const itemTypes = itemOrder;
   const filteredRows = itemFilter === "all"
     ? rows
@@ -233,7 +235,7 @@ export default function AdminBidToBeParticipated() {
               <td className="px-3 py-3 font-semibold text-slate-500">{index + 1}</td>
               <BidNoCell row={row} className="px-3 py-3" />
               <DateCell value={row.bid_date} className="px-3 py-3" /><DateCell value={row.end_date} className="px-3 py-3" />
-              <td className="max-w-xs px-3 py-3 font-medium text-slate-800">{row.item}</td><CorrigendumCell row={row} className="px-3 py-3" /><td className="px-3 py-3 font-semibold capitalize">{row.status.replace("_", " ")}</td>
+              <td className="max-w-xs px-3 py-3 font-medium text-slate-800">{row.item}<ScheduleBidTag row={row} /></td><CorrigendumCell row={row} className="px-3 py-3" /><td className="px-3 py-3 font-semibold capitalize">{row.status.replace("_", " ")}</td>
               <td className="px-3 py-3 text-center"><div className="inline-flex items-center gap-2"><input type="checkbox" checked={selectedEmployeeBidIds.includes(row.id)} onChange={() => setSelectedEmployeeBidIds((current) => current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id])} className="h-4 w-4 accent-red-600" aria-label={`Select ${row.bid_no}`} /><button type="button" onClick={() => hideAssignedBid(row)}
                 className="rounded p-2 text-red-600 hover:bg-red-50 hover:text-red-700" title="Remove from admin dashboard" aria-label={`Remove ${row.bid_no}`}><FaTrash aria-hidden="true" /></button></div></td>
             </tr>)}</tbody>
@@ -251,7 +253,7 @@ export default function AdminBidToBeParticipated() {
             <BidNoCell row={row} className="px-4 py-3" />
             <DateCell value={row.bid_date} className="px-4 py-3" />
             <DateCell value={row.end_date} className="px-4 py-3" />
-            <td className="max-w-xs px-4 py-3 text-sm font-medium text-slate-800">{row.product_name}</td>
+            <td className="max-w-xs px-4 py-3 text-sm font-medium text-slate-800">{row.product_name}<ScheduleBidTag row={row} /></td>
             <CorrigendumCell row={row} className="px-4 py-3" />
             <td className="px-4 py-3 text-center">
               <select defaultValue="" disabled={assigningBidId === row.id}

@@ -120,6 +120,7 @@ def _assignment_data(row):
         "opportunity_id": opportunity.id,
         "bid_no": opportunity.bid_no,
         "item": opportunity.product_name,
+        "schedule_wise": opportunity.schedule_wise,
         "category": _category(opportunity.product_name),
         "bid_date": opportunity.bid_date.isoformat() if opportunity.bid_date else "",
         "end_date": opportunity.end_date.isoformat() if opportunity.end_date else "",

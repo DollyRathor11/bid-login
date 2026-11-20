@@ -215,6 +215,34 @@ test("a bunch with A3 MFP keeps its usual rules and must be delivered in Uttar P
   assert.equal(opportunityResult(`${desktop}, ${ups}`, "", 0, 90, "New Delhi 110001").eligible, true);
 });
 
+test("receives a schedule-wise bunch (item wise evaluation) with other items when one of ours is in it", () => {
+  const items = "Office Chair (Q2), All in One PC (V2) (Q2), Steel Almirah (Q2)";
+  const itemWise = "Total Quantity 3 Evaluation Method Item wise evaluation";
+  const result = opportunityResult(items, itemWise);
+  assert.equal(result.eligible, true);
+  assert.equal(result.schedule_wise, true);
+  assert.equal(result.product_type, "aio");
+  // The other ways GeM writes it (GEM/2026/B/... with A3, A4 and Computer Printer schedules).
+  const printers = "A3 Size Multifunction Printer (MFP) (Q2), A4 And Legal Size Multifunction Printer (MFP) (Q2), Computer Printer (V2) (Q10)";
+  const lucknow = "1 Collectorate, Lucknow 226001 1 30";
+  const scheduled = opportunityResult(printers, "Total Quantity 16 / Evaluation Method ( Item Wise Evaluation Method )", 0, 90, lucknow);
+  assert.equal(scheduled.eligible, true);
+  assert.equal(scheduled.schedule_wise, true);
+  // Group wise bids print "awarded schedulewise" too; that alone is not item wise.
+  assert.equal(opportunityResult(printers, "Total Quantity 16 Evaluation Method ( Group Wise Evaluation Method ) "
+    + "Contract will be awarded schedulewise and the determination of L1", 0, 90, lucknow).reject, "product");
+  // Total value wise or group wise evaluation: every item must still be ours.
+  assert.equal(opportunityResult(items, "Total Quantity 3 Evaluation Method Total value wise evaluation").reject, "product");
+  assert.equal(opportunityResult(items, "Total Quantity 3 Evaluation Method Group wise evaluation").reject, "product");
+  // None of ours (UPS alone is not one), even item wise.
+  assert.equal(opportunityResult("Office Chair (Q2), Line Interactive UPS with AVR (V2) (Q2)", itemWise).reject, "product");
+  // Every other rule still applies: the Desktop in it keeps the 120-day limit.
+  assert.equal(opportunityResult("Office Chair (Q2), High End Desktop Computer (Q2)", itemWise, 0, 180).reject, "over120");
+  assert.equal(opportunityResult("Office Chair (Q2), High End Desktop Computer (Q2) (PAC Only)", itemWise).reject, "pac");
+  // A single item is never schedule-wise.
+  assert.equal(opportunityResult("Office Chair (Q2)", itemWise).reject, "product");
+});
+
 test("never receives a bid below five units or with an unreadable quantity", () => {
   const category = "High End Desktop Computer (Q2)";
   assert.equal(opportunityResult(category, "Total Quantity 4").reject, "quantity");
@@ -853,9 +881,12 @@ test('the seller-list card rules out only bids it can prove ineligible', () => {
   assert.equal(cardReject(card("Laptop - Notebook", 50)), "product");
   assert.equal(cardReject(card("Laptop - Notebook,Tablet Computer", 50)), "product");
   assert.equal(cardReject(card("Line Interactive UPS With AVR (V2)", 50)), "product");
-  assert.equal(cardReject(card("Entry and Mid Level Desktop Computer,Laptop - Notebook", 50)), "product");
-  assert.equal(cardReject(card("Interactive Panels with CPU,Entry and Mid Level...", 2)), "product");
   assert.equal(cardReject(card("Line Interactive UPS With AVR (V2),Online UPS (≤10 KVA) With...", 2)), "product");
+  assert.equal(cardReject(card("Laptop - Notebook,Line Interactive UPS With AVR (V2)", 2)), "product");
+  // A bunch with one of our products and others may be schedule-wise, which
+  // only the bid's PDF tells, so it is read from the detail.
+  assert.equal(cardReject(card("Entry and Mid Level Desktop Computer,Laptop - Notebook", 50)), "");
+  assert.equal(cardReject(card("Interactive Panels with CPU,Entry and Mid Level...", 2)), "");
   // A bunch of our products and UPS is read from the detail, at any quantity.
   assert.equal(cardReject(card("All in One PC (V2),A4 and Lega...", 2)), "");
   assert.equal(cardReject(card("All in One PC (V2),Line Intera...", 1)), "");

@@ -33,6 +33,9 @@ export const itemCategory = (row) => {
   const singleA3 = categories.length === 1 && A3_PATTERNS.some(([, pattern]) => pattern.test(categories[0]));
   if (!singleA3 && /(?:\(\s*PAC\s*Only\s*\)|\bPAC\s*Only\b)/i.test(raw)) return "other";
   const matched = categories.map((category) => [...CATEGORY_PATTERNS, ...A3_PATTERNS].find(([, pattern]) => pattern.test(category))?.[0]);
+  // A schedule-wise bunch (GeM item wise evaluation, read by the extension)
+  // needs only one of our items; its other items are not mandatory.
+  if (categories.length > 1 && row.schedule_wise) return matched.some(Boolean) ? "schedule_bid" : "other";
   // A bunch bid (several item categories) is shown as Bunch Bid when every
   // category is ours or a UPS and at least one is ours.
   if (categories.length > 1) {

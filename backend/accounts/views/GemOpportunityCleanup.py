@@ -86,11 +86,11 @@ def delete_invalid_unassigned_opportunities(now=None):
         GemBidOpportunity.objects.filter(
             is_deleted=False,
             assignment__isnull=True,
-        ).only("id", "bid_date", "end_date", "product_name", "product_type")
+        ).only("id", "bid_date", "end_date", "product_name", "product_type", "schedule_wise")
     )
     invalid_ids = []
     for row in candidates:
-        classification = classify_opportunity_item(row.product_name)
+        classification = classify_opportunity_item(row.product_name, row.schedule_wise)
         if not classification or not valid_opportunity_dates(
             row.bid_date, row.end_date, reference, day_limit_product(classification)
         ):
