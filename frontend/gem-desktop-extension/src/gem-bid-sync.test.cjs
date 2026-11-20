@@ -217,30 +217,57 @@ test("a bunch with A3 MFP keeps its usual rules and must be delivered in Uttar P
 
 test("receives a schedule-wise bunch (item wise evaluation) with other items when one of ours is in it", () => {
   const items = "Office Chair (Q2), All in One PC (V2) (Q2), Steel Almirah (Q2)";
-  const itemWise = "Total Quantity 3 Evaluation Method Item wise evaluation";
+  // GeM's "Evaluation Schedules" table: Schedule N, Estimated Value, Item/Category, Quantity.
+  const table = (aioQuantity) => "Evaluation Schedules Estimated Value Item/Category Quantity "
+    + `Schedule 1 5000 Office Chair 2 Schedule 2 300000 All In One Pc (v2) ${aioQuantity} Schedule 3 9000 Steel Almirah 3 `
+    + "Technical Specifications";
+  const itemWise = `Total Quantity 3 Evaluation Method Item wise evaluation ${table(6)}`;
   const result = opportunityResult(items, itemWise);
   assert.equal(result.eligible, true);
   assert.equal(result.schedule_wise, true);
   assert.equal(result.product_type, "aio");
-  // The other ways GeM writes it (GEM/2026/B/... with A3, A4 and Computer Printer schedules).
+  assert.equal(result.quantity, 6);
+  // The other way GeM writes it (A3, A4 and Computer Printer schedules).
   const printers = "A3 Size Multifunction Printer (MFP) (Q2), A4 And Legal Size Multifunction Printer (MFP) (Q2), Computer Printer (V2) (Q10)";
+  const printerTable = "Evaluation Schedules Schedule 1 430000 A3 Size Multifunction Printer (mfp) 2 "
+    + "Schedule 2 104000 A4 And Legal Size Multifunction Printer (mfp) 2 Schedule 3 196000 A4 And Legal Size Multifunction Printer (mfp) 2 "
+    + "Schedule 4 146000 Computer Printer (v2) 10 Technical Specifications";
   const lucknow = "1 Collectorate, Lucknow 226001 1 30";
-  const scheduled = opportunityResult(printers, "Total Quantity 16 / Evaluation Method ( Item Wise Evaluation Method )", 0, 90, lucknow);
+  const scheduled = opportunityResult(printers, `Total Quantity 16 / Evaluation Method ( Item Wise Evaluation Method ) ${printerTable}`, 0, 90, lucknow);
   assert.equal(scheduled.eligible, true);
   assert.equal(scheduled.schedule_wise, true);
+  // Our printers count, not the Computer Printer: 2 + 2 + 2.
+  assert.equal(scheduled.quantity, 6);
   // Group wise bids print "awarded schedulewise" too; that alone is not item wise.
   assert.equal(opportunityResult(printers, "Total Quantity 16 Evaluation Method ( Group Wise Evaluation Method ) "
-    + "Contract will be awarded schedulewise and the determination of L1", 0, 90, lucknow).reject, "product");
+    + `Contract will be awarded schedulewise and the determination of L1 ${printerTable}`, 0, 90, lucknow).reject, "product");
   // Total value wise or group wise evaluation: every item must still be ours.
   assert.equal(opportunityResult(items, "Total Quantity 3 Evaluation Method Total value wise evaluation").reject, "product");
   assert.equal(opportunityResult(items, "Total Quantity 3 Evaluation Method Group wise evaluation").reject, "product");
   // None of ours (UPS alone is not one), even item wise.
   assert.equal(opportunityResult("Office Chair (Q2), Line Interactive UPS with AVR (V2) (Q2)", itemWise).reject, "product");
   // Every other rule still applies: the Desktop in it keeps the 120-day limit.
-  assert.equal(opportunityResult("Office Chair (Q2), High End Desktop Computer (Q2)", itemWise, 0, 180).reject, "over120");
-  assert.equal(opportunityResult("Office Chair (Q2), High End Desktop Computer (Q2) (PAC Only)", itemWise).reject, "pac");
+  const desktopTable = "Item wise evaluation Evaluation Schedules Schedule 1 5000 Office Chair 2 Schedule 2 90000 High End Desktop Computer 8";
+  assert.equal(opportunityResult("Office Chair (Q2), High End Desktop Computer (Q2)", `Evaluation Method ${desktopTable}`, 0, 180).reject, "over120");
+  assert.equal(opportunityResult("Office Chair (Q2), High End Desktop Computer (Q2) (PAC Only)", `Evaluation Method ${desktopTable}`).reject, "pac");
   // A single item is never schedule-wise.
   assert.equal(opportunityResult("Office Chair (Q2)", itemWise).reject, "product");
+});
+
+test("a schedule-wise bid follows the single-item quantity rule on our own schedules", () => {
+  const items = "Office Chair (Q2), All in One PC (V2) (Q2)";
+  const text = (rows) => `Evaluation Method Item wise evaluation Evaluation Schedules ${rows} Technical Specifications`;
+  // Below 5 units of AIO, however many chairs.
+  assert.equal(opportunityResult(items, text("Schedule 1 5000 Office Chair 50 Schedule 2 90000 All In One Pc (v2) 4")).reject, "quantity");
+  assert.equal(opportunityResult(items, text("Schedule 1 5000 Office Chair 50 Schedule 2 90000 All In One Pc (v2) 5")).eligible, true);
+  // A printer schedule has no minimum.
+  assert.equal(opportunityResult("Office Chair (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2)",
+    text("Schedule 1 5000 Office Chair 50 Schedule 2 20000 A4 And Legal Size Multifunction Printer (mfp) 1")).eligible, true);
+  // One of our schedules meeting the rule is enough.
+  assert.equal(opportunityResult("Entry and Mid Level Desktop Computer (Q2), High End Desktop Computer (Q2), Office Chair (Q2)",
+    text("Schedule 1 90000 Entry And Mid Level Desktop Computer 2 Schedule 2 300000 High End Desktop Computer 7 Schedule 3 5000 Office Chair 4")).eligible, true);
+  // The schedule table could not be read.
+  assert.equal(opportunityResult(items, "Evaluation Method Item wise evaluation Total Quantity 30").reject, "quantity_unread");
 });
 
 test("never receives a bid below five units or with an unreadable quantity", () => {

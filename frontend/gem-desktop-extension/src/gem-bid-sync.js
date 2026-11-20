@@ -2144,6 +2144,32 @@
       .some((value) => /ink\s*-?\s*jet/i.test(value) && !/laser|\bled\b|electro\s*-?\s*photo|xerograph/i.test(value));
   }
 
+  // Our items as GeM names them in a schedule-wise bid's "Evaluation
+  // Schedules" table (Schedule N, Estimated Value, Item/Category, Quantity).
+  const SCHEDULE_ITEM_NAMES = [
+    ["desktop", /^entry\s+and\s+mid\s+level\s+desktop\s+computer/i],
+    ["desktop", /^high\s+end\s+desktop\s+computer/i],
+    ["aio", /^all\s+in\s+one\s+pc/i],
+    ["workstation", /^fixed\s+computer\s+workstation/i],
+    ["toner", /^toner\s+cartridges?\s*(?:\/|and)\s*ink\s+cartridges?/i],
+    ["printer", /^a4\s+and\s+legal\s+size\s+multifunction\s+printer\s*\(\s*mfp\s*\)/i],
+    ["a3_mfp", /^a3\s+size\s+multifunction\s+printer\s*\(\s*mfp\s*\)/i],
+  ];
+
+  // Our schedules of a schedule-wise bid, each with its own quantity.
+  function ourSchedules(flat) {
+    const start = flat.search(/Evaluation\s+Schedules/i);
+    if (start < 0) return [];
+    const table = flat.slice(start).split(/Technical\s+Specifications|Consignees?\s*\/\s*Reporting/i, 1)[0];
+    return table.split(/\bSchedule\s+\d+\s+/i).slice(1).map((row) => {
+      const item = row.replace(/^\d+(?:\.\d+)?\s+/, "");
+      const named = SCHEDULE_ITEM_NAMES.map(([product, pattern]) => [product, item.match(pattern)]).find(([, match]) => match);
+      if (!named) return null;
+      const quantity = Number(item.slice(named[1][0].length).match(/^\s*(?:\(\s*v\d+\s*\)\s*)?(\d+)\b/i)?.[1] || 0);
+      return { product: named[0], quantity };
+    }).filter(Boolean);
+  }
+
   function opportunityFromText(bidNo, raw, cardStartDate = "", cardQuantity = 0) {
     const flat = String(raw || "").replace(/[\u0000-\u001f]+/g, " ").replace(/\s+/g, " ").trim();
     const bounded = (start, end) => flat.match(new RegExp(`${start}\\s*:?\\s*(.+?)(?=${end})`, "i"))?.[1]?.trim() || "";
@@ -2192,6 +2218,16 @@
     // under the first one.
     const product = matchedProducts.find((match) => match && match[0] !== "ups");
     if (!categories.length || (!scheduleWise && matchedProducts.some((match) => !match)) || !product) return { reject: "product" };
+    // A schedule-wise bid follows the single-item quantity rule on our own
+    // schedules: at least one must have 5 units, or be a product with no
+    // minimum. Its table unread, it is rejected like an unread quantity.
+    const schedules = scheduleWise ? ourSchedules(flat) : [];
+    if (scheduleWise) {
+      if (!schedules.some((schedule) => schedule.quantity)) return { reject: "quantity_unread" };
+      if (!schedules.some((schedule) => schedule.quantity >= 5 || NO_MINIMUM_QUANTITY_PRODUCTS.has(schedule.product))) {
+        return { reject: "quantity" };
+      }
+    }
     // No quantity rule applies to a bunch, which lists a quantity per item
     // (often 1 each). A single item whose quantity could not be read is
     // rejected rather than risk saving a small one; bids below 5 units are
@@ -2261,7 +2297,8 @@
       product_type: product[0],
       is_bunch: isBunch,
       schedule_wise: scheduleWise,
-      quantity,
+      // A schedule-wise bid counts only our own schedules.
+      quantity: scheduleWise ? schedules.reduce((sum, schedule) => sum + schedule.quantity, 0) : quantity,
       offer_validity_days: validityDays || null,
       department: bounded("Department\\s+Name", "(?:Organisation|Office|Contact|Buyer|Item\\s+Category|$)"),
       delivery_pincode: pins[0] || "",
