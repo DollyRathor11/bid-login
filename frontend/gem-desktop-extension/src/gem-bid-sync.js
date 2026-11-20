@@ -292,8 +292,9 @@
   // that were rejected, so a later scan can tell where the new bids end.
   // Renamed when bunch bids started being received, and again for
   // schedule-wise bunches, so bunch bids rejected by earlier scans are read
-  // again once.
-  const OPPORTUNITY_KNOWN_BIDS_KEY = "gemOpportunityKnownBidsV3";
+  // again once. V4: schedule bids first read while the live server still ran
+  // the old rules were rejected there; reading them again saves them to it.
+  const OPPORTUNITY_KNOWN_BIDS_KEY = "gemOpportunityKnownBidsV4";
   // Bids read by the scan in progress. They only become "known" once that
   // scan completes; an interrupted run must not hide the pages it never read.
   const OPPORTUNITY_RUN_BIDS_KEY = "gemOpportunityRunBids";
