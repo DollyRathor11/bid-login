@@ -141,9 +141,12 @@
     await waitFor(() => !openModals().length, 1500);
   }
 
-  async function readReplies(bidNo) {
+  async function readReplies(bidNo, step) {
     await closeModals();
-    if (!bidCard(bidNo)) searchBid(bidNo);
+    if (!bidCard(bidNo)) {
+      await step("searching GeM");
+      searchBid(bidNo);
+    }
     const card = await waitFor(() => bidCard(bidNo), 12000);
     if (!card) return { outcome: "not_found" };
     let link = representationLink(card);
@@ -151,6 +154,7 @@
       // GeM can reveal View Representation only after View Corrigendum is opened.
       const corrigendum = controlIn(card, /^view\s+corrigendum$/i);
       if (corrigendum) {
+        await step("opening View Corrigendum");
         corrigendum.click();
         link = await waitFor(() => representationLink(bidCard(bidNo)), 4000);
       }
@@ -159,6 +163,7 @@
       await closeModals();
       return { outcome: "no_link" };
     }
+    await step("opening View Representation");
     link.click();
     const table = await waitFor(() => replyTable(bidNo), 10000);
     if (!table) {
@@ -185,26 +190,55 @@
     no_table: "representation popup did not load",
     no_reply: "no reply published yet",
     no_match: "replies published, but none matched our representation text",
+    timeout: "GeM did not answer within a minute; skipped",
   };
+  // One bid never holds the scan for more than this.
+  const BID_TIMEOUT_MS = 60000;
+  // GeM's search can reload the page, which ends this script: the tab keeps
+  // the run in sessionStorage and the reloaded page carries on from storage.
+  const RUN_MARK = "acxxelReplyRun";
+  const RESUME_WITHIN_MS = 180000;
 
-  async function run(bidNumbers) {
-    const counts = { checked: 0, saved: 0, linked: 0, found: 0 };
-    const problems = [];
-    const total = bidNumbers.length;
+  async function run(bidNumbers, resume = null) {
+    const counts = { checked: 0, saved: 0, linked: 0, found: 0, ...(resume?.counts || {}) };
+    const problems = resume?.problems || [];
+    const total = resume?.total || bidNumbers.length;
+    let pending = [...bidNumbers];
+    // Reloads met on the current bid; one that keeps reloading the page is skipped.
+    let resumes = resume && resume.resumeBid === pending[0] ? Number(resume.resumes || 0) + 1 : resume ? 1 : 0;
     const report = (status, message) => chrome.storage.local.set({ [STATE_KEY]: {
-      status, message, total, ...counts, problems, updatedAt: Date.now(),
+      status, message, total, ...counts, counts, problems, pending,
+      resumeBid: pending[0] || "", resumes, updatedAt: Date.now(),
     } });
-    const closeTab = () => chrome.runtime.sendMessage({ type: "GEM_REPRESENTATION_REPLIES_DONE" }).catch(() => {});
+    if (resumes > 2 && pending.length) {
+      problems.push({ bidNo: pending[0], reason: "GeM page kept reloading on this bid; skipped" });
+      counts.checked += 1;
+      pending = pending.slice(1);
+      resumes = 0;
+    }
+    const finish = () => {
+      try { sessionStorage.removeItem(RUN_MARK); } catch { /* storage blocked */ }
+      chrome.runtime.sendMessage({ type: "GEM_REPRESENTATION_REPLIES_DONE" }).catch(() => {});
+    };
+    try { sessionStorage.setItem(RUN_MARK, "1"); } catch { /* storage blocked */ }
     try {
       await waitFor(searchBox, 15000);
-      for (const bidNo of bidNumbers) {
+      while (pending.length) {
+        const bidNo = pending[0];
         if ((await chrome.storage.local.get(STOP_KEY))[STOP_KEY]) {
           await report("stopped", `Stopped after ${counts.checked} of ${total} bids. Replies already read are saved.`);
-          closeTab();
+          finish();
           return;
         }
-        await report("running", `Checking ${bidNo} (${counts.checked + 1} of ${total})...`);
-        const result = await readReplies(bidNo);
+        const label = `Checking ${bidNo} (${counts.checked + 1} of ${total})`;
+        await report("running", `${label}...`);
+        const step = (text) => report("running", `${label}: ${text}...`);
+        let timer = null;
+        const result = await Promise.race([
+          readReplies(bidNo, step),
+          new Promise((resolve) => { timer = setTimeout(() => resolve({ outcome: "timeout" }), BID_TIMEOUT_MS); }),
+        ]).finally(() => clearTimeout(timer));
+        if (result.outcome === "timeout") await closeModals();
         let outcome = result.outcome;
         if (outcome !== "not_found") counts.found += 1;
         if (!["not_found", "no_link"].includes(outcome)) counts.linked += 1;
@@ -219,6 +253,9 @@
         }
         if (OUTCOME_NOTES[outcome]) problems.push({ bidNo, reason: OUTCOME_NOTES[outcome] });
         counts.checked += 1;
+        pending = pending.slice(1);
+        resumes = 0;
+        await report("running", `Checked ${bidNo} (${counts.checked} of ${total}).`);
         await sleep(800);
       }
       // Every found bid without the link usually means GeM is showing the
@@ -227,9 +264,10 @@
         ? " No bid showed View Representation: log out of GeM, or run this from a Chrome profile not logged in to GeM."
         : "";
       await report("complete", `Done. Checked ${counts.checked} bids; ${counts.saved} replies saved.${hint}`);
-      closeTab();
+      finish();
     } catch (error) {
       // The tab stays open so the page can be looked at.
+      try { sessionStorage.removeItem(RUN_MARK); } catch { /* storage blocked */ }
       await report("failed", `${error.message || "Representation Replies failed."} Replies already read are saved.`);
     } finally {
       running = false;
@@ -247,4 +285,19 @@
     sendResponse({ ok: true });
     return undefined;
   });
+
+  // This tab's run was cut off by a page reload: carry on with the bids left.
+  (async () => {
+    let marked = false;
+    try { marked = sessionStorage.getItem(RUN_MARK) === "1"; } catch { /* storage blocked */ }
+    if (!marked || running) return;
+    const { [STATE_KEY]: state } = await chrome.storage.local.get(STATE_KEY);
+    const fresh = state?.status === "running" && Date.now() - Number(state.updatedAt || 0) < RESUME_WITHIN_MS;
+    if (!fresh || !Array.isArray(state.pending) || !state.pending.length) {
+      try { sessionStorage.removeItem(RUN_MARK); } catch { /* storage blocked */ }
+      return;
+    }
+    running = true;
+    run(state.pending, state);
+  })();
 })();
