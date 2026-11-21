@@ -26,6 +26,16 @@ const DATE_FIELDS = [
   ["submitted_at", "Submitted On"],
   ["end_date", "End Date"],
 ];
+// GeM's reply date, "16-11-2026 11:30 AM" (time optional), as a timestamp.
+const replyTime = (value) => {
+  const match = String(value || "").match(/(\d{1,2})[-/](\d{1,2})[-/](\d{4})(?:\s+(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?)?/i);
+  if (!match) return 0;
+  const [, day, month, year, hour = "0", minute = "0", meridiem = ""] = match;
+  let hours = Number(hour) % (meridiem ? 12 : 24);
+  if (/pm/i.test(meridiem)) hours += 12;
+  return new Date(Number(year), Number(month) - 1, Number(day), hours, Number(minute)).getTime();
+};
+const latestReplyTime = (row) => Math.max(0, ...repliedRows(row).map((item) => replyTime(item.reply_published_on) || 1));
 const matchesReply = (row, filter) => filter === "all" || (repliedRows(row).length > 0) === (filter === "received");
 const filterClass = "rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100";
 
@@ -157,7 +167,10 @@ export default function RepresentationBidsPanel() {
   }, []);
 
   const searchKey = bidKey(search);
-  const searchedRows = rows.filter((row) => {
+  // Bids with a reply come first, the newest reply on top, filtered or not;
+  // the rest keep their order.
+  const orderedRows = [...rows].sort((a, b) => latestReplyTime(b) - latestReplyTime(a));
+  const searchedRows = orderedRows.filter((row) => {
     if (searchKey && !bidKey(row.bid_no).includes(searchKey)) return false;
     if (!dateFrom && !dateTo) return true;
     const day = dayKey(row[dateField]);
