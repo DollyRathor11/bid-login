@@ -1,7 +1,8 @@
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { useEffect, useState } from "react";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import SpecialDocEditor from "../../../components/analyser/SpecialDocEditor";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import {
   INTEL_PROCESSORS, INTEL_XEON_PROCESSORS, AMD_THREADRIPPER_PROCESSORS,
   INTEL_MOTHERBOARDS, INTEL_XEON_MOTHERBOARDS, AMD_MOTHERBOARDS,

@@ -905,6 +905,9 @@ def list_workstation_bids(request):
             bids = WorkstationBid.objects.filter(status="complete", review_status=BID_REJECTED).order_by("-updated_at")
         else:
             bids = WorkstationBid.objects.filter(status="complete", review_status=status_filter).order_by("-created_at")
+        if role != "admin":
+            from ..bunch_membership import exclude_bunch_bids
+            bids = exclude_bunch_bids(bids)
         label = BID_REJECTED if status_filter == REJECTED_SECTION else status_filter
         return JsonResponse([_workstation_bid_data(bid, request, label) for bid in bids], safe=False)
     except Exception as e:

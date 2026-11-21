@@ -1,6 +1,7 @@
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { useEffect, useState } from "react";
 import SpecialDocEditor from "../../../components/analyser/SpecialDocEditor";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import {
   PROCESSORS, RAMS, HDDS, SSDS, OS_OPTIONS, DVDS, WIFIS, MONITORS,
   CABINETS, KEYBOARDS, WARRANTIES, MOTHERBOARDS,

@@ -1,7 +1,8 @@
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { useEffect, useState } from "react";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import SpecialDocEditor from "../../../components/analyser/SpecialDocEditor";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import { AIO_DVDS as DVDS, AIO_WARRANTIES as WARRANTIES } from "../User/AioConfig";
 // AIO-native RAM/SSD/HDD/OS/screen-size/WiFi/keyboard/motherboard vocabulary
 // (see AioConfig.jsx for why these can't just reuse Desktop's lists) — same

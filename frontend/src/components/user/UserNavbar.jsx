@@ -71,6 +71,7 @@ const UserNavbar = () => {
     { name: "Printer",     path: "/user/printer",     icon: <FaPrint />   },
     { name: "Multifunction Printer", path: "/user/multifunction-printer", icon: <FaPrint /> },
     { name: "Toner",       path: "/user/toner",       icon: <FaBox />     },
+    { name: "UPS",         path: "/user/ups",         icon: <FaBox />     },
   ];
 
   return (

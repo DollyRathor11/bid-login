@@ -1,3 +1,5 @@
+import CustomProductSpecs from "../../../components/analyser/CustomProductSpecs";
+import { catalogueProductId, catalogueCategory } from "../../../utils/catalogueProduct";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import img1 from "../../../assets/img1.png";
@@ -769,7 +771,7 @@ function getAioSpecs(product) {
 // AIO sections plus any other GeM spec not in them, so nothing is hidden.
 function getAioSections(specs) {
   const listed = new Set(AIO_SECTIONS.flatMap((section) => section.fields));
-  const others = Object.keys(specs).filter((field) => !listed.has(field));
+  const others = Object.keys(specs).filter((field) => !field.startsWith("_") && !listed.has(field));
   return others.length
     ? [...AIO_SECTIONS, { title: "OTHER SPECIFICATIONS", fields: others }]
     : AIO_SECTIONS;
@@ -820,6 +822,45 @@ function getWorkstationSpecs(product) {
     "Screen Size": cleanDisplayValue(raw["Screen Size"] || product?.monitor),
     "Power Supply": cleanDisplayValue(raw["Power Supply"] || product?.power_supply),
   };
+}
+
+function getEditableSpecs(product) {
+  const raw = getRawExtraSpecs(product);
+  if (isWorkstationProduct(product)) {
+    return { ...raw, ...getWorkstationSpecs(product) };
+  }
+  if (isAioProduct(product)) {
+    return { ...raw, ...getAioSpecs(product) };
+  }
+  return { ...raw, ...getExtraSpecs(product) };
+}
+
+function getProductEditSections(product, specs) {
+  let sections = isWorkstationProduct(product)
+    ? WORKSTATION_SECTIONS
+    : isAioProduct(product)
+      ? getAioSections(specs)
+      : GEM_SECTIONS;
+  const visibleFields = new Set(sections.flatMap((section) => section.fields));
+  const additionalFields = Object.keys(specs).filter(
+    (field) => !field.startsWith("_") && !visibleFields.has(field)
+  );
+
+  if (additionalFields.length) {
+    const otherSectionIndex = sections.findIndex(
+      (section) => section.title === "OTHER SPECIFICATIONS"
+    );
+    if (otherSectionIndex >= 0) {
+      sections = sections.map((section, index) =>
+        index === otherSectionIndex
+          ? { ...section, fields: [...section.fields, ...additionalFields] }
+          : section
+      );
+    } else {
+      sections = [...sections, { title: "OTHER SPECIFICATIONS", fields: additionalFields }];
+    }
+  }
+  return sections;
 }
 
 function getPrinterSpecs(product) {
@@ -922,6 +963,10 @@ async function parseJsonResponse(res) {
   return data;
 }
 
+function getCatalogueProductId(product) {
+  return product?.catalogue_id ?? product?.id;
+}
+
 function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -930,6 +975,7 @@ function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
 
   const workstation = isWorkstationProduct(product);
   const printer = isPrinterProduct(product);
+  const canEdit = !printer;
   const aio = isAioProduct(product);
   const specs = printer
     ? getPrinterSpecs(product)
@@ -959,7 +1005,11 @@ function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
     setDeleteError("");
 
     try {
-      const res = await fetch(`${API}/catalogue/${product.id}/delete/`, {
+<<<<<<< HEAD
+      const res = await fetch(`${API}/catalogue/${catalogueProductId(product)}/delete/`, {
+=======
+      const res = await fetch(`${API}/catalogue/${getCatalogueProductId(product)}/delete/`, {
+>>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
         method: "DELETE",
       });
 
@@ -975,7 +1025,7 @@ function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
 
   return (
     <>
-      {!workstation && !printer && showEdit && (
+      {canEdit && showEdit && (
         <ProductFormModal
           mode="edit"
           product={product}
@@ -995,15 +1045,17 @@ function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
           </h1>
 
           <div className="flex items-center gap-3">
-            {!workstation && !printer && (
-              <>
+            {canEdit && (
             <button
               onClick={() => setShowEdit(true)}
               className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-bold text-sm"
             >
               ✏️ Edit
             </button>
+            )}
 
+            {!workstation && !printer && (
+              <>
             {!confirmDelete ? (
               <button
                 onClick={() => setConfirmDelete(true)}
@@ -1160,6 +1212,7 @@ function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
                 </div>
               </div>
             ))}
+            {(getRawExtraSpecs(product)._custom_specs || []).length > 0 && <section className="overflow-hidden rounded-xl border shadow-sm"><div className="bg-slate-800 px-5 py-3"><h3 className="text-xs font-extrabold uppercase tracking-widest text-white">Additional Specifications</h3></div><div className="divide-y divide-gray-100">{getRawExtraSpecs(product)._custom_specs.map(row => <div key={row.label} className="grid grid-cols-2 gap-4 px-5 py-3 text-sm"><div className="font-medium text-gray-500">{row.label}</div><div className="break-words text-gray-800">{row.value}</div></div>)}</div></section>}
           </div>
         </div>
       </div>
@@ -1169,10 +1222,19 @@ function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
 
 function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
   const isEdit = mode === "edit";
+  const workstation = isEdit && isWorkstationProduct(product);
+  const createsWorkstationCatalogueEntry = workstation && !product?.catalogue_id;
 
   const [form, setForm] = useState({
     model_no: product?.model_no || "",
-    category: product?.category || "",
+<<<<<<< HEAD
+    category: catalogueCategory(product?.category, CATEGORY_OPTIONS),
+=======
+    category:
+      CATEGORY_OPTIONS.find(
+        (category) => category.toLowerCase() === String(product?.category || "").toLowerCase()
+      ) || product?.category || "",
+>>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
     processor: product?.processor || "",
     ram: product?.ram || "",
     storage: product?.storage || "",
@@ -1180,8 +1242,15 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
   });
 
   const [extraSpecs, setExtraSpecs] = useState(
-    isEdit ? getExtraSpecs(product) : emptySpecs()
+<<<<<<< HEAD
+    isEdit ? { ...getExtraSpecs(product), ...getRawExtraSpecs(product) } : emptySpecs()
+=======
+    isEdit ? getEditableSpecs(product) : emptySpecs()
+>>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
   );
+  const editSections = isEdit ? getProductEditSections(product, extraSpecs) : GEM_SECTIONS;
+
+  const [customSpecs, setCustomSpecs] = useState(() => getRawExtraSpecs(product)._custom_specs || []);
 
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
@@ -1219,15 +1288,37 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
     if (!form.category.trim()) {
       return setError("Category is required.");
     }
+    const catalogueId = catalogueProductId(product);
+    if (isEdit && !catalogueId) return setError("This product does not have an editable catalogue record.");
 
+    const names = new Set();
+    for (const row of customSpecs) {
+      const name = row.label.trim();
+      if (!name && !row.value.trim()) continue;
+      if (!name || !row.value.trim()) return setError("Enter a field name and value for each additional specification.");
+      if (names.has(name.toLowerCase())) return setError("Additional specification names must be unique.");
+      names.add(name.toLowerCase());
+    }
     const fd = new FormData();
+    const formData = { ...form };
+    if (workstation) {
+      formData.processor = extraSpecs["Processor Number"] || "";
+      formData.ram = extraSpecs.RAM || "";
+      formData.storage = [extraSpecs.SSD, extraSpecs.HDD].filter(Boolean).join(", ");
+      formData.os = extraSpecs["Factory Pre-loaded Operating System"] || "";
+    }
 
-    Object.entries(form).forEach(([key, value]) => {
+    Object.entries(formData).forEach(([key, value]) => {
       fd.append(key, value || "");
     });
 
+<<<<<<< HEAD
     fd.append("description", "");
+    fd.append("extra_specs", JSON.stringify({ ...extraSpecs, _custom_specs: customSpecs }));
+=======
+    fd.append("description", isEdit ? product?.description || "" : "");
     fd.append("extra_specs", JSON.stringify(extraSpecs));
+>>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
 
     if (imageFile) {
       fd.append("image", imageFile);
@@ -1236,17 +1327,35 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
     setSaving(true);
 
     try {
+<<<<<<< HEAD
       const url = isEdit
-        ? `${API}/catalogue/${product.id}/update/`
+        ? `${API}/catalogue/${catalogueId}/update/`
+=======
+      const url = isEdit && !createsWorkstationCatalogueEntry
+        ? `${API}/catalogue/${getCatalogueProductId(product)}/update/`
+>>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
         : `${API}/catalogue/create/`;
 
       const res = await fetch(url, {
-        method: isEdit ? "PATCH" : "POST",
+        method: isEdit && !createsWorkstationCatalogueEntry ? "PATCH" : "POST",
         body: fd,
       });
 
       const data = await parseJsonResponse(res);
-      onSaved(data);
+<<<<<<< HEAD
+      onSaved(isEdit ? { ...product, ...data, id: product.id, catalogue_id: Number(catalogueId), extra_specs: { ...extraSpecs, ...data.extra_specs } } : data);
+=======
+      onSaved(
+        isEdit
+          ? {
+              ...data,
+              id: product.id,
+              catalogue_id: getCatalogueProductId(product) ?? data.id,
+              ...(isAioProduct(product) || workstation ? { extra_specs: extraSpecs } : {}),
+            }
+          : data
+      );
+>>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
       onClose();
     } catch (err) {
       setError(err.message);
@@ -1337,8 +1446,12 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
                   type="text"
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                   value={form.model_no}
+                  readOnly={createsWorkstationCatalogueEntry}
                   onChange={(e) => setField("model_no", e.target.value)}
                 />
+                {createsWorkstationCatalogueEntry && (
+                  <p className="mt-1 text-xs text-gray-500">The model number is fixed for sheet-backed workstation products.</p>
+                )}
               </div>
 
               <div>
@@ -1359,7 +1472,7 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
                 </select>
               </div>
 
-              {[
+              {!workstation && [
                 { label: "Processor", key: "processor" },
                 { label: "RAM", key: "ram" },
                 { label: "Storage", key: "storage" },
@@ -1381,7 +1494,7 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
           </div>
 
           <div className="mt-8 space-y-5">
-            {GEM_SECTIONS.map((section) => (
+            {editSections.map((section) => (
               <div
                 key={section.title}
                 className="border rounded-2xl overflow-hidden bg-white"
@@ -1410,6 +1523,8 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
               </div>
             ))}
           </div>
+
+          <div className="mt-5"><CustomProductSpecs rows={customSpecs} onChange={setCustomSpecs} /></div>
 
           <div className="flex gap-3 pt-5 mt-5 border-t justify-end">
             <button

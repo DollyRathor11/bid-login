@@ -73,32 +73,57 @@
     return at >= 0 && !/\d/.test(value[at + bidNo.length] || "");
   };
 
+  // A box whose form goes to another address (the header's Marketplace search
+  // posts to mkp.gem.gov.in/search) would take the tab away from All Bids.
+  const leavesAllBids = (input) => {
+    const action = input.form?.getAttribute("action");
+    if (!action || /^(?:#|javascript:)/i.test(action)) return false;
+    try {
+      const target = new URL(action, location.href);
+      return target.origin !== location.origin || !target.pathname.startsWith("/all-bids");
+    } catch {
+      return true;
+    }
+  };
+
+  // All Bids' own bid search, never the site header's Marketplace search.
   function searchBox() {
-    return [...document.querySelectorAll('input[type="search"], input[type="text"], input:not([type])')]
-      .find((input) => visible(input) && !input.readOnly
-        && /search|keyword|bid\s*(?:no|number)/i.test(`${input.placeholder} ${input.id} ${input.name} ${input.getAttribute("aria-label") || ""}`)
-        && !/date/i.test(`${input.placeholder} ${input.id} ${input.name}`)) || null;
+    const candidates = [...document.querySelectorAll('input[type="search"], input[type="text"], input:not([type])')]
+      .filter((input) => {
+        const label = `${input.placeholder} ${input.id} ${input.name} ${input.getAttribute("aria-label") || ""}`;
+        return visible(input) && !input.readOnly
+          && /search|keyword|bid/i.test(label) && !/date/i.test(label)
+          && !input.closest("header, nav, .navbar, .header, #header, .top-header, .main-header")
+          && !leavesAllBids(input);
+      });
+    const bidLabel = (input) => /bid|ra\s*no/i.test(`${input.placeholder} ${input.id} ${input.name} ${input.getAttribute("aria-label") || ""}`);
+    return candidates.find(bidLabel) || candidates[0] || null;
   }
 
+  const describe = (node) => clean(`${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ""} ${nodeText(node) || node.value || ""}`).slice(0, 60);
+
+  // Only a control that says "search" next to the box is clicked (never a plain
+  // link that could leave All Bids); otherwise Enter is pressed in the box.
+  // Returns what was done, for the status line.
   function searchBid(bidNo) {
     const input = searchBox();
     if (!input) throw new Error("The search box of the GeM All Bids page was not found.");
     input.focus();
     input.value = bidNo;
-    for (const type of ["input", "change"]) input.dispatchEvent(new Event(type, { bubbles: true }));
+    for (const type of ["input", "change", "keyup"]) input.dispatchEvent(new Event(type, { bubbles: true }));
     const scope = input.closest(".input-group, form") || input.parentElement;
-    const buttons = [...(scope?.querySelectorAll('button, input[type="submit"], input[type="button"], a, [id*="search" i]') || [])]
-      .filter((node) => node !== input && visible(node));
-    const button = buttons.find((node) => /search/i.test(`${node.id} ${node.className} ${nodeText(node)} ${node.value || ""}`)
-      || node.querySelector?.('[class*="search" i]')) || buttons[0];
+    const button = [...(scope?.querySelectorAll('button, input[type="submit"], input[type="button"], [id*="search" i], [class*="search" i]') || [])]
+      .filter((node) => node !== input && !node.contains(input) && visible(node) && !(node.matches("a[href]") && !/^(?:#|javascript:)/i.test(node.getAttribute("href"))))
+      .find((node) => /search/i.test(`${node.id} ${node.className} ${nodeText(node)} ${node.value || ""} ${node.title || ""}`)
+        || node.querySelector?.('[class*="search" i]'));
     if (button) {
       button.click();
-      return;
+      return `clicked ${describe(button)}`;
     }
     for (const type of ["keydown", "keypress", "keyup"]) {
       input.dispatchEvent(new KeyboardEvent(type, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
     }
-    input.form?.requestSubmit?.();
+    return `pressed Enter in ${describe(input)}`;
   }
 
   // The bid's card: the largest block around its number holding one bid only.
@@ -145,7 +170,7 @@
     await closeModals();
     if (!bidCard(bidNo)) {
       await step("searching GeM");
-      searchBid(bidNo);
+      await step(`searching GeM (${searchBid(bidNo)})`);
     }
     const card = await waitFor(() => bidCard(bidNo), 12000);
     if (!card) return { outcome: "not_found" };
@@ -204,6 +229,8 @@
     const problems = resume?.problems || [];
     const total = resume?.total || bidNumbers.length;
     let pending = [...bidNumbers];
+    const startedAt = Date.now();
+    let checkedNow = 0;
     // Reloads met on the current bid; one that keeps reloading the page is skipped.
     let resumes = resume && resume.resumeBid === pending[0] ? Number(resume.resumes || 0) + 1 : resume ? 1 : 0;
     const report = (status, message) => chrome.storage.local.set({ [STATE_KEY]: {
@@ -230,7 +257,8 @@
           finish();
           return;
         }
-        const label = `Checking ${bidNo} (${counts.checked + 1} of ${total})`;
+        const speed = checkedNow ? `, about ${Math.round((Date.now() - startedAt) / checkedNow / 1000)}s per bid` : "";
+        const label = `Checking ${bidNo} (${counts.checked + 1} of ${total}${speed})`;
         await report("running", `${label}...`);
         const step = (text) => report("running", `${label}: ${text}...`);
         let timer = null;
@@ -255,8 +283,10 @@
         counts.checked += 1;
         pending = pending.slice(1);
         resumes = 0;
-        await report("running", `Checked ${bidNo} (${counts.checked} of ${total}).`);
-        await sleep(800);
+        checkedNow += 1;
+        const perBid = Math.round((Date.now() - startedAt) / checkedNow / 1000);
+        await report("running", `Checked ${bidNo} (${counts.checked} of ${total}, about ${perBid}s per bid).`);
+        await sleep(300);
       }
       // Every found bid without the link usually means GeM is showing the
       // logged-in view of All Bids.

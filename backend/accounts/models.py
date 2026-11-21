@@ -460,6 +460,9 @@ class GemBidOpportunity(models.Model):
     delivery_pincode = models.CharField(max_length=6, blank=True, default="")
     product_type = models.CharField(max_length=40, blank=True, default="")
     pdf_url = models.URLField(max_length=1000, blank=True, default="")
+    # GeM "Evaluation Method: Item wise evaluation": each item is its own
+    # schedule, so a seller may quote only its own items of a bunch bid.
+    schedule_wise = models.BooleanField(default=False)
     has_corrigendum = models.BooleanField(default=False)
     corrigendum_detail = models.TextField(blank=True, default="")
     corrigendum_found_at = models.DateTimeField(blank=True, null=True)
@@ -898,3 +901,7 @@ class ComponentRateHistory(models.Model):
 
     def __str__(self):
         return f"{self.product}/{self.category}: {self.component_name} @ {self.price}"
+
+
+# UPS has its own storage; existing product tables and flows are unchanged.
+from .ups_models import UpsBid  # noqa: E402,F401

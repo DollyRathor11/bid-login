@@ -67,3 +67,17 @@ class GemOpportunityProductRulesTests(SimpleTestCase):
             "A4 and Legal Size Multifunction Printer (MFP) (Q2) ( PAC Only )"
         ))
 
+    def test_schedule_wise_bunch_may_hold_other_items(self):
+        item = "Office Chair (Q2), All in One PC (V2) (Q2), Steel Almirah (Q2)"
+        self.assertIsNone(classify_opportunity_item(item))
+        result = classify_opportunity_item(item, schedule_wise=True)
+        self.assertEqual(result["product_type"], "aio")
+        self.assertTrue(result["schedule_wise"])
+        self.assertEqual(result["product_types"], ["aio"])
+        # Still needs one of ours (UPS alone is not), and a single item is
+        # never schedule-wise.
+        self.assertIsNone(classify_opportunity_item(
+            "Office Chair (Q2), Line Interactive UPS with AVR (V2) (Q2)", schedule_wise=True
+        ))
+        self.assertIsNone(classify_opportunity_item("Office Chair (Q2)", schedule_wise=True))
+

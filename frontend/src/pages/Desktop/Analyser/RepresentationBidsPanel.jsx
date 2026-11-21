@@ -11,6 +11,23 @@ const formatDateTime = (value) => (value ? new Date(value).toLocaleString("en-IN
 const repliedRows = (bid) => (bid.representations || []).filter((row) => row.reply);
 // "GEM/2026/B/8291220", "gem 2026 b 8291220" and "8291220" all find the bid.
 const bidKey = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+// The local calendar day (YYYY-MM-DD) of a date, to compare with a date input.
+const dayKey = (value) => {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+};
+const REPLY_FILTERS = [
+  ["all", "All"],
+  ["received", "Reply Received"],
+  ["awaited", "Reply Awaited"],
+];
+const DATE_FIELDS = [
+  ["submitted_at", "Submitted On"],
+  ["end_date", "End Date"],
+];
+const matchesReply = (row, filter) => filter === "all" || (repliedRows(row).length > 0) === (filter === "received");
+const filterClass = "rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100";
 
 function RepresentationsModal({ bid, repliesOnly, onClose }) {
   const rows = repliesOnly ? repliedRows(bid) : bid.representations || [];
@@ -85,6 +102,10 @@ export default function RepresentationBidsPanel() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
   const [search, setSearch] = useState("");
+  const [replyFilter, setReplyFilter] = useState("all");
+  const [dateField, setDateField] = useState("submitted_at");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
 
   const deleteIds = async (ids, confirmText) => {
@@ -136,7 +157,16 @@ export default function RepresentationBidsPanel() {
   }, []);
 
   const searchKey = bidKey(search);
-  const visibleRows = searchKey ? rows.filter((row) => bidKey(row.bid_no).includes(searchKey)) : rows;
+  const searchedRows = rows.filter((row) => {
+    if (searchKey && !bidKey(row.bid_no).includes(searchKey)) return false;
+    if (!dateFrom && !dateTo) return true;
+    const day = dayKey(row[dateField]);
+    return Boolean(day) && (!dateFrom || day >= dateFrom) && (!dateTo || day <= dateTo);
+  });
+  const visibleRows = searchedRows.filter((row) => matchesReply(row, replyFilter));
+  const filtersActive = Boolean(search.trim() || dateFrom || dateTo || replyFilter !== "all");
+  const changeFilter = (setter) => (event) => { setter(event.target.value); setPage(1); };
+  const clearFilters = () => { setSearch(""); setReplyFilter("all"); setDateFrom(""); setDateTo(""); setPage(1); };
   const { pageRows, pageCount, currentPage, offset } = paginate(visibleRows, page);
   const allVisibleSelected = pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id));
 
@@ -159,6 +189,34 @@ export default function RepresentationBidsPanel() {
               className="w-full rounded border border-gray-300 py-2 pl-9 pr-3 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
             />
           </label>
+          <label className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+            Reply:
+            <select value={replyFilter} onChange={changeFilter(setReplyFilter)} className={filterClass}>
+              {REPLY_FILTERS.map(([value, label]) => (
+                <option key={value} value={value}>
+                  {label} ({searchedRows.filter((row) => matchesReply(row, value)).length})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-700">
+            <select value={dateField} onChange={changeFilter(setDateField)} aria-label="Date to filter by" className={filterClass}>
+              {DATE_FIELDS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+            <label className="flex items-center gap-1">
+              From
+              <input type="date" value={dateFrom} max={dateTo || undefined} onChange={changeFilter(setDateFrom)} className={filterClass} />
+            </label>
+            <label className="flex items-center gap-1">
+              To
+              <input type="date" value={dateTo} min={dateFrom || undefined} onChange={changeFilter(setDateTo)} className={filterClass} />
+            </label>
+          </div>
+          {filtersActive && (
+            <button type="button" onClick={clearFilters} className="text-sm font-bold text-sky-700 hover:text-sky-900">
+              Clear filters
+            </button>
+          )}
         </div>
         {selectedIds.size > 0 && (
           <button
@@ -273,7 +331,7 @@ export default function RepresentationBidsPanel() {
             </tr>
           ))}
           {rows.length > 0 && visibleRows.length === 0 && (
-            <tr><td colSpan="9" className="py-16 text-center text-sm text-gray-500">No bid matches "{search.trim()}".</td></tr>
+            <tr><td colSpan="9" className="py-16 text-center text-sm text-gray-500">No bid matches these filters.</td></tr>
           )}
           {rows.length === 0 && (
             <tr><td colSpan="9" className="py-16 text-center text-sm text-gray-500">

@@ -1,5 +1,6 @@
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import printerOm052 from "../../../assets/OMO52.png";
 import printerOm271 from "../../../assets/OM271.png";
 import printerOm050 from "../../../assets/OMO50.png";

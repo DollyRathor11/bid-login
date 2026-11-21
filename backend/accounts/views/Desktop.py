@@ -4566,6 +4566,9 @@ def _normalize_extra_specs(extra_specs):
         ordered[field] = _clean_value((extra_specs or {}).get(field, ""))
     if ordered.get("Type of RAM") == "DDR4":
         ordered["Type of RAM"] = "DDR4 RAM"
+    if "_custom_specs" in (extra_specs or {}):
+        from ..catalogue_custom_specs import normalize_custom_specs
+        ordered["_custom_specs"] = normalize_custom_specs(extra_specs["_custom_specs"])
     return ordered
 
 def _catalogue_product_data(product, request):
@@ -4695,10 +4698,13 @@ def create_catalogue_product(request):
         if CatalogueProduct.objects.filter(model_no__iexact=model_no).exists(): return JsonResponse({"error": "A product with this model no. already exists"}, status=400)
         try: extra_specs = json.loads(data.get("extra_specs", "{}"))
         except Exception: extra_specs = {}
+        category = data.get("category", "")
         product = CatalogueProduct.objects.create(
             model_no=model_no, processor=data.get("processor", ""), ram=data.get("ram", ""),
-            storage=data.get("storage", ""), os=data.get("os", ""), category=data.get("category", ""),
-            description=data.get("description", ""), extra_specs=_normalize_extra_specs(extra_specs), image=image,
+            storage=data.get("storage", ""), os=data.get("os", ""), category=category,
+            description=data.get("description", ""),
+            extra_specs=extra_specs if category.strip().lower() in {"aio", "workstation"} else _normalize_extra_specs(extra_specs),
+            image=image,
         )
         return JsonResponse({"message": "Catalogue product created successfully", **_catalogue_product_data(product, request)}, status=201)
     except Exception as e:
@@ -4726,7 +4732,18 @@ def update_catalogue_product(request, product_id):
         if "extra_specs" in data:
             try: extra_specs = json.loads(data.get("extra_specs", "{}"))
             except Exception: extra_specs = {}
-            product.extra_specs = _normalize_extra_specs(extra_specs)
+<<<<<<< HEAD
+            # Editing additional fields must retain imported category specs
+            # and GeM section metadata which are outside the desktop template.
+            existing_specs = product.extra_specs if isinstance(product.extra_specs, dict) else {}
+            product.extra_specs = {**existing_specs, **_normalize_extra_specs(extra_specs)}
+=======
+            product.extra_specs = (
+                extra_specs
+                if str(data.get("category", product.category)).strip().lower() in {"aio", "workstation"}
+                else _normalize_extra_specs(extra_specs)
+            )
+>>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
         if image: product.image = image
         product.save()
         return JsonResponse({"message": "Catalogue product updated successfully", **_catalogue_product_data(product, request)}, status=200)
@@ -5348,6 +5365,9 @@ def list_desktop_bids(request):
                     review_status=status_filter,
                 ).order_by("-created_at")
 
+        if role != "admin":
+            from ..bunch_membership import exclude_bunch_bids
+            bids = exclude_bunch_bids(bids)
         # Rejected rows say "bid_rejected": AIO/Toner screens read "rejected" as re-analyze.
         label = BID_REJECTED if status_filter == REJECTED_SECTION else status_filter
         result = [_bid_data(bid, request, status_label=label) for bid in bids]

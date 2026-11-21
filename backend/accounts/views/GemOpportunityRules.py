@@ -83,13 +83,14 @@ def _category_key_and_product(category, in_bunch=False):
     return None, None
 
 
-def classify_opportunity_item(value):
+def classify_opportunity_item(value, schedule_wise=False):
     """Return category metadata, or None when any category is unsupported.
 
     A single-category bid must be one of the approved categories. A bunch bid
     (several categories) is kept when every category is approved or a UPS
     category and at least one is approved; its product type is that of its
-    first approved category.
+    first approved category. A schedule-wise bunch (GeM item wise evaluation,
+    where a seller quotes only its own items) may also hold other categories.
     """
     raw = str(value or "")
     if not raw.strip():
@@ -104,16 +105,18 @@ def classify_opportunity_item(value):
     if has_pac_only(raw) and not is_a3:
         return None
     classified = [_category_key_and_product(category, is_bunch) for category in categories]
-    if any(category_key is None for category_key, _ in classified):
+    schedule_wise = bool(schedule_wise and is_bunch)
+    if not schedule_wise and any(category_key is None for category_key, _ in classified):
         return None
-    primary = next((product_type for _, product_type in classified if product_type != "ups"), None)
+    primary = next((product_type for _, product_type in classified if product_type and product_type != "ups"), None)
     if not primary:
         return None
     return {
         "clean_name": clean_name,
         "categories": categories,
-        "category_keys": [category_key for category_key, _ in classified],
-        "product_types": [product_type for _, product_type in classified],
+        "category_keys": [category_key for category_key, _ in classified if category_key],
+        "product_types": [product_type for _, product_type in classified if product_type],
         "product_type": primary,
         "is_bunch": is_bunch,
+        "schedule_wise": schedule_wise,
     }

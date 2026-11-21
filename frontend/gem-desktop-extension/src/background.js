@@ -542,6 +542,21 @@ async function startJob(jobId, product) {
 // searching only the bids that still wait for a reply.
 const GEM_ALL_BIDS_URL = "https://bidplus.gem.gov.in/all-bids";
 const REPLY_STATE_KEY = "gemRepresentationReplySync";
+const REPLY_TAB_KEY = "gemRepresentationReplyTab";
+
+// The reply scan runs only on All Bids: if GeM takes its tab to another page,
+// say so (with the address) instead of leaving the status on "searching".
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
+  if (!changeInfo.url || changeInfo.url.startsWith(GEM_ALL_BIDS_URL)) return;
+  const { [REPLY_TAB_KEY]: replyTab, [REPLY_STATE_KEY]: state } = await chrome.storage.local.get([REPLY_TAB_KEY, REPLY_STATE_KEY]);
+  if (replyTab !== tabId || !["starting", "running"].includes(state?.status)) return;
+  await chrome.storage.local.set({ [REPLY_STATE_KEY]: {
+    ...state,
+    status: "failed",
+    message: `GeM left All Bids and opened ${changeInfo.url.slice(0, 160)}; the scan stopped. ${state.message || ""}`.trim(),
+    updatedAt: Date.now(),
+  } });
+});
 
 async function waitForTabLoaded(tabId, timeoutMs = 30000) {
   const end = Date.now() + timeoutMs;
@@ -571,7 +586,12 @@ async function startRepresentationReplies() {
       return { ok: true };
     }
     await setState("starting", `Opening GeM All Bids for ${bidNumbers.length} bids...`);
-    tabId = (await chrome.tabs.create({ url: GEM_ALL_BIDS_URL, active: false })).id;
+    // A tab in the background is slowed down by Chrome (GeM's search and
+    // popups take far longer), so All Bids opens in its own visible window.
+    // It closes by itself when the scan ends.
+    const scanWindow = await chrome.windows.create({ url: GEM_ALL_BIDS_URL, focused: true, type: "normal", width: 1200, height: 850 });
+    tabId = scanWindow.tabs?.[0]?.id ?? (await chrome.tabs.query({ windowId: scanWindow.id }))[0]?.id;
+    await chrome.storage.local.set({ [REPLY_TAB_KEY]: tabId });
     const tab = await waitForTabLoaded(tabId);
     if (!String(tab.url || "").startsWith(GEM_ALL_BIDS_URL)) {
       throw new Error("GeM did not open All Bids. Log out of GeM, or use a Chrome profile not logged in to GeM.");

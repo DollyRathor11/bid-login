@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import Login from "./components/auth/Login";
 import BidTypeSelect from "./components/auth/BidTypeSelect";
 import ManagementNavbar from "./components/Management/ManagementNavbar";
@@ -13,6 +13,12 @@ import UserDashboard from "./pages/User/UserDashboard";
 import AllBidsApproval from "./pages/Admin/AllBidsApproval";
 import AdminBidSearch from "./components/Admin/AdminBidSearch";
 import CreateDesktopBid from "./pages/Desktop/User/CreateDesktopBid";
+import CreateUpsBid from "./pages/Ups/CreateUpsBid";
+import BunchBids from "./pages/Bunch/BunchBids";
+import BunchReviewHeader from "./pages/Bunch/BunchReviewHeader";
+import BunchAdminUpsReview from "./pages/Bunch/BunchAdminUpsReview";
+import BunchUpsReview from "./pages/Bunch/BunchUpsReview";
+import UpsAnalyserDocuments from "./pages/Bunch/UpsAnalyserDocuments";
 import CreateWorkstationBid from "./pages/Workstation/User/CreateWorkstationBid";
 import WorkstationAnalyserDashboard from "./pages/Workstation/Analyser/WorkstationAnalyserDashboard";
 import WorkstationBidDetailView from "./pages/Workstation/Analyser/WorkstationBidDetailView";
@@ -72,9 +78,12 @@ const AdminWelcome = () => (
 );
 
 function App() {
+  const location = useLocation();
   return (
     <div className="app-content">
-      <Routes>
+      <BunchReviewHeader />
+      <div className={location.state?.bunchReview?.role === "admin" ? "bunch-admin-workspace" : undefined}>
+      <Routes key={location.state?.bunchReview ? location.key : "routes"}>
         <Route path="/" element={<BidTypeSelect />} />
         <Route path="/login/pre-bid" element={<Login />} />
         <Route path="/login/post-bid" element={<Login showRoleSelector={false} fixedRole="management" />} />
@@ -99,6 +108,7 @@ function App() {
         <Route path="/user/desktop" element={<CreateDesktopBid />} />
         <Route path="/user/aio" element={<CreateAioBid />} />
         <Route path="/user/toner" element={<CreateTonerBid />} />
+        <Route path="/user/ups" element={<CreateUpsBid />} />
         <Route path="/user/workstation" element={<CreateWorkstationBid />} />
         <Route path="/user/printer" element={<CreatePrinterBid productMode="printer" />} /> {}
         <Route path="/user/multifunction-printer" element={<CreatePrinterBid productMode="multifunction" />} />
@@ -106,6 +116,7 @@ function App() {
         <Route path="/analyser-dashboard" element={<AnalyserNavbar />}>
           <Route index element={null} />
           <Route path="pricing-pending" element={<AdminPricingPending />} />
+          <Route path="bunch" element={<BunchBids />} />
           <Route path="desktop" element={<AnalyserDashboard product="desktop" />} />
           <Route path="desktop/bid/:id/downloads" element={<ApprovedBidDownloads />} />
           <Route path="desktop/bid/:id/approved-details" element={<ApprovedBiddingDetails />} />
@@ -136,6 +147,8 @@ function App() {
         <Route path="/analyser-dashboard/printer/document" element={<AnalyserPrinterDocument />} />
 
         <Route path="/analyser-document" element={<AnalyserDocument />} />
+        <Route path="/analyser-dashboard/bunch/ups/:id" element={<BunchUpsReview />} />
+        <Route path="/analyser-dashboard/bunch/ups/:id/documents" element={<UpsAnalyserDocuments />} />
 
         <Route path="/admin-dashboard" element={<AdminNavbar />}>
           <Route index element={<AdminWelcome />} />
@@ -156,6 +169,8 @@ function App() {
         </Route>
 
         <Route path="/admin-dashboard/all-bids-approval" element={<AllBidsApproval />} />
+        <Route path="/admin-dashboard/bunch/ups/:id" element={<BunchAdminUpsReview />} />
+        <Route path="/admin-dashboard/bunch-bid-approval" element={<BunchBids role="admin" />} />
         <Route path="/admin-dashboard/bid-search" element={<AdminBidSearch />} />
         <Route path="/admin-dashboard/desktop-bid-approval" element={<DesktopBidApproval />} />
         <Route path="/admin-dashboard/aio-bid-approval" element={<AioBidApproval />} />
@@ -178,6 +193,7 @@ function App() {
           }
         />
       </Routes>
+      </div>
     </div>
   );
 }

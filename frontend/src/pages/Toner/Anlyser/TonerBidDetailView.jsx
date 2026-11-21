@@ -1,8 +1,9 @@
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { TonerModels, TonerBrands, CompatiblePrinterModels } from "../ReviewFields";
 import { useEffect, useState } from "react";
 import GemUploadButton from "../../../components/analyser/GemUploadButton";
 import SpecialDocEditor from "../../../components/analyser/SpecialDocEditor";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 // Toner-native dropdown vocabulary — same source used at the User config
 // step (TonerConfig.jsx), so the Analyser sees the exact same option text.
 import {

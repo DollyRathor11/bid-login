@@ -51,6 +51,7 @@ def _data(row):
         "end_date": row.end_date.isoformat() if row.end_date else "",
         "product_name": _clean_item(row.product_name),
         "product_type": row.product_type,
+        "schedule_wise": row.schedule_wise,
         "pdf_url": row.pdf_url,
         **corrigendum_data(row),
     }
@@ -113,7 +114,7 @@ def gem_bid_opportunities(request):
             row for row in rows[:5000]
             if valid_opportunity_dates(
                 row.bid_date, row.end_date, now,
-                day_limit_product(classify_opportunity_item(row.product_name), row.product_type),
+                day_limit_product(classify_opportunity_item(row.product_name, row.schedule_wise), row.product_type),
             )
         ]
         return JsonResponse({"results": [_data(row) for row in visible]})
@@ -181,7 +182,7 @@ def gem_bid_opportunities(request):
         if not re.fullmatch(r"GEM/\d{4}/B/\d+", bid_no):
             rejections.append({"bid_no": bid_no, "reason": "invalid_bid_no"})
             continue
-        classification = classify_opportunity_item(product_name)
+        classification = classify_opportunity_item(product_name, item.get("schedule_wise") is True)
         provided_product_type = str(item.get("product_type") or "").strip()
         if (
             not classification
@@ -241,6 +242,7 @@ def gem_bid_opportunities(request):
                 "department": str(item.get("department") or ""),
                 "delivery_pincode": str(item.get("delivery_pincode") or "")[:6],
                 "product_type": classification["product_type"],
+                "schedule_wise": classification["schedule_wise"],
                 "pdf_url": str(item.get("pdf_url") or "")[:1000],
                 **corrigendum,
             },

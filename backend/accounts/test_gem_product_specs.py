@@ -161,6 +161,65 @@ class DesktopExcelSyncTests(GemProductSpecsImportTests):
             self.client.delete(f"/api/catalogue/{product.id}/delete/")
         self.assertEqual(self.excel_rows("ACL-UI-2"), [])
 
+    def test_aio_catalogue_edit_preserves_aio_specific_specs(self):
+        product = CatalogueProduct.objects.create(
+            model_no="ACL-AIO-EDIT",
+            category="aio",
+            extra_specs={"Screen Size": "23.8", "WiFi Bluetooth": "Wi-Fi 6"},
+        )
+
+        response = self.client.post(
+            f"/api/catalogue/{product.id}/update/",
+            {
+                "category": "aio",
+                "extra_specs": json.dumps({
+                    "Screen Size": "24",
+                    "WiFi Bluetooth": "Wi-Fi 6E",
+                }),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        product.refresh_from_db()
+        self.assertEqual(
+            product.extra_specs,
+            {"Screen Size": "24", "WiFi Bluetooth": "Wi-Fi 6E"},
+        )
+
+    def test_workstation_catalogue_create_and_edit_preserve_all_specs(self):
+        specs = {
+            "Processor Number": "Intel Xeon",
+            "Motherboard": "WS Board",
+            "RAM": "64 GB",
+            "SSD": "1 TB",
+            "Custom GeM Specification": "Custom value",
+        }
+        response = self.client.post(
+            "/api/catalogue/create/",
+            {
+                "model_no": "ACL-WS-EDIT",
+                "category": "Workstation",
+                "extra_specs": json.dumps(specs),
+            },
+        )
+
+        self.assertEqual(response.status_code, 201, response.content)
+        product = CatalogueProduct.objects.get(model_no="ACL-WS-EDIT")
+        self.assertEqual(product.extra_specs, specs)
+
+        updated_specs = {**specs, "Custom GeM Specification": "Updated value"}
+        response = self.client.post(
+            f"/api/catalogue/{product.id}/update/",
+            {
+                "category": "Workstation",
+                "extra_specs": json.dumps(updated_specs),
+            },
+        )
+
+        self.assertEqual(response.status_code, 200, response.content)
+        product.refresh_from_db()
+        self.assertEqual(product.extra_specs, updated_specs)
+
     def test_row_added_in_excel_shows_in_directory(self):
         self.append_excel_row({
             "model_no": "ACL-XL-HAND", "category": "Desktop", "processor": "i5-13400",

@@ -1,5 +1,5 @@
 import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
-import { useNavigate } from "react-router-dom";
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { priceInputValue } from "../../../utils/price";
 import { useGemBidLinks } from "../../../utils/gemBidLinks";
@@ -464,7 +464,7 @@ export default function PrinterBidApproval() {
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 p-4">
-          <div className="max-h-[calc(100vh-2rem)] w-full max-w-7xl overflow-y-auto rounded-xl bg-white shadow-2xl">
+          <div className="bunch-product-review-modal max-h-[calc(100vh-2rem)] w-full max-w-7xl overflow-y-auto rounded-xl bg-white shadow-2xl">
             <div className="flex items-center justify-between rounded-t-xl border-b bg-gray-50 px-6 py-4">
               <div className="flex items-center gap-4">
                 <button type="button" onClick={closeModal} className="flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 shadow-sm transition-all hover:border-slate-800 hover:bg-slate-800 hover:text-white">

@@ -44,6 +44,9 @@ from .views.Printer import (
 )
 from .views import ProductDashboard as product_dashboard
 from .views.AdminBidSearch import admin_bid_search
+from .views import Ups
+from .views.BunchBids import bunch_bids
+from .views.UpsDocuments import generate_ups_document
 from .views.UserDashboard import user_dashboard
 from .views.DailyActivity import daily_activity
 from .views.AnalyserDashboard import analyser_dashboard
@@ -313,6 +316,14 @@ urlpatterns = [
     path("admin/dashboard/<str:product>/participants/", product_dashboard.admin_dashboard_participants),
     path("admin/dashboard/post-bid-summary/", product_dashboard.admin_post_bid_summary),
     path("admin/dashboard/bid-search/", admin_bid_search),
+    path("ups-bids/schema/", Ups.ups_schema),
+    path("ups-bids/create/", Ups.save_ups),
+    path("ups-bids/<int:bid_id>/", Ups.ups_detail),
+    path("ups-bids/<int:bid_id>/save/", Ups.save_ups),
+    path("ups-bids/<int:bid_id>/documents/", Ups.submit_ups_documents),
+    path("ups-bids/<int:bid_id>/generate-docs/", generate_ups_document),
+    path("ups-bids/<int:bid_id>/review/", Ups.review_ups),
+    path("bunch-bids/", bunch_bids),
     path("admin/dashboard/<str:product>/person/<str:endpoint>/", product_dashboard.admin_person_dashboard),
     path("admin/dashboard/<str:product>/bids/", product_dashboard.admin_dashboard_bids),
     path("admin/toner-bids/dashboard-years/", product_dashboard.admin_toner_dashboard_years),

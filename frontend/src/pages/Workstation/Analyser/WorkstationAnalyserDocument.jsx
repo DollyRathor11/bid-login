@@ -1,5 +1,6 @@
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import WorkstationDocument from "../User/WorkstationDocument";
 
 const API_BASE = import.meta.env.VITE_API_URL;

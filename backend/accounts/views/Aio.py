@@ -168,6 +168,9 @@ def list_aio_bids(r):
     elif s=="re-analyze":q=q.filter(status__in=["rejected","re-analyze"])
     elif s==REJECTED_SECTION:q=q.filter(status=BID_REJECTED)
     elif role=="analyser":q=q.exclude(status="draft")
+    if role != "admin":
+        from ..bunch_membership import exclude_bunch_bids
+        q = exclude_bunch_bids(q)
     rows=[_json(x,r) for x in q]
     if s:
         for x in rows:

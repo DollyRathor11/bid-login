@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { BidNoCell, CorrigendumCell, DateCell } from "../Admin/BidTableCells";
+import ScheduleBidTag from "../../utils/ScheduleBidTag";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -32,7 +33,7 @@ export default function UserAssignedBids() {
           <td className="px-4 py-4 font-bold">{index + 1}</td>
           <BidNoCell row={row} className="px-4 py-4" />
           <DateCell value={row.bid_date} className="px-4 py-4" /><DateCell value={row.end_date} className="px-4 py-4" />
-          <td className="max-w-md px-4 py-4 font-medium">{row.item}</td>
+          <td className="max-w-md px-4 py-4 font-medium">{row.item}<ScheduleBidTag row={row} /></td>
           <CorrigendumCell row={row} className="px-4 py-4" />
         </tr>)}
         {!rows.length && <tr><td colSpan="6" className="py-16 text-center text-gray-500">No bids have been assigned to you yet.</td></tr>}
