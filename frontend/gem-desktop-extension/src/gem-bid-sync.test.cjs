@@ -265,9 +265,12 @@ test("a schedule-wise bid with one item of ours follows its quantity rule; with 
     text("Schedule 1 5000 Office Chair 50 Schedule 2 20000 A4 And Legal Size Multifunction Printer (mfp) 1")).eligible, true);
   // ...and its table unread, it is rejected like an unread quantity.
   assert.equal(opportunityResult(items, "Evaluation Method Item wise evaluation Total Quantity 30").reject, "quantity_unread");
-  // A UPS is not one of ours: AIO + UPS + chair is still one item of ours.
+  // A UPS is one of ours: AIO + UPS + chair is two items of ours, so no quantity rule.
   assert.equal(opportunityResult(`${items}, Line Interactive UPS with AVR (V2) (Q2)`,
-    text("Schedule 1 5000 Office Chair 50 Schedule 2 90000 All In One Pc (v2) 2 Schedule 3 9000 Line Interactive Ups With Avr (v2) 9")).reject, "quantity");
+    text("Schedule 1 5000 Office Chair 50 Schedule 2 90000 All In One Pc (v2) 2 Schedule 3 9000 Line Interactive Ups With Avr (v2) 9")).eligible, true);
+  // A UPS alone with other items is still not received.
+  assert.equal(opportunityResult("Office Chair (Q2), Line Interactive UPS with AVR (V2) (Q2)",
+    text("Schedule 1 5000 Office Chair 50 Schedule 2 9000 Line Interactive Ups With Avr (v2) 9")).reject, "product");
   // Two or more items of ours: quantity does not matter, table read or not.
   const desktops = "Entry and Mid Level Desktop Computer (Q2), High End Desktop Computer (Q2), Office Chair (Q2)";
   assert.equal(opportunityResult(desktops,

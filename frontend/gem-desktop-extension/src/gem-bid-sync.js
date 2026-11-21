@@ -2218,13 +2218,13 @@
     // under the first one.
     const product = matchedProducts.find((match) => match && match[0] !== "ups");
     if (!categories.length || (!scheduleWise && matchedProducts.some((match) => !match)) || !product) return { reject: "product" };
-    // A schedule-wise bid with only one item of ours (UPS is not one) follows
-    // the single-item quantity rule on that item's schedule: 5 units, unless
-    // it is a product with no minimum; its table unread, it is rejected like
-    // an unread quantity. With two or more of our items, like any bunch, no
-    // quantity rule applies.
+    // A schedule-wise bid with only one item of ours follows the single-item
+    // quantity rule on that item's schedule: 5 units, unless it is a product
+    // with no minimum; its table unread, it is rejected like an unread
+    // quantity. With two or more of our items (a UPS counts as one), like any
+    // bunch, no quantity rule applies.
     const schedules = scheduleWise ? ourSchedules(flat) : [];
-    const ourItemCount = matchedProducts.filter((match) => match && match[0] !== "ups").length;
+    const ourItemCount = matchedProducts.filter(Boolean).length;
     if (scheduleWise && ourItemCount === 1 && !NO_MINIMUM_QUANTITY_PRODUCTS.has(product[0])) {
       const ownQuantity = schedules.find((schedule) => schedule.product === product[0])?.quantity || 0;
       if (!ownQuantity) return { reject: "quantity_unread" };
