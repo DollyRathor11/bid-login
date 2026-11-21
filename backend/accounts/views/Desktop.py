@@ -4695,10 +4695,13 @@ def create_catalogue_product(request):
         if CatalogueProduct.objects.filter(model_no__iexact=model_no).exists(): return JsonResponse({"error": "A product with this model no. already exists"}, status=400)
         try: extra_specs = json.loads(data.get("extra_specs", "{}"))
         except Exception: extra_specs = {}
+        category = data.get("category", "")
         product = CatalogueProduct.objects.create(
             model_no=model_no, processor=data.get("processor", ""), ram=data.get("ram", ""),
-            storage=data.get("storage", ""), os=data.get("os", ""), category=data.get("category", ""),
-            description=data.get("description", ""), extra_specs=_normalize_extra_specs(extra_specs), image=image,
+            storage=data.get("storage", ""), os=data.get("os", ""), category=category,
+            description=data.get("description", ""),
+            extra_specs=extra_specs if category.strip().lower() in {"aio", "workstation"} else _normalize_extra_specs(extra_specs),
+            image=image,
         )
         return JsonResponse({"message": "Catalogue product created successfully", **_catalogue_product_data(product, request)}, status=201)
     except Exception as e:
@@ -4726,7 +4729,11 @@ def update_catalogue_product(request, product_id):
         if "extra_specs" in data:
             try: extra_specs = json.loads(data.get("extra_specs", "{}"))
             except Exception: extra_specs = {}
-            product.extra_specs = _normalize_extra_specs(extra_specs)
+            product.extra_specs = (
+                extra_specs
+                if str(data.get("category", product.category)).strip().lower() in {"aio", "workstation"}
+                else _normalize_extra_specs(extra_specs)
+            )
         if image: product.image = image
         product.save()
         return JsonResponse({"message": "Catalogue product updated successfully", **_catalogue_product_data(product, request)}, status=200)
