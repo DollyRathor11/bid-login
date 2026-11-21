@@ -254,20 +254,25 @@ test("receives a schedule-wise bunch (item wise evaluation) with other items whe
   assert.equal(opportunityResult("Office Chair (Q2)", itemWise).reject, "product");
 });
 
-test("a schedule-wise bid follows the single-item quantity rule on our own schedules", () => {
+test("a schedule-wise bid with one item of ours follows its quantity rule; with two or more, no quantity rule", () => {
   const items = "Office Chair (Q2), All in One PC (V2) (Q2)";
   const text = (rows) => `Evaluation Method Item wise evaluation Evaluation Schedules ${rows} Technical Specifications`;
-  // Below 5 units of AIO, however many chairs.
+  // One item of ours: below 5 units of AIO is rejected, however many chairs.
   assert.equal(opportunityResult(items, text("Schedule 1 5000 Office Chair 50 Schedule 2 90000 All In One Pc (v2) 4")).reject, "quantity");
   assert.equal(opportunityResult(items, text("Schedule 1 5000 Office Chair 50 Schedule 2 90000 All In One Pc (v2) 5")).eligible, true);
-  // A printer schedule has no minimum.
+  // ...unless it is a product with no minimum, such as a printer.
   assert.equal(opportunityResult("Office Chair (Q2), A4 and Legal Size Multifunction Printer (MFP) (Q2)",
     text("Schedule 1 5000 Office Chair 50 Schedule 2 20000 A4 And Legal Size Multifunction Printer (mfp) 1")).eligible, true);
-  // One of our schedules meeting the rule is enough.
-  assert.equal(opportunityResult("Entry and Mid Level Desktop Computer (Q2), High End Desktop Computer (Q2), Office Chair (Q2)",
-    text("Schedule 1 90000 Entry And Mid Level Desktop Computer 2 Schedule 2 300000 High End Desktop Computer 7 Schedule 3 5000 Office Chair 4")).eligible, true);
-  // The schedule table could not be read.
+  // ...and its table unread, it is rejected like an unread quantity.
   assert.equal(opportunityResult(items, "Evaluation Method Item wise evaluation Total Quantity 30").reject, "quantity_unread");
+  // A UPS is not one of ours: AIO + UPS + chair is still one item of ours.
+  assert.equal(opportunityResult(`${items}, Line Interactive UPS with AVR (V2) (Q2)`,
+    text("Schedule 1 5000 Office Chair 50 Schedule 2 90000 All In One Pc (v2) 2 Schedule 3 9000 Line Interactive Ups With Avr (v2) 9")).reject, "quantity");
+  // Two or more items of ours: quantity does not matter, table read or not.
+  const desktops = "Entry and Mid Level Desktop Computer (Q2), High End Desktop Computer (Q2), Office Chair (Q2)";
+  assert.equal(opportunityResult(desktops,
+    text("Schedule 1 90000 Entry And Mid Level Desktop Computer 2 Schedule 2 300000 High End Desktop Computer 1 Schedule 3 5000 Office Chair 4")).eligible, true);
+  assert.equal(opportunityResult(desktops, "Evaluation Method Item wise evaluation Total Quantity 3").eligible, true);
 });
 
 test("never receives a bid below five units or with an unreadable quantity", () => {

@@ -2218,15 +2218,17 @@
     // under the first one.
     const product = matchedProducts.find((match) => match && match[0] !== "ups");
     if (!categories.length || (!scheduleWise && matchedProducts.some((match) => !match)) || !product) return { reject: "product" };
-    // A schedule-wise bid follows the single-item quantity rule on our own
-    // schedules: at least one must have 5 units, or be a product with no
-    // minimum. Its table unread, it is rejected like an unread quantity.
+    // A schedule-wise bid with only one item of ours (UPS is not one) follows
+    // the single-item quantity rule on that item's schedule: 5 units, unless
+    // it is a product with no minimum; its table unread, it is rejected like
+    // an unread quantity. With two or more of our items, like any bunch, no
+    // quantity rule applies.
     const schedules = scheduleWise ? ourSchedules(flat) : [];
-    if (scheduleWise) {
-      if (!schedules.some((schedule) => schedule.quantity)) return { reject: "quantity_unread" };
-      if (!schedules.some((schedule) => schedule.quantity >= 5 || NO_MINIMUM_QUANTITY_PRODUCTS.has(schedule.product))) {
-        return { reject: "quantity" };
-      }
+    const ourItemCount = matchedProducts.filter((match) => match && match[0] !== "ups").length;
+    if (scheduleWise && ourItemCount === 1 && !NO_MINIMUM_QUANTITY_PRODUCTS.has(product[0])) {
+      const ownQuantity = schedules.find((schedule) => schedule.product === product[0])?.quantity || 0;
+      if (!ownQuantity) return { reject: "quantity_unread" };
+      if (ownQuantity < 5) return { reject: "quantity" };
     }
     // No quantity rule applies to a bunch, which lists a quantity per item
     // (often 1 each). A single item whose quantity could not be read is
@@ -2297,8 +2299,8 @@
       product_type: product[0],
       is_bunch: isBunch,
       schedule_wise: scheduleWise,
-      // A schedule-wise bid counts only our own schedules.
-      quantity: scheduleWise ? schedules.reduce((sum, schedule) => sum + schedule.quantity, 0) : quantity,
+      // A schedule-wise bid counts only our own schedules, when its table was read.
+      quantity: scheduleWise && schedules.length ? schedules.reduce((sum, schedule) => sum + schedule.quantity, 0) : quantity,
       offer_validity_days: validityDays || null,
       department: bounded("Department\\s+Name", "(?:Organisation|Office|Contact|Buyer|Item\\s+Category|$)"),
       delivery_pincode: pins[0] || "",
