@@ -4732,18 +4732,18 @@ def update_catalogue_product(request, product_id):
         if "extra_specs" in data:
             try: extra_specs = json.loads(data.get("extra_specs", "{}"))
             except Exception: extra_specs = {}
-<<<<<<< HEAD
             # Editing additional fields must retain imported category specs
             # and GeM section metadata which are outside the desktop template.
             existing_specs = product.extra_specs if isinstance(product.extra_specs, dict) else {}
-            product.extra_specs = {**existing_specs, **_normalize_extra_specs(extra_specs)}
-=======
-            product.extra_specs = (
-                extra_specs
-                if str(data.get("category", product.category)).strip().lower() in {"aio", "workstation"}
-                else _normalize_extra_specs(extra_specs)
-            )
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
+            if str(data.get("category", product.category)).strip().lower() in {"aio", "workstation"}:
+                # AIO / Workstation keep their own GeM field names as sent.
+                cleaned = dict(extra_specs) if isinstance(extra_specs, dict) else {}
+                if "_custom_specs" in cleaned:
+                    from ..catalogue_custom_specs import normalize_custom_specs
+                    cleaned["_custom_specs"] = normalize_custom_specs(cleaned["_custom_specs"])
+            else:
+                cleaned = _normalize_extra_specs(extra_specs)
+            product.extra_specs = {**existing_specs, **cleaned}
         if image: product.image = image
         product.save()
         return JsonResponse({"message": "Catalogue product updated successfully", **_catalogue_product_data(product, request)}, status=200)

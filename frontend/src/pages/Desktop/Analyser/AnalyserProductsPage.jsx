@@ -963,10 +963,6 @@ async function parseJsonResponse(res) {
   return data;
 }
 
-function getCatalogueProductId(product) {
-  return product?.catalogue_id ?? product?.id;
-}
-
 function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
   const [showEdit, setShowEdit] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -1005,11 +1001,7 @@ function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
     setDeleteError("");
 
     try {
-<<<<<<< HEAD
       const res = await fetch(`${API}/catalogue/${catalogueProductId(product)}/delete/`, {
-=======
-      const res = await fetch(`${API}/catalogue/${getCatalogueProductId(product)}/delete/`, {
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
         method: "DELETE",
       });
 
@@ -1227,14 +1219,7 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
 
   const [form, setForm] = useState({
     model_no: product?.model_no || "",
-<<<<<<< HEAD
     category: catalogueCategory(product?.category, CATEGORY_OPTIONS),
-=======
-    category:
-      CATEGORY_OPTIONS.find(
-        (category) => category.toLowerCase() === String(product?.category || "").toLowerCase()
-      ) || product?.category || "",
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
     processor: product?.processor || "",
     ram: product?.ram || "",
     storage: product?.storage || "",
@@ -1242,11 +1227,7 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
   });
 
   const [extraSpecs, setExtraSpecs] = useState(
-<<<<<<< HEAD
-    isEdit ? { ...getExtraSpecs(product), ...getRawExtraSpecs(product) } : emptySpecs()
-=======
     isEdit ? getEditableSpecs(product) : emptySpecs()
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
   );
   const editSections = isEdit ? getProductEditSections(product, extraSpecs) : GEM_SECTIONS;
 
@@ -1289,7 +1270,7 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
       return setError("Category is required.");
     }
     const catalogueId = catalogueProductId(product);
-    if (isEdit && !catalogueId) return setError("This product does not have an editable catalogue record.");
+    if (isEdit && !createsWorkstationCatalogueEntry && !catalogueId) return setError("This product does not have an editable catalogue record.");
 
     const names = new Set();
     for (const row of customSpecs) {
@@ -1312,13 +1293,8 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
       fd.append(key, value || "");
     });
 
-<<<<<<< HEAD
-    fd.append("description", "");
-    fd.append("extra_specs", JSON.stringify({ ...extraSpecs, _custom_specs: customSpecs }));
-=======
     fd.append("description", isEdit ? product?.description || "" : "");
-    fd.append("extra_specs", JSON.stringify(extraSpecs));
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
+    fd.append("extra_specs", JSON.stringify({ ...extraSpecs, _custom_specs: customSpecs }));
 
     if (imageFile) {
       fd.append("image", imageFile);
@@ -1327,13 +1303,8 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
     setSaving(true);
 
     try {
-<<<<<<< HEAD
-      const url = isEdit
-        ? `${API}/catalogue/${catalogueId}/update/`
-=======
       const url = isEdit && !createsWorkstationCatalogueEntry
-        ? `${API}/catalogue/${getCatalogueProductId(product)}/update/`
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
+        ? `${API}/catalogue/${catalogueId}/update/`
         : `${API}/catalogue/create/`;
 
       const res = await fetch(url, {
@@ -1342,20 +1313,17 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
       });
 
       const data = await parseJsonResponse(res);
-<<<<<<< HEAD
-      onSaved(isEdit ? { ...product, ...data, id: product.id, catalogue_id: Number(catalogueId), extra_specs: { ...extraSpecs, ...data.extra_specs } } : data);
-=======
       onSaved(
         isEdit
           ? {
+              ...product,
               ...data,
               id: product.id,
-              catalogue_id: getCatalogueProductId(product) ?? data.id,
-              ...(isAioProduct(product) || workstation ? { extra_specs: extraSpecs } : {}),
+              catalogue_id: createsWorkstationCatalogueEntry ? data.id : Number(catalogueId),
+              extra_specs: { ...extraSpecs, ...data.extra_specs },
             }
           : data
       );
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
       onClose();
     } catch (err) {
       setError(err.message);
