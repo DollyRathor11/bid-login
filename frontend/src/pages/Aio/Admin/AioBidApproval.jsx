@@ -1,7 +1,7 @@
 import { epbgPriceError } from "../../../utils/approvalComponentPrices";
 import useApprovalComponentPrices from "../../../hooks/useApprovalComponentPrices";
 import { fetchApprovalBids } from "../../../utils/approvalDashboardLinks";
-import { useNavigate } from "react-router-dom";
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { useEffect, useRef, useState } from "react";
 import { AIO_DVDS as DVDS, AIO_WARRANTIES as WARRANTIES } from "../User/AioConfig";
 // AIO-native RAM/SSD/HDD/OS/screen-size/WiFi/keyboard/motherboard vocabulary —
@@ -936,7 +936,7 @@ export default function AioBidApproval() {
 
       {selected && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 overflow-hidden">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[calc(100vh-2rem)] overflow-y-auto">
+          <div className="bunch-product-review-modal bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[calc(100vh-2rem)] overflow-y-auto">
             <div className="flex justify-between items-center px-6 py-4 border-b bg-gray-50 rounded-t-xl">
               <div className="flex items-center gap-4">
                 <button type="button" onClick={closeModal}
