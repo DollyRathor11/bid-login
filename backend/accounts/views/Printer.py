@@ -1623,6 +1623,9 @@ def list_printer_bids(request):
             bids = PrinterBid.objects.filter(status="complete", review_status=BID_REJECTED).order_by("-updated_at")
         else:
             bids = PrinterBid.objects.filter(status="complete", review_status=status_filter).order_by("-created_at")
+        if role != "admin":
+            from ..bunch_membership import exclude_bunch_bids
+            bids = exclude_bunch_bids(bids)
         label = BID_REJECTED if status_filter == REJECTED_SECTION else status_filter
         return JsonResponse([_printer_bid_data(bid, request, label) for bid in bids], safe=False)
     except Exception as e:

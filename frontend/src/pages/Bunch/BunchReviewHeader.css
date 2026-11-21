@@ -1,0 +1,19 @@
+/* Keep existing admin review modals below the bunch's product tabs. */
+.bunch-admin-workspace .fixed.inset-0:has(> .shadow-2xl) {
+  top: var(--bunch-review-header-height, 116px);
+}
+
+/* The bunch toolbar is the single review header in this workspace. */
+.bunch-admin-workspace .bunch-product-review-modal > div:first-child,
+.bunch-admin-workspace .ups-admin-review-header {
+  display: none;
+}
+
+.bunch-admin-workspace .fixed.inset-0:has(> .bunch-product-review-modal) {
+  align-items: flex-start;
+  padding: 16px;
+}
+
+.bunch-admin-workspace .bunch-product-review-modal {
+  max-height: calc(100dvh - var(--bunch-review-header-height, 116px) - 32px);
+}

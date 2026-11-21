@@ -289,7 +289,7 @@ const AnalyserNavbar = () => {
   const isDashboard = location.pathname === "/analyser-dashboard" || location.pathname === "/analyser-dashboard/";
   // A product's bid list opens full width without the sidebar, like the
   // admin's bid approval pages, so its whole table fits on screen.
-  const isProductBidList = /^\/analyser-dashboard\/(?:desktop|aio|toner|workstation|printer)\/?$/.test(location.pathname);
+  const isProductBidList = /^\/analyser-dashboard\/(?:desktop|aio|toner|workstation|printer|bunch)\/?$/.test(location.pathname);
 
   if (isProductBidList) {
     return (
@@ -427,6 +427,11 @@ const AnalyserNavbar = () => {
                 </div>
                 );
               })}
+              <div onClick={() => navigate("/analyser-dashboard/bunch")} role="link" tabIndex={0}
+                onKeyDown={event => { if (event.key === "Enter") navigate("/analyser-dashboard/bunch"); }}
+                className={`flex cursor-pointer items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium text-gray-200 hover:bg-gray-700/50 ${location.pathname === "/analyser-dashboard/bunch" ? "bg-gray-700/70" : ""}`}>
+                <FaBox className="text-lg" /> Bunch Bids
+              </div>
 
             </div>
           )}

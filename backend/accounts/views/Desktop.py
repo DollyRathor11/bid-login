@@ -4566,6 +4566,9 @@ def _normalize_extra_specs(extra_specs):
         ordered[field] = _clean_value((extra_specs or {}).get(field, ""))
     if ordered.get("Type of RAM") == "DDR4":
         ordered["Type of RAM"] = "DDR4 RAM"
+    if "_custom_specs" in (extra_specs or {}):
+        from ..catalogue_custom_specs import normalize_custom_specs
+        ordered["_custom_specs"] = normalize_custom_specs(extra_specs["_custom_specs"])
     return ordered
 
 def _catalogue_product_data(product, request):
@@ -4726,7 +4729,10 @@ def update_catalogue_product(request, product_id):
         if "extra_specs" in data:
             try: extra_specs = json.loads(data.get("extra_specs", "{}"))
             except Exception: extra_specs = {}
-            product.extra_specs = _normalize_extra_specs(extra_specs)
+            # Editing additional fields must retain imported category specs
+            # and GeM section metadata which are outside the desktop template.
+            existing_specs = product.extra_specs if isinstance(product.extra_specs, dict) else {}
+            product.extra_specs = {**existing_specs, **_normalize_extra_specs(extra_specs)}
         if image: product.image = image
         product.save()
         return JsonResponse({"message": "Catalogue product updated successfully", **_catalogue_product_data(product, request)}, status=200)
@@ -5348,6 +5354,9 @@ def list_desktop_bids(request):
                     review_status=status_filter,
                 ).order_by("-created_at")
 
+        if role != "admin":
+            from ..bunch_membership import exclude_bunch_bids
+            bids = exclude_bunch_bids(bids)
         # Rejected rows say "bid_rejected": AIO/Toner screens read "rejected" as re-analyze.
         label = BID_REJECTED if status_filter == REJECTED_SECTION else status_filter
         result = [_bid_data(bid, request, status_label=label) for bid in bids]

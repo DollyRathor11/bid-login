@@ -42,6 +42,7 @@ const bidItems = [
   { name: "Workstation Bid Approval", path: "/admin-dashboard/workstation-bid-approval", ready: true },
   { name: "Printer Bid Approval",     path: "/admin-dashboard/printer-bid-approval", ready: true },
   { name: "Toner Bid Approval",       path: "/toner-bid-approval",                   ready: true },
+  { name: "Bunch Bid Approval",       path: "/admin-dashboard/bunch-bid-approval", ready: true },
 ];
 
 

@@ -871,3 +871,7 @@ class ComponentRateHistory(models.Model):
 
     def __str__(self):
         return f"{self.product}/{self.category}: {self.component_name} @ {self.price}"
+
+
+# UPS has its own storage; existing product tables and flows are unchanged.
+from .ups_models import UpsBid  # noqa: E402,F401

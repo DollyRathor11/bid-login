@@ -1,5 +1,6 @@
+import useNavigate from "../../../hooks/useBunchNavigate";
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
