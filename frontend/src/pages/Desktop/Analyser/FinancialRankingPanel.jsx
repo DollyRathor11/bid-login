@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { FaEye, FaSearch, FaTrash } from "react-icons/fa";
+import PostBidPagination from "../../../components/Management/PostBidPagination";
+import { paginate } from "../../../components/Management/paginateRows";
 
 const API_BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 const COMPANY = "LAPS N TABS TECHNOLOGY PRIVATE LIMITED";
@@ -143,6 +145,7 @@ export default function FinancialRankingPanel() {
   const [deletingId, setDeletingId] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
 
@@ -185,11 +188,13 @@ export default function FinancialRankingPanel() {
     .sort(compareLatestFirst)
     .filter((row) => matchesDateRange(row, fromDate, toDate));
   const visibleRows = searchedRows.filter((row) => matchesStatus(row, statusFilter));
+  const { pageRows, pageCount, currentPage, offset } = paginate(visibleRows, page);
   const hasDateFilter = Boolean(fromDate || toDate);
 
   function clearDates() {
     setFromDate("");
     setToDate("");
+    setPage(1);
   }
 
   async function handleDelete(row) {
@@ -223,7 +228,7 @@ export default function FinancialRankingPanel() {
                 key={filter.key}
                 type="button"
                 aria-pressed={selected}
-                onClick={() => setStatusFilter(filter.key)}
+                onClick={() => { setStatusFilter(filter.key); setPage(1); }}
                 className={`rounded-lg border px-3 py-2 text-xs font-semibold transition ${selected ? "border-sky-700 bg-sky-700 text-white" : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-700"}`}
               >
                 {filter.label} <span className={selected ? "text-sky-100" : "text-slate-400"}>({count})</span>
@@ -240,12 +245,12 @@ export default function FinancialRankingPanel() {
             id="awarded-bid-search"
             type="search"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => { setSearch(event.target.value); setPage(1); }}
             placeholder="Enter complete or partial Bid No., e.g. 8035070"
             className="w-full rounded-lg border border-slate-300 bg-white py-2.5 pl-10 pr-24 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
           />
           {search && (
-            <button type="button" onClick={() => setSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2.5 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800">Clear</button>
+            <button type="button" onClick={() => { setSearch(""); setPage(1); }} className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-2.5 py-1 text-xs font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800">Clear</button>
           )}
         </div>
       </div>
@@ -253,11 +258,11 @@ export default function FinancialRankingPanel() {
         <div className="w-full text-sm font-semibold text-slate-700 sm:w-auto sm:self-center">Bid Start Date</div>
         <label className="flex min-w-44 flex-col gap-1 text-xs font-semibold text-slate-600">
           From Date
-          <input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => setFromDate(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-sky-500" />
+          <input type="date" value={fromDate} max={toDate || undefined} onChange={(event) => { setFromDate(event.target.value); setPage(1); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-sky-500" />
         </label>
         <label className="flex min-w-44 flex-col gap-1 text-xs font-semibold text-slate-600">
           To Date
-          <input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => setToDate(event.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-sky-500" />
+          <input type="date" value={toDate} min={fromDate || undefined} onChange={(event) => { setToDate(event.target.value); setPage(1); }} className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-700 outline-none focus:border-sky-500" />
         </label>
         {hasDateFilter && <button type="button" onClick={clearDates} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-600 hover:border-sky-300 hover:text-sky-700">Clear Dates</button>}
       </div>
@@ -279,9 +284,9 @@ export default function FinancialRankingPanel() {
                 </tr>
               </thead>
               <tbody>
-                {visibleRows.map((row, index) => (
+                {pageRows.map((row, index) => (
                   <tr key={row.id} className="border-t border-slate-100 align-top hover:bg-slate-50">
-                    <td className="px-4 py-4 text-slate-500">{index + 1}</td>
+                    <td className="px-4 py-4 text-slate-500">{offset + index + 1}</td>
                     <td className="px-4 py-4 font-semibold text-sky-800">{row.bid_no}</td>
                     <td className="whitespace-nowrap px-4 py-4 text-slate-600">{formatDate(row.start_date)}</td>
                     <td className="whitespace-nowrap px-4 py-4 text-slate-600">{formatDate(row.end_date)}</td>
@@ -311,6 +316,7 @@ export default function FinancialRankingPanel() {
                 ))}
               </tbody>
             </table>
+            <PostBidPagination page={currentPage} pageCount={pageCount} onPage={setPage} />
           </div>
         ) : <div className="rounded-xl border border-slate-200 bg-white p-12 text-center"><h3 className="font-semibold text-slate-800">No matching bids found</h3><p className="mt-2 text-sm text-slate-500">Change the Bid No., status, or date filter to view saved awarded bids.</p></div>
           : <div className="rounded-xl border border-slate-200 bg-white p-12 text-center"><h3 className="font-semibold text-slate-800">No awarded Bid/RA results saved yet</h3><p className="mt-2 text-sm text-slate-500">Select Bid/RA Awarded on GeM and scan all awarded results from the extension.</p></div>}

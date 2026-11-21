@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchComponentRates } from "../../../utils/componentRates";
 import useComponentOptions from "../../../hooks/useComponentOptions";
-import { componentPriceValue, priceInputValue } from "../../../utils/price";
+import { componentPriceValue, priceInputValue, EPBG_INPUT_RULES } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -633,6 +633,7 @@ export default function DesktopConfig({ bidData, onNext }) {
               name="epbg"
               value={form.epbg}
               onChange={handleChange}
+              {...EPBG_INPUT_RULES}
               placeholder="e.g. 3 or NA"
               className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-500 bg-gray-50 outline-none"
             />

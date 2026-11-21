@@ -6,7 +6,7 @@ import {
   DVDS as DESKTOP_DVDS,
   WARRANTIES as DESKTOP_WARRANTIES,
 } from "../../Desktop/User/DesktopConfig";
-import { componentPriceValue, priceInputValue } from "../../../utils/price";
+import { componentPriceValue, priceInputValue, EPBG_INPUT_RULES } from "../../../utils/price";
 
 export const AIO_DVDS = DESKTOP_DVDS.map((item) => ({ ...item }));
 export const AIO_WARRANTIES = DESKTOP_WARRANTIES.map((item) => ({ ...item }));
@@ -546,6 +546,7 @@ export default function AioConfig({ bidData, onNext }) {
               name="epbg"
               value={form.epbg}
               onChange={handleChange}
+              {...EPBG_INPUT_RULES}
               placeholder="e.g. 3 or NA"
               className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm text-gray-500 bg-gray-50 outline-none"
             />

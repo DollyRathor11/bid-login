@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { FaEye, FaTrash } from "react-icons/fa";
+import { FaEye, FaSearch, FaTrash } from "react-icons/fa";
+import PostBidPagination from "../../../components/Management/PostBidPagination";
+import { paginate } from "../../../components/Management/paginateRows";
 
 const API_BASE = import.meta.env.VITE_API_URL;
+// "GEM/2026/B/8291220", "gem 2026 b 8291220" and "8291220" all find the bid.
+const bidKey = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 function EvaluationHistoryModal({ bid, onClose }) {
   useEffect(() => {
     const onKeyDown = (event) => event.key === "Escape" && onClose();
@@ -73,6 +77,8 @@ export default function DisqualifiedBidsPanel({ showProductFilter = false }) {
   const [error, setError] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const handleRemove = async (row) => {
     if (!window.confirm(`Permanently delete bid ${row.bid_no} from the database?`)) return;
     try {
@@ -154,14 +160,27 @@ export default function DisqualifiedBidsPanel({ showProductFilter = false }) {
   if (loading) return <div className="py-16 text-center text-sm font-medium text-gray-500">Loading disqualified bids...</div>;
   if (error) return <div className="m-6 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
 
-  const visibleRows = rows;
+  const searchKey = bidKey(search);
+  const visibleRows = searchKey ? rows.filter((row) => bidKey(row.bid_no).includes(searchKey)) : rows;
+  const { pageRows, pageCount, currentPage, offset } = paginate(visibleRows, page);
 
   return (
     <div className="bg-white">
       {showProductFilter && (
         <div className="flex min-h-[76px] items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
-          <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-4">
             <h2 className="text-lg font-bold text-slate-900">Disqualified Bid</h2>
+            <label className="relative block w-72 max-w-full">
+              <span className="sr-only">Search by bid number</span>
+              <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400" aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+                placeholder="Search bid no. (GEM/2026/B/8291220 or 8291220)"
+                className="w-full rounded border border-gray-300 py-2 pl-9 pr-3 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+              />
+            </label>
           </div>
           {selectedIds.size > 0 && (
             <div className="flex shrink-0 items-center">
@@ -193,8 +212,12 @@ export default function DisqualifiedBidsPanel({ showProductFilter = false }) {
                 <input
                   type="checkbox"
                   aria-label="Select all disqualified bids"
-                  checked={visibleRows.length > 0 && selectedIds.size === visibleRows.length}
-                  onChange={(event) => setSelectedIds(event.target.checked ? new Set(visibleRows.map((row) => row.id)) : new Set())}
+                  checked={pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id))}
+                  onChange={(event) => setSelectedIds((current) => {
+                    const next = new Set(current);
+                    pageRows.forEach((row) => (event.target.checked ? next.add(row.id) : next.delete(row.id)));
+                    return next;
+                  })}
                   className="h-4 w-4 accent-red-600"
                 />
                 <span>Action</span>
@@ -203,9 +226,9 @@ export default function DisqualifiedBidsPanel({ showProductFilter = false }) {
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map((row, index) => (
+          {pageRows.map((row, index) => (
             <tr key={row.id} className="border-b border-gray-100 align-top hover:bg-gray-50">
-              <td className="px-4 py-4 text-sm font-bold text-gray-700">{index + 1}</td>
+              <td className="px-4 py-4 text-sm font-bold text-gray-700">{offset + index + 1}</td>
               <td className="px-4 py-4 text-sm font-bold text-blue-700">{row.bid_no}</td>
               <td className="px-4 py-4 text-sm text-gray-700">{row.department || "-"}</td>
               <td className="px-4 py-4 text-sm text-gray-700">{row.disqualified_at ? new Date(row.disqualified_at).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-"}</td>
@@ -244,11 +267,14 @@ export default function DisqualifiedBidsPanel({ showProductFilter = false }) {
             </tr>
           ))}
           {visibleRows.length === 0 && (
-            <tr><td colSpan="7" className="py-16 text-center text-sm text-gray-500">No disqualified bids have been synced from GeM yet.</td></tr>
+            <tr><td colSpan="7" className="py-16 text-center text-sm text-gray-500">
+              {rows.length ? `No bid matches "${search.trim()}".` : "No disqualified bids have been synced from GeM yet."}
+            </td></tr>
           )}
         </tbody>
       </table>
       </div>
+      <PostBidPagination page={currentPage} pageCount={pageCount} onPage={setPage} />
       {selected && <EvaluationHistoryModal bid={selected} onClose={() => setSelected(null)} />}
     </div>
   );

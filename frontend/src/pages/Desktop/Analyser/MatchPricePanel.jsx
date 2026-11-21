@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { FaEye, FaTrash } from "react-icons/fa";
+import PostBidPagination from "../../../components/Management/PostBidPagination";
+import { paginate } from "../../../components/Management/paginateRows";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem("token") || localStorage.getItem("token") || ""}` });
@@ -66,6 +68,7 @@ export default function MatchPricePanel() {
   const [error, setError] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [page, setPage] = useState(1);
 
   const deleteIds = async (ids, confirmText) => {
     if (!ids.length || !window.confirm(confirmText)) return;
@@ -117,6 +120,7 @@ export default function MatchPricePanel() {
 
   if (loading) return <div className="py-16 text-center text-sm font-medium text-gray-500">Loading match price bids...</div>;
   if (error) return <div className="m-6 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
+  const { pageRows, pageCount, currentPage, offset } = paginate(rows, page);
 
   return (
     <div className="bg-white">
@@ -154,8 +158,12 @@ export default function MatchPricePanel() {
                 <input
                   type="checkbox"
                   aria-label="Select all match price bids"
-                  checked={rows.length > 0 && selectedIds.size === rows.length}
-                  onChange={(event) => setSelectedIds(event.target.checked ? new Set(rows.map((row) => row.id)) : new Set())}
+                  checked={pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id))}
+                  onChange={(event) => setSelectedIds((current) => {
+                    const next = new Set(current);
+                    pageRows.forEach((row) => (event.target.checked ? next.add(row.id) : next.delete(row.id)));
+                    return next;
+                  })}
                   className="h-4 w-4 accent-red-600"
                 />
                 <span>Action</span>
@@ -164,11 +172,11 @@ export default function MatchPricePanel() {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, index) => {
+          {pageRows.map((row, index) => {
             const percent = row.difference !== null && row.l1_price ? (row.difference / row.l1_price) * 100 : null;
             return (
               <tr key={row.id} className="border-b border-gray-100 align-top hover:bg-gray-50">
-                <td className="px-4 py-4 text-sm font-bold text-gray-700">{index + 1}</td>
+                <td className="px-4 py-4 text-sm font-bold text-gray-700">{offset + index + 1}</td>
                 <td className="px-4 py-4 text-sm font-bold text-blue-700">
                   {row.bid_no}
                   {row.ra_no && <div className="mt-1 text-xs font-semibold text-slate-500">RA {row.ra_no}</div>}
@@ -228,6 +236,7 @@ export default function MatchPricePanel() {
         </tbody>
       </table>
       </div>
+      <PostBidPagination page={currentPage} pageCount={pageCount} onPage={setPage} />
       {selected && <PriceMatchModal bid={selected} onClose={() => setSelected(null)} />}
     </div>
   );

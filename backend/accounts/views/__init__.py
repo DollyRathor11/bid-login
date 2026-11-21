@@ -9,6 +9,7 @@ from .Gem import *
 from .GemResults import *
 from .GemClarifications import *
 from .GemCounterOffers import *
+from .GemRepresentations import *
 from .GemOpportunities import *
 from .GemAssignments import *
 from .ComponentRates import *

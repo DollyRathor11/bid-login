@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { EPBG_INPUT_RULES } from "../../../utils/price";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 
@@ -710,6 +711,7 @@ export default function PrinterConfig({ bidData, onNext, onBack, productMode = "
               name="epbg"
               value={form.epbg}
               onChange={handleChange}
+              {...EPBG_INPUT_RULES}
               placeholder="e.g. 3 or NA"
               className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
             />

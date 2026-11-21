@@ -4,7 +4,10 @@
 <main>
   <section class="sync-section">
     <strong>Disqualified &amp; Clarification Bid Tracking</strong>
-    <p class="hint">Log in to GeM and click Scan. The extension opens the Seller Bid List, applies the Technical Evaluated filters and starts reading. Retry resumes directly at the saved page.</p>
+    <ul class="uses">
+      <li><b>Scan Disqualified Bid</b> – saves bids where Acxxel was disqualified, with the reason, to Disqualified Bids.</li>
+      <li><b>Scan Clarification</b> – saves bids where the buyer asked for a clarification to Clarification Bid.</li>
+    </ul>
     <div class="button-row">
       <button id="sync-bids" type="button">Scan Disqualified Bid</button>
       <button id="sync-clarifications" type="button">Scan Clarification</button>
@@ -16,9 +19,13 @@
   </section>
   <section class="sync-section">
     <strong>Bid To Be Participated</strong>
-    <p class="hint">Select approved GeM categories. The scan uses Bid Start Date: Latest First, skips bids it has already read, continues an unfinished earlier scan from the page where it stopped, and stops once it reaches bids a complete scan already read.</p>
+    <ul class="uses">
+      <li><b>Scan Bid To Be Participated</b> – reads new bids from Ongoing Bids and saves those that pass all bid rules to Bid To Be Participated.</li>
+      <li><b>My Representation</b> – needs the GeM login with User Id "Representation". Opens each bid's My Representations and saves the ones with entries to Post Bid &gt; My Representation. It only reads; nothing is submitted.</li>
+    </ul>
     <div class="button-row">
       <button id="sync-opportunities" type="button">Scan Bid To Be Participated</button>
+      <button id="sync-representations" type="button" title="Needs the Representation GeM login. Reads every card's My Representations on the selected categories and saves the bids that have any.">My Representation</button>
       <button id="pause-opportunities" type="button" class="secondary" disabled>Pause Scan</button>
       <button id="copy-opportunity-status" type="button" class="secondary">Copy status</button>
       <button id="retry-opportunities" type="button" class="secondary" disabled>Retry Scan</button>
@@ -26,8 +33,22 @@
     <p id="opportunity-state" class="sync-state"></p>
   </section>
   <section class="sync-section">
+    <strong>Representation Replies</strong>
+    <ul class="uses">
+      <li><b>Scan Representation Replies</b> – searches GeM All Bids by bid number, only for our bids still waiting for a reply, and saves the replies to Post Bid &gt; My Representation. Log out of GeM first, or use a Chrome profile not logged in to GeM.</li>
+    </ul>
+    <div class="button-row">
+      <button id="replies-start" type="button">Scan Representation Replies</button>
+      <button id="replies-stop" type="button" class="secondary" disabled>Stop</button>
+      <button id="replies-copy" type="button" class="secondary">Copy status</button>
+    </div>
+    <p id="replies-state" class="sync-state" role="status"></p>
+  </section>
+  <section class="sync-section">
     <strong>Awarded Bid/RA Ranking</strong>
-    <p class="hint">Select Bids/RAs Already Submitted/Participated and Bid/RA Awarded. The scan automatically checks pages 1-65 and saves bids with Start Date 01/01/2026 or later.</p>
+    <ul class="uses">
+      <li><b>Scan All Awarded Bid/RA Results</b> – saves every seller's rank and price (L1, L2…) of awarded bids to Financial Rankings.</li>
+    </ul>
     <div class="button-row">
       <button id="financial-start" type="button">Scan All Awarded Bid/RA Results</button>
       <button id="financial-pause" type="button" class="secondary" disabled>Pause Scan</button>
@@ -37,7 +58,9 @@
   </section>
   <section class="sync-section">
     <strong>Counter Offer (Match Price)</strong>
-    <p class="hint">Log in to GeM and click Scan. The extension opens the Seller Bid List, applies the same filters as Awarded Bid/RA Ranking (Bids/RAs Already Submitted/Participated + Bid/RA Awarded) and saves every bid whose Counter Offer Confirmation is still pending, with your offer and the L1 price, to Post Bid &gt; Match Price. It never accepts or declines the L1 price.</p>
+    <ul class="uses">
+      <li><b>Scan Counter Offer</b> – saves pending counter offers (your price vs L1 price) to Post Bid &gt; Match Price.</li>
+    </ul>
     <div class="button-row">
       <button id="sync-counter-offers" type="button">Scan Counter Offer</button>
       <button id="pause-counter-offers" type="button" class="secondary" disabled>Pause Scan</button>
@@ -48,7 +71,9 @@
   </section>
   <section class="sync-section">
     <strong>Product Scan</strong>
-    <p class="hint">Search your product on GeM Market (category + filters like Brand), then click Scan. The scan reads the open page and every product on it, saves them, and continues page by page to the last page. Only acxxel products are taken. Desktop, All in One PC and Toner products also appear in the product directory; every category gets its own Excel.</p>
+    <ul class="uses">
+      <li><b>Scan Products</b> – saves Acxxel's GeM catalogue products (model, price, specs, image) to the product directory and an Excel per category.</li>
+    </ul>
     <div class="button-row">
       <button id="product-scan" type="button">Scan Products</button>
       <button id="product-pause" type="button" class="secondary" disabled>Pause Scan</button>
@@ -57,4 +82,4 @@
     <p id="product-state" class="sync-state" role="status"></p>
   </section>
   <p id="message"></p>
-</main><script src="../popup.js"></script><script src="financial-ranking-popup.js"></script><script src="product-scan-popup.js"></script></body></html>
+</main><script src="../popup.js"></script><script src="financial-ranking-popup.js"></script><script src="product-scan-popup.js"></script><script src="representation-replies-popup.js"></script></body></html>

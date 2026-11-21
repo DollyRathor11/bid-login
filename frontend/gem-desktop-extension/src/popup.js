@@ -12,6 +12,7 @@ const retrySyncButton = document.getElementById("retry-sync");
 const syncState = document.getElementById("sync-state");
 const copySyncStatus = document.getElementById("copy-sync-status");
 const opportunityButton = document.getElementById("sync-opportunities");
+const representationButton = document.getElementById("sync-representations");
 const pauseOpportunityButton = document.getElementById("pause-opportunities");
 const copyOpportunityStatus = document.getElementById("copy-opportunity-status");
 const retryOpportunityButton = document.getElementById("retry-opportunities");
@@ -31,8 +32,9 @@ document.getElementById("version").textContent = `v${chrome.runtime.getManifest(
 function visibleSyncState(sync, storageKey) {
   const updatedAt = Number(sync?.updatedAt || 0);
   // Keep incomplete disqualified scans and their bid-level reasons visible,
-  // and a Bid To Be Participated scan that Retry Scan can still continue.
-  if (storageKey === "gemBidSync" || sync?.retry) return sync;
+  // a Bid To Be Participated scan that Retry Scan can still continue, and a
+  // My Representation error (such as the wrong GeM login) until the next scan.
+  if (storageKey === "gemBidSync" || sync?.retry || sync?.mode === "representation") return sync;
   const expired = TERMINAL_STATUSES.has(sync?.status)
     && updatedAt > 0
     && Date.now() - updatedAt >= TERMINAL_STATUS_TTL_MS;
@@ -122,11 +124,16 @@ function showOpportunityState(sync) {
   }
   const active = ACTIVE_SCAN_STATUSES.has(sync?.status);
   const paused = sync?.status === "paused";
-  opportunityButton.disabled = !acxxelConnected || active;
-  opportunityButton.textContent = paused
+  // My Representation runs on the same Ongoing Bids page and shares this
+  // section's status line and Pause button.
+  const representation = sync?.mode === "representation";
+  const runningLabel = paused
     ? "Scan paused..."
-    : sync?.status === "recovering" ? "Recovering scan..."
-      : active ? "Scan running..." : "Scan Bid To Be Participated";
+    : sync?.status === "recovering" ? "Recovering scan..." : "Scan running...";
+  opportunityButton.disabled = !acxxelConnected || active;
+  opportunityButton.textContent = active && !representation ? runningLabel : "Scan Bid To Be Participated";
+  representationButton.disabled = !acxxelConnected || active;
+  representationButton.textContent = active && representation ? runningLabel : "My Representation";
   pauseOpportunityButton.hidden = false;
   pauseOpportunityButton.disabled = !active || ["starting", "recovering"].includes(sync?.status);
   pauseOpportunityButton.textContent = paused ? "Resume Scan" : "Pause Scan";
@@ -139,22 +146,6 @@ function showOpportunityState(sync) {
     : `Continue the scan at page ${sync.retry.page}.`;
 }
 
-function preventConcurrentScans(bidSync, opportunitySync) {
-  const bidActive = ACTIVE_SCAN_STATUSES.has(bidSync?.status);
-  const opportunityActive = ACTIVE_SCAN_STATUSES.has(opportunitySync?.status);
-  if (bidActive) {
-    opportunityButton.disabled = true;
-    retryOpportunityButton.disabled = true;
-  }
-  if (opportunityActive) {
-    syncButton.disabled = true;
-    clarificationButton.disabled = true;
-    counterOfferButton.disabled = true;
-    retrySyncButton.disabled = true;
-    retryCounterOfferButton.disabled = true;
-  }
-}
-
 function refreshSyncState() {
   chrome.runtime.sendMessage({ type: "GET_GEM_BID_SYNC_STATE" }, (response) => {
     if (!chrome.runtime.lastError && response?.ok) {
@@ -163,7 +154,6 @@ function refreshSyncState() {
       message.textContent = acxxelConnected ? "" : "Open any logged-in Acxxel page and refresh it once.";
       showSyncState(response.gemBidSync);
       showOpportunityState(response.gemOpportunitySync);
-      preventConcurrentScans(response.gemBidSync, response.gemOpportunitySync);
     }
   });
 }
@@ -200,6 +190,24 @@ opportunityButton.addEventListener("click", () => {
     if (chrome.runtime.lastError || !response?.ok) {
       opportunityState.className = "sync-state failed";
       opportunityState.textContent = chrome.runtime.lastError?.message || response?.error || "Unable to start Bid To Be Participated scan.";
+      opportunityButton.disabled = false;
+      return;
+    }
+    window.setTimeout(refreshSyncState, 300);
+  });
+});
+
+representationButton.addEventListener("click", () => {
+  representationButton.disabled = true;
+  opportunityButton.disabled = true;
+  opportunityState.className = "sync-state";
+  opportunityState.textContent = "Starting My Representation scan...";
+  chrome.runtime.sendMessage({ type: "START_GEM_OPPORTUNITY_SYNC", mode: "representation" }, (response) => {
+    if (chrome.runtime.lastError || !response?.ok) {
+      // Also where the "log in with the Representation ID" message shows.
+      opportunityState.className = "sync-state failed";
+      opportunityState.textContent = chrome.runtime.lastError?.message || response?.error || "Unable to start My Representation scan.";
+      representationButton.disabled = false;
       opportunityButton.disabled = false;
       return;
     }
@@ -298,8 +306,42 @@ window.setInterval(refreshSyncState, 1000);
 copySyncStatus.addEventListener("click", () => copyListScanStatus(copySyncStatus, syncState));
 copyCounterOfferStatus.addEventListener("click", () => copyListScanStatus(copyCounterOfferStatus, counterOfferState));
 
+// Why each bid of the last Bid To Be Participated scan was not saved.
+const REJECT_REASON_LABELS = {
+  product: "Has an item that is not one of our products",
+  quantity: "Quantity below 5",
+  quantity_unread: "Quantity could not be read",
+  pac: "PAC Only",
+  location: "Delivery location not allowed (bids with A3 MFP: outside Uttar Pradesh)",
+  date: "Start date not readable / in the future",
+  expired: "Bid already ended",
+  over120: "Ends more than 120 days away",
+  inkjet: "Inkjet-only printer",
+  detail: "Bid details could not be downloaded (retried next scan)",
+  already_assigned: "Already assigned to a user",
+  deleted_by_user: "Deleted earlier in the software",
+};
+const REJECT_SOURCE_LABELS = { card: "from card", pdf: "from PDF", api: "by software" };
+
+async function rejectedBidsReport() {
+  const log = (await chrome.storage.local.get("gemOpportunityRejectedBids")).gemOpportunityRejectedBids || {};
+  const entries = Object.entries(log);
+  if (!entries.length) return "";
+  const groups = {};
+  for (const [bidNo, entry] of entries) (groups[entry.reason] ||= []).push([bidNo, entry]);
+  const lines = [`Rejected bids (${entries.length}):`];
+  for (const [reason, rows] of Object.entries(groups)) {
+    lines.push("", `${REJECT_REASON_LABELS[reason] || reason} - ${rows.length}`);
+    for (const [bidNo, entry] of rows) {
+      lines.push(`  ${bidNo} (page ${entry.page || "-"}, ${REJECT_SOURCE_LABELS[entry.from] || entry.from})${entry.items ? ` - ${entry.items}` : ""}`);
+    }
+  }
+  return lines.join("\n");
+}
+
 copyOpportunityStatus.addEventListener("click", async () => {
-  await navigator.clipboard.writeText(opportunityState.textContent || "");
+  const report = await rejectedBidsReport().catch(() => "");
+  await navigator.clipboard.writeText([opportunityState.textContent || "", report].filter(Boolean).join("\n\n"));
   copyOpportunityStatus.textContent = "Copied";
   window.setTimeout(() => { copyOpportunityStatus.textContent = "Copy status"; }, 1200);
 });
@@ -317,7 +359,6 @@ chrome.runtime.sendMessage({ type: "GET_STATE" }, (result) => {
   state.textContent = acxxelConnected ? "Connected" : "Disconnected";
   showSyncState(result.gemBidSync);
   showOpportunityState(result.gemOpportunitySync);
-  preventConcurrentScans(result.gemBidSync, result.gemOpportunitySync);
   if (!acxxelConnected) {
     message.textContent = "Open any logged-in Acxxel page and refresh it once.";
     return;

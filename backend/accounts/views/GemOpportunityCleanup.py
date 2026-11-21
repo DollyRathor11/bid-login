@@ -12,10 +12,24 @@ INDIA_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 # Printer bids are received at any quantity and however far off they end;
 # Workstation bids at any quantity. Every other rule still applies to them.
-NO_MINIMUM_QUANTITY_PRODUCTS = {"printer", "workstation"}
-NO_DAY_LIMIT_PRODUCTS = {"printer"}
+# A3 MFP has neither rule; its only rule (delivery in Uttar Pradesh) is
+# checked by the extension, which reads the consignee addresses.
+NO_MINIMUM_QUANTITY_PRODUCTS = {"printer", "workstation", "a3_mfp"}
+NO_DAY_LIMIT_PRODUCTS = {"printer", "a3_mfp"}
 MINIMUM_QUANTITY = 5
 MAX_DAYS = 120
+
+
+def day_limit_product(classification, product_type=""):
+    """The product whose day limit governs a bid. A bunch follows the strictest
+    of its products: it is free of the 120-day limit only when every product
+    in it (UPS aside) is."""
+    if not classification:
+        return product_type
+    return next(
+        (value for value in classification.get("product_types", ()) if value != "ups" and value not in NO_DAY_LIMIT_PRODUCTS),
+        classification["product_type"],
+    )
 
 
 def valid_opportunity_dates(bid_date, end_date, now=None, product_type=""):
@@ -72,13 +86,13 @@ def delete_invalid_unassigned_opportunities(now=None):
         GemBidOpportunity.objects.filter(
             is_deleted=False,
             assignment__isnull=True,
-        ).only("id", "bid_date", "end_date", "product_name", "product_type")
+        ).only("id", "bid_date", "end_date", "product_name", "product_type", "schedule_wise")
     )
     invalid_ids = []
     for row in candidates:
-        classification = classify_opportunity_item(row.product_name)
+        classification = classify_opportunity_item(row.product_name, row.schedule_wise)
         if not classification or not valid_opportunity_dates(
-            row.bid_date, row.end_date, reference, classification["product_type"]
+            row.bid_date, row.end_date, reference, day_limit_product(classification)
         ):
             invalid_ids.append(row.id)
             continue

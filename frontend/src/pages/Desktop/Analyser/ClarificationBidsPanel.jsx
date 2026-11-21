@@ -1,7 +1,11 @@
 import { useEffect, useState } from "react";
-import { FaEye, FaTrash } from "react-icons/fa";
+import { FaEye, FaSearch, FaTrash } from "react-icons/fa";
+import PostBidPagination from "../../../components/Management/PostBidPagination";
+import { paginate } from "../../../components/Management/paginateRows";
 
 const API_BASE = import.meta.env.VITE_API_URL;
+// "GEM/2026/B/8291220", "gem 2026 b 8291220" and "8291220" all find the bid.
+const bidKey = (value) => String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
 const authHeader = () => ({ Authorization: `Bearer ${sessionStorage.getItem("token") || localStorage.getItem("token") || ""}` });
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "-");
 const formatDateTime = (value) => (value ? new Date(value).toLocaleString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-");
@@ -96,6 +100,8 @@ export default function ClarificationBidsPanel() {
   const [error, setError] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleting, setDeleting] = useState(false);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
 
   const deleteIds = async (ids, confirmText) => {
     if (!ids.length || !window.confirm(confirmText)) return;
@@ -149,16 +155,27 @@ export default function ClarificationBidsPanel() {
   if (error) return <div className="m-6 border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>;
 
   // Only bids whose clarification is still pending are shown.
-  const visibleRows = rows.filter((row) => row.is_pending);
+  const pendingRows = rows.filter((row) => row.is_pending);
+  const searchKey = bidKey(search);
+  const visibleRows = searchKey ? pendingRows.filter((row) => bidKey(row.bid_no).includes(searchKey)) : pendingRows;
+  const { pageRows, pageCount, currentPage, offset } = paginate(visibleRows, page);
 
   return (
     <div className="bg-white">
       <div className="flex min-h-[76px] flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-5 py-4">
         <div className="flex flex-wrap items-center gap-4">
           <h2 className="text-lg font-bold text-slate-900">Clarification Bid</h2>
-          <span className="rounded border border-slate-300 bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white">
-            Pending Clarification ({visibleRows.length})
-          </span>
+          <label className="relative block w-72 max-w-full">
+            <span className="sr-only">Search by bid number</span>
+            <FaSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400" aria-hidden="true" />
+            <input
+              type="search"
+              value={search}
+              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+              placeholder="Search bid no. (GEM/2026/B/8291220 or 8291220)"
+              className="w-full rounded border border-gray-300 py-2 pl-9 pr-3 text-sm text-gray-800 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+            />
+          </label>
         </div>
         {selectedIds.size > 0 && (
           <button
@@ -188,8 +205,12 @@ export default function ClarificationBidsPanel() {
                 <input
                   type="checkbox"
                   aria-label="Select all clarification bids"
-                  checked={visibleRows.length > 0 && selectedIds.size === visibleRows.length}
-                  onChange={(event) => setSelectedIds(event.target.checked ? new Set(visibleRows.map((row) => row.id)) : new Set())}
+                  checked={pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id))}
+                  onChange={(event) => setSelectedIds((current) => {
+                    const next = new Set(current);
+                    pageRows.forEach((row) => (event.target.checked ? next.add(row.id) : next.delete(row.id)));
+                    return next;
+                  })}
                   className="h-4 w-4 accent-red-600"
                 />
                 <span>Action</span>
@@ -198,9 +219,9 @@ export default function ClarificationBidsPanel() {
           </tr>
         </thead>
         <tbody>
-          {visibleRows.map((row, index) => (
+          {pageRows.map((row, index) => (
             <tr key={row.id} className="border-b border-gray-100 align-top hover:bg-gray-50">
-              <td className="px-4 py-4 text-sm font-bold text-gray-700">{index + 1}</td>
+              <td className="px-4 py-4 text-sm font-bold text-gray-700">{offset + index + 1}</td>
               <td className="px-4 py-4 text-sm font-bold text-blue-700">{row.bid_no}</td>
               <td className="px-4 py-4 text-sm text-gray-700">{row.department || "-"}</td>
               <td className="px-4 py-4 text-sm text-gray-700">{formatDate(row.clarification_at)}</td>
@@ -247,12 +268,13 @@ export default function ClarificationBidsPanel() {
           ))}
           {visibleRows.length === 0 && (
             <tr><td colSpan="8" className="py-16 text-center text-sm text-gray-500">
-              No pending clarifications.
+              {pendingRows.length ? `No bid matches "${search.trim()}".` : "No pending clarifications."}
             </td></tr>
           )}
         </tbody>
       </table>
       </div>
+      <PostBidPagination page={currentPage} pageCount={pageCount} onPage={setPage} />
       {selected && <ClarificationHistoryModal bid={selected} onClose={() => setSelected(null)} />}
     </div>
   );

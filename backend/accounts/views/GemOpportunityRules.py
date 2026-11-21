@@ -36,6 +36,16 @@ ALLOWED_CATEGORY_PATTERNS = (
 )
 
 
+# A3 MFP: alone it has no rule but delivery in Uttar Pradesh; a bunch with
+# it keeps its usual rules and must also be delivered in UP (extension check).
+A3_CATEGORY_PATTERNS = (
+    ("a3_mfp", "a3_mfp", re.compile(
+        r"^a3\b(?=[\s\S]*(?:multifunction|\bmfp\b))(?=[\s\S]*(?:printer|\bp\b))[\s\S]*$",
+        re.IGNORECASE,
+    )),
+)
+
+
 # UPS categories are received only inside a bunch bid, never on their own,
 # and only under these exact GeM names.
 BUNCH_ONLY_CATEGORY_PATTERNS = (
@@ -66,39 +76,47 @@ def clean_opportunity_item(value):
 
 def _category_key_and_product(category, in_bunch=False):
     normalized = " ".join(str(category or "").split()).strip(" ,")
-    patterns = ALLOWED_CATEGORY_PATTERNS + (BUNCH_ONLY_CATEGORY_PATTERNS if in_bunch else ())
+    patterns = ALLOWED_CATEGORY_PATTERNS + A3_CATEGORY_PATTERNS + (BUNCH_ONLY_CATEGORY_PATTERNS if in_bunch else ())
     for category_key, product_type, pattern in patterns:
         if pattern.fullmatch(normalized):
             return category_key, product_type
     return None, None
 
 
-def classify_opportunity_item(value):
+def classify_opportunity_item(value, schedule_wise=False):
     """Return category metadata, or None when any category is unsupported.
 
     A single-category bid must be one of the approved categories. A bunch bid
     (several categories) is kept when every category is approved or a UPS
     category and at least one is approved; its product type is that of its
-    first approved category.
+    first approved category. A schedule-wise bunch (GeM item wise evaluation,
+    where a seller quotes only its own items) may also hold other categories.
     """
     raw = str(value or "")
-    if not raw.strip() or has_pac_only(raw):
+    if not raw.strip():
         return None
     clean_name = clean_opportunity_item(raw)
     categories = [part.strip() for part in re.split(r"\s*,\s*", clean_name) if part.strip()]
     if not categories:
         return None
     is_bunch = len(categories) > 1
-    classified = [_category_key_and_product(category, is_bunch) for category in categories]
-    if any(category_key is None for category_key, _ in classified):
+    # PAC Only does not stop an A3 MFP bid, which has no rule but location.
+    is_a3 = not is_bunch and _category_key_and_product(categories[0])[1] == "a3_mfp"
+    if has_pac_only(raw) and not is_a3:
         return None
-    primary = next((product_type for _, product_type in classified if product_type != "ups"), None)
+    classified = [_category_key_and_product(category, is_bunch) for category in categories]
+    schedule_wise = bool(schedule_wise and is_bunch)
+    if not schedule_wise and any(category_key is None for category_key, _ in classified):
+        return None
+    primary = next((product_type for _, product_type in classified if product_type and product_type != "ups"), None)
     if not primary:
         return None
     return {
         "clean_name": clean_name,
         "categories": categories,
-        "category_keys": [category_key for category_key, _ in classified],
+        "category_keys": [category_key for category_key, _ in classified if category_key],
+        "product_types": [product_type for _, product_type in classified if product_type],
         "product_type": primary,
         "is_bunch": is_bunch,
+        "schedule_wise": schedule_wise,
     }

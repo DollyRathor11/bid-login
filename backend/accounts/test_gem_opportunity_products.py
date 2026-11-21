@@ -52,7 +52,6 @@ class GemOpportunityProductRulesTests(SimpleTestCase):
             "All in One PC (V2) (Q2), Line Intractive UPS With AVR (Q2)",
             "All in One PC (V2) (Q2), Online UPS (V2) (Q2)",
             "All in One PC (V2) (Q2), Online UPS (Q2)",
-            "A3 Size Multifunction Printer (MFP), A4 and Legal Size Multifunction Printer (MFP)",
             "Line Interactive UPS With AVR (V2) (Q2), "
             "Online UPS (≤10 KVA) With Battery Conforming To IS 16242 (Part 1) (Q2)",
         ]:
@@ -67,4 +66,18 @@ class GemOpportunityProductRulesTests(SimpleTestCase):
         self.assertIsNone(classify_opportunity_item(
             "A4 and Legal Size Multifunction Printer (MFP) (Q2) ( PAC Only )"
         ))
+
+    def test_schedule_wise_bunch_may_hold_other_items(self):
+        item = "Office Chair (Q2), All in One PC (V2) (Q2), Steel Almirah (Q2)"
+        self.assertIsNone(classify_opportunity_item(item))
+        result = classify_opportunity_item(item, schedule_wise=True)
+        self.assertEqual(result["product_type"], "aio")
+        self.assertTrue(result["schedule_wise"])
+        self.assertEqual(result["product_types"], ["aio"])
+        # Still needs one of ours (UPS alone is not), and a single item is
+        # never schedule-wise.
+        self.assertIsNone(classify_opportunity_item(
+            "Office Chair (Q2), Line Interactive UPS with AVR (V2) (Q2)", schedule_wise=True
+        ))
+        self.assertIsNone(classify_opportunity_item("Office Chair (Q2)", schedule_wise=True))
 

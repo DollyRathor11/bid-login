@@ -2,6 +2,9 @@ import { useEffect, useState } from "react";
 import { FaTrash } from "react-icons/fa";
 import { isSupportedOpportunity, itemCategory } from "./bidOpportunityCategory";
 import { BidNoCell, CorrigendumCell, DateCell } from "./BidTableCells";
+import PostBidPagination from "../../components/Management/PostBidPagination";
+import { paginate } from "../../components/Management/paginateRows";
+import ScheduleBidTag from "../../utils/ScheduleBidTag";
 
 const API_BASE = import.meta.env.VITE_API_URL;
 export default function AdminBidToBeParticipated() {
@@ -10,6 +13,7 @@ export default function AdminBidToBeParticipated() {
   const [success, setSuccess] = useState("");
   const [deletingId, setDeletingId] = useState(null);
   const [itemFilter, setItemFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [employees, setEmployees] = useState([]);
   const [assignedTo, setAssignedTo] = useState("");
   const [employeeBids, setEmployeeBids] = useState([]);
@@ -22,9 +26,10 @@ export default function AdminBidToBeParticipated() {
     high_end_desktop: "High End Desktop Computer",
     entry_mid_desktop: "Entry and Mid Level Desktop Computer",
     printer: "A4 and Legal Size MFP", aio: "All in One PC (V2)", workstation: "Fixed Computer Workstation",
-    toner: "Toner / Ink Cartridges", bunch_bid: "Bunch Bid",
+    toner: "Toner / Ink Cartridges", a3_mfp: "A3 Size Printer MFP", bunch_bid: "Bunch Bid",
+    schedule_bid: "Schedule Bids",
   };
-  const itemOrder = ["high_end_desktop", "entry_mid_desktop", "printer", "aio", "workstation", "toner", "bunch_bid"];
+  const itemOrder = ["high_end_desktop", "entry_mid_desktop", "printer", "a3_mfp", "aio", "workstation", "toner", "bunch_bid", "schedule_bid"];
   const itemTypes = itemOrder;
   const filteredRows = itemFilter === "all"
     ? rows
@@ -200,13 +205,15 @@ export default function AdminBidToBeParticipated() {
     const timer = window.setInterval(() => document.visibilityState === "visible" && load(), 30000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
+  const { pageRows, pageCount, currentPage, offset } = paginate(filteredRows, page);
+
   return (
     <div className="bg-white">
       <div className="border-b border-gray-200 px-5 py-4">
         <h2 className="text-lg font-bold text-slate-900">Bid To Be Participated</h2>
         <div className="mt-4 flex items-center gap-3">
           <label htmlFor="item-filter" className="text-sm font-semibold text-slate-700">Item:</label>
-          <select id="item-filter" value={itemFilter} onChange={(event) => setItemFilter(event.target.value)}
+          <select id="item-filter" value={itemFilter} onChange={(event) => { setItemFilter(event.target.value); setPage(1); }}
             className="min-w-48 rounded border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 outline-none focus:border-blue-500">
             <option value="all">All Items ({rows.length})</option>
             {itemTypes.map((type) => <option key={type} value={type}>
@@ -228,7 +235,7 @@ export default function AdminBidToBeParticipated() {
               <td className="px-3 py-3 font-semibold text-slate-500">{index + 1}</td>
               <BidNoCell row={row} className="px-3 py-3" />
               <DateCell value={row.bid_date} className="px-3 py-3" /><DateCell value={row.end_date} className="px-3 py-3" />
-              <td className="max-w-xs px-3 py-3 font-medium text-slate-800">{row.item}</td><CorrigendumCell row={row} className="px-3 py-3" /><td className="px-3 py-3 font-semibold capitalize">{row.status.replace("_", " ")}</td>
+              <td className="max-w-xs px-3 py-3 font-medium text-slate-800">{row.item}<ScheduleBidTag row={row} /></td><CorrigendumCell row={row} className="px-3 py-3" /><td className="px-3 py-3 font-semibold capitalize">{row.status.replace("_", " ")}</td>
               <td className="px-3 py-3 text-center"><div className="inline-flex items-center gap-2"><input type="checkbox" checked={selectedEmployeeBidIds.includes(row.id)} onChange={() => setSelectedEmployeeBidIds((current) => current.includes(row.id) ? current.filter((id) => id !== row.id) : [...current, row.id])} className="h-4 w-4 accent-red-600" aria-label={`Select ${row.bid_no}`} /><button type="button" onClick={() => hideAssignedBid(row)}
                 className="rounded p-2 text-red-600 hover:bg-red-50 hover:text-red-700" title="Remove from admin dashboard" aria-label={`Remove ${row.bid_no}`}><FaTrash aria-hidden="true" /></button></div></td>
             </tr>)}</tbody>
@@ -241,12 +248,12 @@ export default function AdminBidToBeParticipated() {
           <thead className="sticky top-0 z-10 bg-slate-800 text-xs font-semibold uppercase tracking-wide text-white"><tr>
             <th className="w-14 px-4 py-3">S.No.</th><th className="px-4 py-3">Bid No.</th><th className="px-4 py-3">Start Date</th><th className="px-4 py-3">End Date</th><th className="px-4 py-3">Item</th><th className="px-4 py-3">Corrigendum</th><th className="px-4 py-3 text-center">Assign To User</th>
           </tr></thead>
-          <tbody>{filteredRows.map((row, index) => <tr key={row.id} className="border-b border-gray-100 align-middle even:bg-slate-50/60 hover:bg-blue-50/40">
-            <td className="px-4 py-3 text-sm font-semibold text-slate-500">{index + 1}</td>
+          <tbody>{pageRows.map((row, index) => <tr key={row.id} className="border-b border-gray-100 align-middle even:bg-slate-50/60 hover:bg-blue-50/40">
+            <td className="px-4 py-3 text-sm font-semibold text-slate-500">{offset + index + 1}</td>
             <BidNoCell row={row} className="px-4 py-3" />
             <DateCell value={row.bid_date} className="px-4 py-3" />
             <DateCell value={row.end_date} className="px-4 py-3" />
-            <td className="max-w-xs px-4 py-3 text-sm font-medium text-slate-800">{row.product_name}</td>
+            <td className="max-w-xs px-4 py-3 text-sm font-medium text-slate-800">{row.product_name}<ScheduleBidTag row={row} /></td>
             <CorrigendumCell row={row} className="px-4 py-3" />
             <td className="px-4 py-3 text-center">
               <select defaultValue="" disabled={assigningBidId === row.id}
@@ -262,6 +269,7 @@ export default function AdminBidToBeParticipated() {
         </table>
         {!filteredRows.length && !error && <div className="py-16 text-center text-sm text-gray-500">No eligible bids found for this item.</div>}
       </div>
+      <PostBidPagination page={currentPage} pageCount={pageCount} onPage={setPage} />
     </div>
   );
 }

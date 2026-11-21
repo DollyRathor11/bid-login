@@ -30,13 +30,28 @@ test("keeps ordinary desktop categories unchanged", () => {
   assert.equal(itemCategory({ product_name: "Desktop Computer" }), "other");
 });
 
-test("shows an all-approved bunch as Bunch Bid and still rejects A3 alone or PAC Only", () => {
+test("shows an all-approved bunch as Bunch Bid, A3 alone as A3 MFP, A3 in a bunch as Bunch Bid, and rejects PAC Only", () => {
   assert.equal(itemCategory({
     product_name: "All in One PC (V2), Entry and Mid Level Desktop Computer, A4 and Legal Size Multifunction Printer (MFP)",
   }), "bunch_bid");
-  assert.equal(itemCategory({ product_name: "A3 Size Multifunction Printer (MFP)" }), "other");
+  assert.equal(itemCategory({ product_name: "A3 Size Multifunction Printer (MFP)" }), "a3_mfp");
+  assert.equal(itemCategory({
+    product_name: "A3 Size Multifunction Printer (MFP), A4 and Legal Size Multifunction Printer (MFP)",
+  }), "bunch_bid");
+  assert.equal(itemCategory({
+    product_name: "A3 Size Multifunction Printer (MFP), Laptop",
+  }), "other");
   assert.equal(itemCategory({
     product_name: "A4 and Legal Size Multifunction Printer (MFP) (Q2) (PAC Only)",
   }), "other");
 });
 
+
+test("shows a schedule-wise bunch with one of our items as Schedule Bids", () => {
+  const name = "A3 Size Multifunction Printer (MFP), A4 And Legal Size Multifunction Printer (MFP), Computer Printer (V2)";
+  assert.equal(itemCategory({ product_name: name, schedule_wise: true }), "schedule_bid");
+  assert.equal(itemCategory({ product_name: name }), "other");
+  assert.equal(itemCategory({ product_name: "All in One PC (V2), Line Interactive UPS with AVR (V2)", schedule_wise: true }), "schedule_bid");
+  assert.equal(itemCategory({ product_name: "Laptop, Line Interactive UPS with AVR (V2)", schedule_wise: true }), "other");
+  assert.equal(itemCategory({ product_name: "All in One PC (V2)", schedule_wise: true }), "aio");
+});
