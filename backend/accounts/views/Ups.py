@@ -198,6 +198,7 @@ def review_ups(request, bid_id):
         if not isinstance(data, dict):
             raise ValueError("Invalid review form.")
         action = data.get("action")
+        metadata_fields = ("bid_no", "dept_name", "organization", "address", "pincode", "qty", "atc", "start_date", "end_date")
         with transaction.atomic():
             bid = UpsBid.objects.select_for_update().select_related("user").filter(pk=bid_id).exclude(status="draft").first()
             if not bid:
@@ -208,11 +209,15 @@ def review_ups(request, bid_id):
                 if bid.analyser_username and bid.analyser_username != actor.username:
                     return JsonResponse({"error": "This UPS bid is being handled by another analyser."}, status=403)
                 if action == "save_analysis":
-                    model = str(data.get("model_number") or bid.model_number or "").strip()
+                    model = str(data.get("model_number", bid.model_number) or "").strip()
                     if len(model) > 150:
                         raise ValueError("UPS model number cannot exceed 150 characters.")
                     specs = data.get("specs", bid.specs)
                     validate_specs(bid.ups_type, specs)
+                    if any(key in data for key in metadata_fields):
+                        metadata = validate_metadata({key: data.get(key, getattr(bid, key)) for key in metadata_fields})
+                        for key, value in metadata.items():
+                            setattr(bid, key, value)
                     bid.specs, bid.model_number = specs, model
                     bid.analyser_username = actor.username
                     bid.analysis_saved_at = timezone.now()
@@ -234,7 +239,7 @@ def review_ups(request, bid_id):
                 if action in ("approved", "re-analyze"):
                     from ..ups_admin_pricing import validate_admin_pricing
                     bid.unit_price, bid.admin_pricing = validate_admin_pricing(data, bid, action)
-                    metadata = validate_metadata({key: data.get(key, getattr(bid, key)) for key in ("bid_no", "dept_name", "organization", "address", "pincode", "qty", "atc", "start_date", "end_date")})
+                    metadata = validate_metadata({key: data.get(key, getattr(bid, key)) for key in metadata_fields})
                     for key, value in metadata.items():
                         setattr(bid, key, value)
                     specs = data.get("specs", bid.specs)

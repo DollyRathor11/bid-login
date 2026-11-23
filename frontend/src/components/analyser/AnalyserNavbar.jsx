@@ -34,6 +34,7 @@ const BID_PRODUCTS = [
   { key: "workstation", label: "Workstation", icon: <FaServer />, color: "#0ea5e9", ready: true },
   { key: "printer", label: "Printer", icon: <FaPrint />, color: "#10b981", ready: true },
   { key: "toner", label: "Toner", icon: <FaBox />, color: "#f59e0b", ready: true },
+  { key: "bunch", label: "Bunch Bid", icon: <FaBox />, color: "#2563eb", ready: true },
 ];
 const PRODUCTS = BID_PRODUCTS;
 const NAV_ENABLED_KEYS = new Set(["desktop", "aio", "workstation", "printer", "toner"]);
@@ -62,6 +63,9 @@ const StatCard = ({ label, value, Icon, gradient, loading, onClick }) => (
 const AnalyserHome = () => {
   const navigate = useNavigate();
   const [selectedProduct, setSelectedProduct] = useState(PRODUCTS[0]);
+  const openDashboardBids = (status) => navigate(selectedProduct.key === "bunch"
+    ? `/analyser-dashboard/bunch?dashboard=1&status=${status}`
+    : `/analyser-dashboard?cardStatus=${status}&product=${selectedProduct.key}`);
   const activity = useDailyActivity(selectedProduct.key);
   const [dropOpen, setDropOpen] = useState(false);
   const productDropdownRef = useRef(null);
@@ -147,13 +151,13 @@ const AnalyserHome = () => {
         </div>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=all&product=${selectedProduct.key}`)} label="Total Bids" value={stats.total} Icon={FaFileInvoiceDollar} gradient="bg-gradient-to-br from-blue-500 to-blue-600" loading={loading} />
-        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=pending&product=${selectedProduct.key}`)} label="Pending Bids" value={stats.pending} Icon={FaClipboardList} gradient="bg-gradient-to-br from-amber-400 to-orange-500" loading={loading} />
-        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=approved&product=${selectedProduct.key}`)} label="Approved Bids" value={stats.reviewed} Icon={FaCheckCircle} gradient="bg-gradient-to-br from-emerald-400 to-emerald-600" loading={loading} />
+        <StatCard onClick={() => openDashboardBids("all")} label="Total Bids" value={stats.total} Icon={FaFileInvoiceDollar} gradient="bg-gradient-to-br from-blue-500 to-blue-600" loading={loading} />
+        <StatCard onClick={() => openDashboardBids("pending")} label="Pending Bids" value={stats.pending} Icon={FaClipboardList} gradient="bg-gradient-to-br from-amber-400 to-orange-500" loading={loading} />
+        <StatCard onClick={() => openDashboardBids("approved")} label="Approved Bids" value={stats.reviewed} Icon={FaCheckCircle} gradient="bg-gradient-to-br from-emerald-400 to-emerald-600" loading={loading} />
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=re-analyze&product=${selectedProduct.key}`)} label="Re-Analyze Bids" value={stats.reAnalyze} Icon={FaExclamationTriangle} gradient="bg-gradient-to-br from-rose-500 to-rose-700" loading={loading} />
-        <StatCard onClick={() => navigate(`/analyser-dashboard?cardStatus=rejected&product=${selectedProduct.key}`)} label="Rejected Bids" value={stats.rejected} Icon={FaBan} gradient="bg-gradient-to-br from-red-800 to-red-950" loading={loading} />
+        <StatCard onClick={() => openDashboardBids("re-analyze")} label="Re-Analyze Bids" value={stats.reAnalyze} Icon={FaExclamationTriangle} gradient="bg-gradient-to-br from-rose-500 to-rose-700" loading={loading} />
+        <StatCard onClick={() => openDashboardBids("rejected")} label="Rejected Bids" value={stats.rejected} Icon={FaBan} gradient="bg-gradient-to-br from-red-800 to-red-950" loading={loading} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white border-2 border-slate-100 rounded-2xl p-6 shadow-sm">

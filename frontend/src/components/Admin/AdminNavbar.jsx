@@ -61,6 +61,7 @@ const BID_PRODUCTS = [
   { key: "workstation", label: "Workstation", icon: <FaServer />,  color: "#0ea5e9", ready: true },
   { key: "printer",     label: "Printer",     icon: <FaPrint />,   color: "#10b981", ready: true  },
   { key: "toner",       label: "Toner",       icon: <FaBox />,     color: "#f59e0b", ready: true },
+  { key: "bunch",       label: "Bunch Bid",   icon: <FaBox />,     color: "#2563eb", ready: true },
 ];
 
 const ADMIN_DASHBOARD_API_MAP = {
@@ -106,6 +107,14 @@ const fetchDashboard = async (product, endpoint, params = "", options = {}) => {
       const response = await fetch(`${API_BASE}/dashboard/daily-activity/?product=${key}&${params}`, { ...options, headers: { Authorization: `Bearer ${token}` } });
       if (!response.ok) throw new Error("Unable to load daily activity");
       return response.json();
+    }
+    if (key === "bunch") {
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+      const response = await fetch(`${ADMIN_API}/dashboard/bunch/?${params}`, {
+        ...options, headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error("Unable to load bunch bid dashboard");
+      return (await response.json())[endpoint];
     }
     const personView = ["stats", "monthly", "daily"].includes(endpoint) && (new URLSearchParams(params).get("user") || new URLSearchParams(params).get("analyser"));
     const url = personView ? `${ADMIN_API}/dashboard/${key}/person/${endpoint}/` : endpoint === "participants"

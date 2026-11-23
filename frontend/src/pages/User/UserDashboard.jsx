@@ -7,7 +7,7 @@ import { FaFileInvoiceDollar, FaHourglassHalf, FaThumbsUp, FaThumbsDown, FaClipb
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, PieChart, Pie, Cell } from "recharts";
 
 const API = import.meta.env.VITE_API_URL;
-const PRODUCTS = [["all", "All Bids"], ["desktop", "Desktop"], ["aio", "AIO"], ["workstation", "Workstation"], ["printer", "Printer"], ["toner", "Toner"]];
+const PRODUCTS = [["all", "All Bids"], ["desktop", "Desktop"], ["aio", "AIO"], ["workstation", "Workstation"], ["printer", "Printer"], ["toner", "Toner"], ["bunch", "Bunch Bid"]];
 
 export default function UserDashboard() {
   const [product, setProduct] = useState("all");
@@ -47,7 +47,7 @@ export default function UserDashboard() {
     { label: "Approved Bids", value: stats?.approved, Icon: FaThumbsUp, color: "from-emerald-500 to-emerald-600" },
     { label: "Re-Analyze", value: stats?.reAnalyze, Icon: FaThumbsDown, color: "from-rose-500 to-rose-600" },
     { label: "Rejected Bids", value: stats?.rejected, Icon: FaBan, color: "from-red-800 to-red-950" },
-    { label: "Bids Assigned to User", value: data?.assigned, Icon: FaClipboardList, color: "from-teal-500 to-teal-600", onClick: () => navigate("/user/bid-to-be-participated") },
+    { label: "Bids Assigned to User", value: data?.assigned, Icon: FaClipboardList, color: "from-teal-500 to-teal-600", onClick: () => navigate(product === "bunch" ? "/user/bid-to-be-participated?product=bunch" : "/user/bid-to-be-participated") },
   ];
   const ratio = [
     { name: "Pending", value: stats?.pending || 0, color: "#f59e0b" },
