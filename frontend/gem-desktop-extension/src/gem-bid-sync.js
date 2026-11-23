@@ -1244,7 +1244,12 @@
       const raw = text(liveCard);
       const cardStatus = (raw.match(CLARIFICATION_STATUS_PATTERN) || [""])[0];
       const hasClarification = /clarification\s+history/i.test(raw) || Boolean(cardStatus);
-      const historyResult = hasClarification ? await clarificationHistoryFor(liveCard) : { rows: [], error: "" };
+      // Only pending clarifications are tracked. A card that already says the
+      // clarification was submitted/closed is not opened at all.
+      const cardClosed = Boolean(cardStatus) && !/pending|sought|requested|awaiting/i.test(cardStatus);
+      const historyResult = hasClarification && !cardClosed
+        ? await clarificationHistoryFor(liveCard)
+        : { rows: [], error: "" };
       const summary = clarificationSummary(historyResult.rows, cardStatus);
       // A pending clarification also has a "Clarification Request Details"
       // popup with the last date for the seller's response. It is extra
@@ -1912,18 +1917,28 @@
                   await progress("running", `Checked ${result.bid_no}: no clarification (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
                   return;
                 }
+                // Only pending clarifications are kept; a submitted or closed one
+                // is removed from the dashboard if it was there (best effort).
+                if (!result.is_pending) {
+                  await runtimeMessage({ type: "SAVE_GEM_CLARIFICATIONS", results: [result] }).catch(() => {});
+                  processed.add(result.bid_no);
+                  pending.delete(result.bid_no);
+                  await progress("running", `Checked ${result.bid_no}: ${result.clarification_status || "clarification"} is not pending, not saved (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                  return;
+                }
                 await progress("running", `Saving clarification bid ${result.bid_no}.`, { page, saved, rejected, checked });
                 let response = null;
                 for (let saveAttempt = 1; saveAttempt <= 3; saveAttempt += 1) {
                   response = await runtimeMessage({ type: "SAVE_GEM_CLARIFICATIONS", results: [result] });
                   if (response.saved === 1) break;
-                  if ((response.rejections || []).some((item) => item.reason === "expired_only")) break;
+                  if ((response.rejections || []).some((item) => ["expired_only", "not_pending"].includes(item.reason))) break;
                   if (saveAttempt < 3) await sleep(saveAttempt * 2000);
                 }
-                if ((response.rejections || []).some((item) => item.reason === "expired_only")) {
+                const skipReason = (response.rejections || []).find((item) => ["expired_only", "not_pending"].includes(item.reason))?.reason;
+                if (skipReason) {
                   processed.add(result.bid_no);
                   pending.delete(result.bid_no);
-                  await progress("running", `Checked ${result.bid_no}: only expired clarification, not saved (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
+                  await progress("running", `Checked ${result.bid_no}: ${skipReason === "expired_only" ? "only expired clarification" : "clarification not pending"}, not saved (${recordNumber}/${totalRecords} on page ${page}).`, { page, saved, rejected, checked });
                   return;
                 }
                 if (response.saved !== 1) {

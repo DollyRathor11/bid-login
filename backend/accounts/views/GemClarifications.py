@@ -11,6 +11,9 @@ from ..models import GemBidResult, GemClarificationResult
 from .Gem import _require_role
 from .GemResults import _parse_datetime
 
+# Words GeM uses on a bid card while the seller still has to reply.
+CARD_PENDING = re.compile(r"pending|sought|requested|awaiting", re.I)
+
 
 def _clarification_data(result):
     return {
@@ -117,6 +120,19 @@ def gem_clarification_results(request):
                 continue
             summary = summarise(kept)
             is_pending = summary["is_pending"] or (not summary["clarification_status"] and bool(row.get("is_pending")))
+            # The GeM card's own status wins: once it says submitted/closed, the
+            # clarification is no longer pending even if an older history said so.
+            card_status = str(row.get("clarification_status", "")).strip()
+            if card_status and CARD_PENDING.search(card_status):
+                is_pending = True
+            elif card_status and not row.get("is_pending"):
+                is_pending = False
+            # Only pending clarifications are tracked; anything else is removed.
+            if not is_pending:
+                if existing:
+                    existing.delete()
+                rejections.append({"bid_no": bid_no, "reason": "not_pending"})
+                continue
             details = row.get("request_details") if isinstance(row.get("request_details"), list) else []
             details = [item for item in details if isinstance(item, dict)]
             last_response_date = _parse_datetime(row.get("last_response_date"))
