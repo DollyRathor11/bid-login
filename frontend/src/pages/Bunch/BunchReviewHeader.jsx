@@ -19,7 +19,12 @@ export default function BunchReviewHeader() {
   useEffect(() => {
     if (!bidNo) return;
     const controller = new AbortController();
-    upsRequest(`bunch-bids/?${new URLSearchParams({ bid_no: bidNo })}`, { signal: controller.signal })
+    const query = new URLSearchParams(context.returnTo?.split("?")[1]);
+    for (const key of [...query.keys()]) {
+      if (!["dashboard", "user", "analyser"].includes(key)) query.delete(key);
+    }
+    query.set("bid_no", bidNo);
+    upsRequest(`bunch-bids/?${query}`, { signal: controller.signal })
       .then(data => {
         if (controller.signal.aborted) return;
         const group = data.results.find(group => group.bid_no.trim().toLowerCase() === bidNo.trim().toLowerCase());

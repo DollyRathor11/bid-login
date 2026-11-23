@@ -7,11 +7,12 @@ const TABS = [
   { key: "rejected", label: "Rejected", icon: "⛔", color: "text-red-800", badge: "bg-red-100 text-red-800" },
 ];
 
-export default function AnalyserBunchList({ data, loading, error, status, onStatus, onPage, onView, role = "analyser" }) {
-  const groups = (data?.results || []).map(group => ({ ...group, items: group.items.filter(item => status === "all" || item.status === status) })).filter(group => group.items.length);
+export default function AnalyserBunchList({ data, loading, error, status, onStatus, onPage, onView, role = "analyser", dashboard = false }) {
+  const tabs = dashboard ? [{ key: "all", label: "All", color: "text-blue-600" }, ...TABS] : TABS;
+  const groups = (data?.results || []).map(group => ({ ...group, items: group.items.filter(item => dashboard || status === "all" || item.status === status) })).filter(group => group.items.length);
   return <section aria-label={role === "admin" ? "Bunch Bid Approval" : "Bunch Bids"} className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
     <div role="tablist" aria-label="Bunch bid status" className="flex gap-2 overflow-x-auto bg-gray-50 px-6 pt-4">
-      {TABS.map(tab => <button type="button" role="tab" aria-selected={status === tab.key} key={tab.key} onClick={() => onStatus(tab.key)}
+      {tabs.map(tab => <button type="button" role="tab" aria-selected={status === tab.key} key={tab.key} onClick={() => onStatus(tab.key)}
         className={`flex items-center gap-2 whitespace-nowrap border-b-2 px-3 py-4 text-sm font-medium transition ${status === tab.key ? `border-current bg-white ${tab.color}` : "border-transparent text-slate-500 hover:bg-white"}`}><span aria-hidden="true">{tab.icon}</span>{tab.label}</button>)}
     </div>
     {error && <p role="alert" className="mx-6 my-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
@@ -20,7 +21,7 @@ export default function AnalyserBunchList({ data, loading, error, status, onStat
       <thead><tr className="bg-slate-800">{["S.No.", "Bid No", "Department", "Qty", role === "admin" ? "Analyser" : "Submitted By", "End Date", "Status", "Action"].map(label => <th key={label} className="whitespace-nowrap border-b border-slate-700 px-2 py-4 text-[11px] font-bold uppercase tracking-wider text-white">{label}</th>)}</tr></thead>
       <tbody>{loading ? <tr><td colSpan={8} className="p-12 text-center text-sm text-slate-400">Loading bids...</td></tr>
         : !error && !groups.length ? <tr><td colSpan={8} className="p-12 text-center text-sm text-slate-400">No {TABS.find(tab => tab.key === status)?.label.toLowerCase() || "matching"} bunch bids found.</td></tr>
-          : !error && groups.map((group, index) => <BunchBidCard key={group.bid_no} group={group} serialNumber={((data?.page || 1) - 1) * 10 + index + 1} onView={onView} role={role} />)}
+          : !error && groups.map((group, index) => <BunchBidCard key={group.bid_no} group={group} serialNumber={((data?.page || 1) - 1) * 10 + index + 1} onView={onView} role={role} dashboard={dashboard} />)}
       </tbody>
     </table></div>
     {!loading && !error && data?.pages > 1 && <nav aria-label="Bunch bid pagination" className="flex justify-center gap-2 p-5">

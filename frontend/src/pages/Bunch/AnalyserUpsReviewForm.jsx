@@ -21,7 +21,8 @@ export default function AnalyserUpsReviewForm({ bidId, bid, schema, form, setFor
   useEffect(() => { try { sessionStorage.setItem(verificationKey, JSON.stringify(verified)); } catch { /* Verification still works when storage is unavailable. */ } }, [verificationKey, verified]);
   const specs = form.specs || {};
   const fields = bid && schema ? getUpsFields(schema, bid.ups_type, specs) : [];
-  const requiredChecks = upsVerificationFields(bid, fields, specs);
+  const requiredChecks = upsVerificationFields(bid ? form : null, fields, specs);
+  const updateField = (name, value) => setForm(previous => ({ ...previous, [name]: value }));
   const isVerified = (key, value) => verified[key] === verificationValue(value);
   const verifiedCount = requiredChecks.filter(field => isVerified(field.key, field.value)).length;
   const allVerified = requiredChecks.length > 0 && verifiedCount === requiredChecks.length;
@@ -38,14 +39,19 @@ export default function AnalyserUpsReviewForm({ bidId, bid, schema, form, setFor
     {error && <p role="alert" className="mb-4 rounded border border-red-200 bg-red-50 px-4 py-2 text-sm font-medium text-red-700">{error}</p>}
     {!bid || !schema ? <p className="py-8 text-sm text-slate-500">Loading UPS bid...</p> : <form onSubmit={event => { if (!allVerified) { event.preventDefault(); return; } submit(event); }} className="[&_label]:font-semibold [&_label]:text-slate-800 [&_input]:border-blue-300 [&_select]:border-blue-300 [&_textarea]:border-blue-300">
       <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 lg:grid-cols-3">
-        {[["bid_no", "Bid Number"], ["dept_name", "Department"], ["organization", "Organization"], ["qty", "Quantity"], ["pincode", "Buyer Pincode"]].map(([name, label]) => <div key={name}>{verificationLabel(`meta.${name}`, bid[name], `ups-review-${name}`, label)}<input id={`ups-review-${name}`} value={bid[name] ?? ""} readOnly className={inputClass} /></div>)}
-        <div className="md:col-span-2 lg:col-span-3">{verificationLabel("meta.address", bid.address, "ups-review-address", "Address")}<input id="ups-review-address" value={bid.address} readOnly className={inputClass} /></div>
-        <div className="md:col-span-2 lg:col-span-3">{verificationLabel("meta.atc", bid.atc, "ups-review-atc", "ATC (Additional Terms & Conditions)")}<textarea id="ups-review-atc" rows={4} value={bid.atc} readOnly className={`${inputClass} resize-none`} /></div>
+        {[["bid_no", "Bid Number", 150], ["dept_name", "Department", 255], ["organization", "Organization", 255], ["qty", "Quantity"], ["pincode", "Buyer Pincode", 6]].map(([name, label, maxLength]) => <div key={name}>
+          {verificationLabel(`meta.${name}`, form[name], `ups-review-${name}`, label)}
+          <input id={`ups-review-${name}`} value={form[name] ?? ""} maxLength={maxLength} type={name === "qty" ? "number" : "text"}
+            min={name === "qty" ? 1 : undefined} inputMode={name === "pincode" ? "numeric" : undefined}
+            required readOnly={!canEdit || saving} onChange={event => updateField(name, event.target.value)} className={inputClass} />
+        </div>)}
+        <div className="md:col-span-2 lg:col-span-3">{verificationLabel("meta.address", form.address, "ups-review-address", "Address")}<input id="ups-review-address" value={form.address ?? ""} required maxLength={5000} readOnly={!canEdit || saving} onChange={event => updateField("address", event.target.value)} className={inputClass} /></div>
+        <div className="md:col-span-2 lg:col-span-3">{verificationLabel("meta.atc", form.atc, "ups-review-atc", "ATC (Additional Terms & Conditions)")}<textarea id="ups-review-atc" rows={4} value={form.atc ?? ""} maxLength={10000} readOnly={!canEdit || saving} onChange={event => updateField("atc", event.target.value)} className={`${inputClass} resize-none`} /></div>
         <UpsAnalyserComplianceDocuments bid={bid} schema={schema} />
       </div>
       <div className="mt-5"><UpsConfig schema={schema} type={bid.ups_type} specs={form.specs} disabled={!canEdit || saving} onChange={specs => setForm({ ...form, specs })} modelNumber={form.model_number} onModelChange={model_number => setForm(previous => ({ ...previous, model_number }))}
         renderLabel={field => verificationLabel(`spec.${field.key}`, specs[field.key], `ups-${field.key}`, field.label, !field.required)}>
-        {[["start_date", "Bid Start Date"], ["end_date", "Bid End Date"]].map(([name, label]) => <div key={name}>{verificationLabel(`meta.${name}`, bid[name], `ups-review-${name}`, label)}<input id={`ups-review-${name}`} type="date" value={bid[name] || ""} readOnly className={inputClass} /></div>)}
+        {[["start_date", "Bid Start Date"], ["end_date", "Bid End Date"]].map(([name, label]) => <div key={name}>{verificationLabel(`meta.${name}`, form[name], `ups-review-${name}`, label)}<input id={`ups-review-${name}`} type="date" value={form[name] || ""} readOnly={!canEdit || saving} onChange={event => updateField(name, event.target.value)} className={inputClass} /></div>)}
         {bid.status === "approved" && <div className="relative min-w-0">
           <div className="mb-1 h-5" aria-hidden="true" />
           <div className="relative flex items-center">

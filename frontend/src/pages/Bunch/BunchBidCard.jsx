@@ -7,10 +7,11 @@ const STATUSES = {
 };
 const productName = item => PRODUCTS[item.product_kind || item.product] || item.product;
 
-export default function BunchBidCard({ group, serialNumber, onView, role = "analyser" }) {
-  const item = role === "admin" ? group.items.find(item => item.can_review) || group.items[0] : group.items[0];
+export default function BunchBidCard({ group, serialNumber, onView, role = "analyser", dashboard = false }) {
+  const item = (dashboard && group.items.find(item => item.status === group.status))
+    || (role === "admin" && group.items.find(item => item.can_review)) || group.items[0];
   if (!item) return null;
-  const status = STATUSES[item.status] || STATUSES.pending;
+  const status = STATUSES[dashboard ? group.status : item.status] || STATUSES.pending;
   const waiting = role === "admin" && !item.can_review;
   const date = item.end_date ? new Date(item.end_date) : null;
   const endDate = date && !Number.isNaN(date.getTime()) ? date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";

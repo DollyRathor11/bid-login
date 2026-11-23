@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { BidNoCell, CorrigendumCell, DateCell } from "../Admin/BidTableCells";
 import ScheduleBidTag from "../../utils/ScheduleBidTag";
 
@@ -6,6 +7,9 @@ const API_BASE = import.meta.env.VITE_API_URL;
 
 export default function UserAssignedBids() {
   const [rows, setRows] = useState([]);
+  const [params] = useSearchParams();
+  const bunchOnly = params.get("product") === "bunch";
+  const visibleRows = bunchOnly ? rows.filter(row => row.product_type === "bunch_bid") : rows;
   const [error, setError] = useState("");
   const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
   const load = async () => {
@@ -29,14 +33,14 @@ export default function UserAssignedBids() {
       <thead className="bg-slate-800 text-xs uppercase text-white"><tr>
         <th className="px-4 py-4">S.No.</th><th className="px-4 py-4">Bid No.</th><th className="px-4 py-4">Start Date</th><th className="px-4 py-4">End Date</th><th className="px-4 py-4">Item</th><th className="px-4 py-4">Corrigendum</th>
       </tr></thead><tbody>
-        {rows.map((row, index) => <tr key={row.id} className="border-b border-gray-100 align-top hover:bg-gray-50">
+        {visibleRows.map((row, index) => <tr key={row.id} className="border-b border-gray-100 align-top hover:bg-gray-50">
           <td className="px-4 py-4 font-bold">{index + 1}</td>
           <BidNoCell row={row} className="px-4 py-4" />
           <DateCell value={row.bid_date} className="px-4 py-4" /><DateCell value={row.end_date} className="px-4 py-4" />
           <td className="max-w-md px-4 py-4 font-medium">{row.item}<ScheduleBidTag row={row} /></td>
           <CorrigendumCell row={row} className="px-4 py-4" />
         </tr>)}
-        {!rows.length && <tr><td colSpan="6" className="py-16 text-center text-gray-500">No bids have been assigned to you yet.</td></tr>}
+        {!visibleRows.length && <tr><td colSpan="6" className="py-16 text-center text-gray-500">{bunchOnly ? "No bunch bids have been assigned to you." : "No bids have been assigned to you yet."}</td></tr>}
       </tbody>
     </table></div>
   </div>;

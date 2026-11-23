@@ -9,8 +9,9 @@ export function bunchAdminPath(product, id, status = "pending") {
 
 export function bunchReviewItems(items, context, search = "") {
   if (context?.role !== "admin") return items;
-  const returnSearch = (context.returnTo || "").split("?")[1] || "";
-  const status = context.reviewStatus || new URLSearchParams(returnSearch).get("status") || new URLSearchParams(search).get("status") || "pending";
+  const returnParams = new URLSearchParams(context.returnTo?.split("?")[1]);
+  if (returnParams.get("dashboard") === "1") return items;
+  const status = context.reviewStatus || returnParams.get("status") || new URLSearchParams(search).get("status") || "pending";
   return items.filter(item => item.status === status);
 }
 

@@ -3,6 +3,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from ..dashboard_metrics import PRODUCTS, analyser_dashboard_bids, dashboard_status
+from .BunchBids import bunch_dashboard_summary
 from .Gem import _require_role
 from .ProductDashboard import _model
 
@@ -13,9 +14,11 @@ def analyser_dashboard(request):
     if error:
         return error
     product = request.GET.get("product", "desktop")
-    if product not in PRODUCTS:
+    if product not in PRODUCTS and product != "bunch":
         return JsonResponse({"error": "Unknown product"}, status=400)
     if request.GET.get("rows") == "1":
+        if product == "bunch":
+            return JsonResponse({"error": "Use the bunch bids list for grouped rows"}, status=400)
         status = request.GET.get("status", "all")
         wanted = {"re-analyze": "reAnalyze"}.get(status, status)
         if wanted not in ("all", "pending", "approved", "reAnalyze", "rejected"):
@@ -38,6 +41,8 @@ def analyser_dashboard(request):
             raise ValueError
     except (TypeError, ValueError):
         return JsonResponse({"error": "Invalid year"}, status=400)
+    if product == "bunch":
+        return JsonResponse(bunch_dashboard_summary(request, actor, year))
     stats = {"total": 0, "pending": 0, "approved": 0, "reAnalyze": 0, "rejected": 0}
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
     monthly = [{"month": month, "monthNumber": index + 1, **{key: 0 for key in stats}} for index, month in enumerate(months)]

@@ -21,7 +21,9 @@ def admin_post_bid_summary(request):
     if error:
         return error
     product = request.GET.get("product", "all")
-    if product != "all" and product not in PRODUCTS:
+    if product == "bunch":
+        product = "bunch_bid"
+    if product not in ("all", "bunch_bid", *PRODUCTS):
         return JsonResponse({"error": "Unknown product"}, status=400)
     assignments = [row for row in user_visible_assignments() if product == "all" or row.opportunity.product_type == product]
     counts = Counter(row.assigned_to.username for row in assignments)

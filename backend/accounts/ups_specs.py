@@ -46,7 +46,7 @@ LINE = [
     field("efficiency", "Inverter Efficiency (%)", ("60% or better", "70% or better"), True),
     field("backup", "Minimum Guaranteed Battery Backup at Full Load (Minutes)", ("5", "10", "15", "30", "60", "90", "120", "180", "240", "240 or higher"), True),
     field("battery_location", "Battery Location", ("Inside the Enclosure of UPS", "Outside the Enclosure of UPS"), True),
-    field("warranty", "Standard Warranty for the UPS", ("3 years", "5 years"), True),
+    field("warranty", "Standard Warranty for the UPS", ("1 year", "3 years", "5 years"), True),
     field("battery_type", "Type of Battery", ("SMF / VRLA", "Tubular (flooded lead acid)", "Lithium-ion / LiFePO4"), True),
     field("battery_capacity", "Battery Capacity (Ah)", ("7",)),
     field("vah", "Minimum Guaranteed VAH Capacity", ("84",)),

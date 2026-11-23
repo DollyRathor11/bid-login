@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET
 
 from ..dashboard_metrics import PRODUCTS, dashboard_status, analyser_dashboard_bids
+from .BunchBids import bunch_dashboard_status, bunch_groups
 from .Gem import _require_role
 from .ProductDashboard import _filter_user, _model
 
@@ -15,7 +16,7 @@ def daily_activity(request):
     if error:
         return error
     product = request.GET.get("product", "all")
-    if product != "all" and product not in PRODUCTS:
+    if product not in ("all", "bunch", *PRODUCTS):
         return JsonResponse({"error": "Unknown product"}, status=400)
     today = timezone.localdate()
     sunday = today - timedelta(days=(today.weekday() + 1) % 7)
@@ -23,6 +24,14 @@ def daily_activity(request):
     for index in range(7):
         day = sunday + timedelta(days=index)
         rows[day.isoformat()] = {"date": day.isoformat(), "day": day.strftime("%a"), "total": 0, "pending": 0, "approved": 0, "reAnalyze": 0, "rejected": 0}
+    if product == "bunch":
+        for group in bunch_groups(request, actor, dashboard=True):
+            day = timezone.localtime(group["updated_at"]).date()
+            if sunday <= day <= today:
+                row = rows[day.isoformat()]
+                row["total"] += 1
+                row[bunch_dashboard_status(group)] += 1
+        return JsonResponse(list(rows.values()), safe=False)
     for key in PRODUCTS if product == "all" else (product,):
         if actor.role == "admin":
             bids = _model(key).objects.exclude(status="draft")
