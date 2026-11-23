@@ -1001,11 +1001,7 @@ function ProductDetailsModal({ product, onClose, onDeleted, onEdited }) {
     setDeleteError("");
 
     try {
-<<<<<<< HEAD
       const res = await fetch(`${API}/catalogue/${catalogueProductId(product)}/delete/`, {
-=======
-      const res = await fetch(`${API}/catalogue/${getCatalogueProductId(product)}/delete/`, {
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
         method: "DELETE",
       });
 
@@ -1317,20 +1313,7 @@ function ProductFormModal({ mode = "add", product = null, onClose, onSaved }) {
       });
 
       const data = await parseJsonResponse(res);
-<<<<<<< HEAD
       onSaved(isEdit ? { ...product, ...data, id: product.id, catalogue_id: Number(catalogueId), extra_specs: { ...extraSpecs, ...data.extra_specs } } : data);
-=======
-      onSaved(
-        isEdit
-          ? {
-              ...data,
-              id: product.id,
-              catalogue_id: getCatalogueProductId(product) ?? data.id,
-              ...(isAioProduct(product) || workstation ? { extra_specs: extraSpecs } : {}),
-            }
-          : data
-      );
->>>>>>> 9358051a9ba5ed35260b4ede79cc00b558073e31
       onClose();
     } catch (err) {
       setError(err.message);
