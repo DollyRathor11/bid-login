@@ -212,6 +212,26 @@ class UpsWorkflowTests(TestCase):
         denied = self.review(self.admin, bid_id, {"action": "approved", "unit_price": "5000", "local_content": "40"})
         self.assertEqual(denied.status_code, 409)
 
+    def test_analyser_metadata_edits_reach_admin_after_documents_step(self):
+        bid_id = self.create_bid()
+        self.submit_bid(bid_id)
+        edits = {
+            "bid_no": "GEM/UPS/456", "dept_name": "Updated Department",
+            "organization": "Updated Organization", "address": "Updated Address",
+            "pincode": "226021", "qty": 3, "atc": "Updated ATC\nSecond line",
+            "start_date": "2026-11-23", "end_date": "2026-11-30",
+        }
+        invalid = self.review(self.analyser, bid_id, {"action": "save_analysis", **edits, "qty": 0})
+        self.assertEqual(invalid.status_code, 400)
+        self.assertEqual(UpsBid.objects.get(pk=bid_id).bid_no, self.payload["bid_no"])
+        sent = self.send_admin(bid_id, **edits)
+        self.assertEqual(sent.status_code, 200, sent.content)
+        admin_view = self.client_for(self.admin).get(f"/api/ups-bids/{bid_id}/")
+        self.assertEqual(admin_view.status_code, 200, admin_view.content)
+        data = admin_view.json()
+        self.assertEqual(data["status"], "analyzed")
+        self.assertEqual({key: data[key] for key in edits}, edits)
+
     def test_document_submission_cannot_skip_next_or_use_invalid_documents(self):
         bid_id = self.create_bid()
         self.submit_bid(bid_id)

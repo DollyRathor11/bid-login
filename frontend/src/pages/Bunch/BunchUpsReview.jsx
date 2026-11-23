@@ -6,7 +6,11 @@ export default function BunchUpsReview() {
   const location = useLocation();
   const navigate = useNavigate();
   return <UpsReview bidId={id} role="analyser" embedded
-    onNext={bid => navigate(`/analyser-dashboard/bunch/ups/${id}/documents`, { state: { ...location.state, bidData: bid } })}
+    onNext={bid => navigate(`/analyser-dashboard/bunch/ups/${id}/documents`, { state: {
+      ...location.state,
+      bidData: bid,
+      ...(location.state?.bunchReview ? { bunchReview: { ...location.state.bunchReview, bidNo: bid.bid_no } } : {}),
+    } })}
     onClose={() => navigate(location.state?.bunchReview?.returnTo || "/analyser-dashboard/bunch")}
     onSaved={() => location.state?.bunchReview
       ? navigate(location.pathname, { replace: true, state: { ...location.state, bunchReview: { ...location.state.bunchReview, submitted: true } } })
