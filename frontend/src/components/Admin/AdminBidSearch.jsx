@@ -59,16 +59,16 @@ export default function AdminBidSearch() {
         <h1 className="text-xl font-bold text-slate-900">Bid Search Results</h1>
         <div className="w-full sm:max-w-md"><BidSearchForm key={query} initialQuery={query} /></div>
       </div>
-      <p className="mt-2 text-xs text-slate-500">Track user, analyser, participation and approval status across all products.</p>
+      <p className="mt-2 text-xs text-slate-500">Track user, analyser and approval status across all products.</p>
       <div aria-live="polite">
         {loading && <p className="mt-4 text-sm text-slate-500">Searching bids...</p>}
         {error && <p role="alert" className="mt-4 text-sm text-red-600">{error}</p>}
         {data && !data.results.length && <p className="mt-4 text-sm text-slate-600">No bid found for this number.</p>}
         {data?.results.length > 0 && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-800 text-white"><tr>{["Bid No.", "Product", "Submitted By", "Assigned User", "Analyser", "Current Stage", "Status", "Participation"].map(label => <th key={label} className="whitespace-nowrap px-4 py-3">{label}</th>)}</tr></thead>
+            <thead className="bg-slate-800 text-white"><tr>{["Bid No.", "Product", "Submitted By", "Assigned User", "Analyser", "Current Stage", "Status"].map(label => <th key={label} className="whitespace-nowrap px-4 py-3">{label}</th>)}</tr></thead>
             <tbody>{data.results.map(row => <tr key={row.key} className="border-t border-slate-100">
-              {[row.bid_no, row.product, row.user || "Not submitted", row.assigned_user || "Not recorded", row.analyser || "Not recorded", row.stage, row.status, row.participation].map((value, index) => <td key={index} className="px-4 py-3 text-slate-700">{value}</td>)}
+              {[row.bid_no, row.product, row.user || "Not submitted", row.assigned_user || "Not recorded", row.analyser || "Not recorded", row.stage, row.status].map((value, index) => <td key={index} className="px-4 py-3 text-slate-700">{value}</td>)}
             </tr>)}</tbody>
           </table>
         </div>}

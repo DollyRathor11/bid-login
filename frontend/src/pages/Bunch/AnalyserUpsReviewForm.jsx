@@ -50,6 +50,7 @@ export default function AnalyserUpsReviewForm({ bidId, bid, schema, form, setFor
         <UpsAnalyserComplianceDocuments bid={bid} schema={schema} />
       </div>
       <div className="mt-5"><UpsConfig schema={schema} type={bid.ups_type} specs={form.specs} disabled={!canEdit || saving} onChange={specs => setForm({ ...form, specs })} modelNumber={form.model_number} onModelChange={model_number => setForm(previous => ({ ...previous, model_number }))}
+        renderModelLabel={verificationLabel("meta.model_number", form.model_number, "ups-model-number", "Model Number")}
         renderLabel={field => verificationLabel(`spec.${field.key}`, specs[field.key], `ups-${field.key}`, field.label, !field.required)}>
         {[["start_date", "Bid Start Date"], ["end_date", "Bid End Date"]].map(([name, label]) => <div key={name}>{verificationLabel(`meta.${name}`, form[name], `ups-review-${name}`, label)}<input id={`ups-review-${name}`} type="date" value={form[name] || ""} readOnly={!canEdit || saving} onChange={event => updateField(name, event.target.value)} className={inputClass} /></div>)}
         {bid.status === "approved" && <div className="relative min-w-0">

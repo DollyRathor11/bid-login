@@ -12,8 +12,8 @@ test("blank optional fields and removed specs do not block UPS verification", ()
 });
 
 test("filled optional values and dates also need a verification tick", () => {
-  const checks = upsVerificationFields({ ...bid, start_date: "2026-11-20", end_date: "2026-11-28", atc: "Buyer requirement" }, [{ key: "battery_capacity", required: false }], { battery_capacity: "9" });
-  for (const key of ["spec.battery_capacity", "meta.atc", "meta.start_date", "meta.end_date"]) assert.ok(checks.some(field => field.key === key));
+  const checks = upsVerificationFields({ ...bid, model_number: "UPS-1", start_date: "2026-11-20", end_date: "2026-11-28", atc: "Buyer requirement" }, [{ key: "battery_capacity", required: false }], { battery_capacity: "9" });
+  for (const key of ["spec.battery_capacity", "meta.model_number", "meta.atc", "meta.start_date", "meta.end_date"]) assert.ok(checks.some(field => field.key === key));
 });
 
 test("a tick for an old value cannot verify a changed specification", () => {

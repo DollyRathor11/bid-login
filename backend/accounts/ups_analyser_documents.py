@@ -41,7 +41,13 @@ def analyser_document(bid, doc_type):
         write(f"Local Content: {bid.local_content}%", bold=True)
         write("Local content details entered by the admin for this UPS bid.")
         return document
-    write("Warranty Details" if doc_type == "warranty" else "Reviewed UPS Specifications", bold=True)
+    write(f"Model Number: {bid.model_number or '-'}")
+    section_titles = {
+        "warranty": "Warranty Details",
+        "technical_compliance": "Reviewed Technical Requirements",
+        "data_sheet": "UPS Product Specifications",
+    }
+    write(section_titles[doc_type], bold=True)
     for field in specs_fields(bid.ups_type, bid.specs):
         value = bid.specs.get(field["key"])
         if not value or (doc_type == "warranty" and field["key"] not in ("warranty", "battery_warranty", "rating", "battery_type")):

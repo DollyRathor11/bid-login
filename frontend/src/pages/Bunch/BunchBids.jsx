@@ -24,7 +24,9 @@ export function UpsReview({ bidId, role, onClose, onSaved, onNext, embedded = fa
   async function submit(event, decision = action, note) {
     event?.preventDefault(); setSaving(true); setError("");
     try {
-      const updated = await upsRequest(`ups-bids/${bidId}/review/`, { method: "POST", body: JSON.stringify({ ...form, action: decision, note: note ?? form.note }) });
+      const payload = { ...form, action: decision, note: note ?? form.note };
+      if (role === "admin") delete payload.local_content;
+      const updated = await upsRequest(`ups-bids/${bidId}/review/`, { method: "POST", body: JSON.stringify(payload) });
       setBid(updated);
       if (role === "analyser") { onNext?.(updated); }
       else { onSaved(updated); if (!embedded) onClose(); }
@@ -84,7 +86,7 @@ export default function BunchBids({ role = "analyser" }) {
   return <main className={role === "admin" ? "min-h-screen bg-gray-50 p-4" : ""}>
     {role === "admin" && <button type="button" onClick={() => navigate("/admin-dashboard")} className="mb-4 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm">← Back</button>}
     <AnalyserBunchList data={data} loading={loading} error={error} status={status} role={role} dashboard={params.get("dashboard") === "1"}
-      onStatus={status => change({ status, page: "1" })} onPage={page => change({ page: String(page) })}
+      onStatus={status => change({ status, page: "1" })} onPage={page => change({ page: String(page) })} onDeleted={refresh}
       onView={row => navigate(role === "admin" ? bunchAdminPath(row.product, row.id, row.status) : bunchProductPath(row.product, row.id), { state: {
         bunchReview: { bidNo: row.bid_no, product: row.product, id: row.id, role, reviewStatus: status, returnTo: `${base}?${params}` },
         readOnly: row.status === "approved" || row.status === "rejected" || (row.status === "pending" && row.can_review),
