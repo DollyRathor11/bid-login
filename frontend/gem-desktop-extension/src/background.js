@@ -1124,6 +1124,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       return { ok: true, detailText: parsed.detail_text || "" };
     }
+    // The user refreshed a GeM tab (not one of the scanner's own reloads, which
+    // leave a resume marker): every scan running in that tab stops and its
+    // section goes back to "Ready to scan".
+    if (message.type === "GEM_TAB_USER_RELOADED") {
+      const tabId = sender.tab?.id;
+      if (!tabId) return { ok: false };
+      const stored = await chrome.storage.local.get(["gemBidSync", "gemOpportunitySync", REPLY_STATE_KEY, REPLY_TAB_KEY]);
+      const stopped = [];
+      for (const key of ["gemBidSync", "gemOpportunitySync"]) {
+        const state = stored[key];
+        if (state?.tabId === tabId && ACTIVE_SYNC_STATUSES.has(state.status)) {
+          await chrome.storage.local.remove(key);
+          stopped.push(key);
+        }
+      }
+      if (stored[REPLY_TAB_KEY] === tabId && ["starting", "running"].includes(stored[REPLY_STATE_KEY]?.status)) {
+        await chrome.storage.local.set({ gemRepresentationReplyStop: true });
+        await chrome.storage.local.remove([REPLY_STATE_KEY, REPLY_TAB_KEY]);
+        stopped.push(REPLY_STATE_KEY);
+      }
+      return { ok: true, stopped };
+    }
     if (message.type === "GEM_BID_SYNC_PROGRESS") {
       const opportunityProgress = message.scanType === "opportunity" || (
         !message.scanType && /selected category|full bid details|opportunit|bid to be participated/i.test(String(message.message || ""))
@@ -1139,6 +1161,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         pending: Array.isArray(message.pending) ? message.pending : [],
         ...(message.retry ? { retry: message.retry } : {}),
         ...(message.mode ? { mode: message.mode } : {}),
+        ...(sender.tab?.id ? { tabId: sender.tab.id } : {}),
         updatedAt: Date.now(),
         extensionVersion: chrome.runtime.getManifest().version,
       };

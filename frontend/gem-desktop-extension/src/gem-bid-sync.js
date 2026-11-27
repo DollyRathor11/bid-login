@@ -3429,6 +3429,20 @@
     return true;
   });
 
+  // A page the user refreshed (F5 / reload button) stops the scan that was
+  // running in this tab. The scanner's own reloads leave a resume marker
+  // first, so those carry on as before.
+  try {
+    const reloaded = performance.getEntriesByType?.("navigation")?.[0]?.type === "reload";
+    const scannerReload = ["acxxelDisqualifiedResume", "acxxelOpportunityResume"]
+      .some((key) => sessionStorage.getItem(key));
+    if (reloaded && !scannerReload) {
+      chrome.runtime.sendMessage({ type: "GEM_TAB_USER_RELOADED" }).catch(() => {});
+    }
+  } catch {
+    // Storage blocked or the extension was reloaded: nothing to stop.
+  }
+
   try {
     const disqualifiedResume = JSON.parse(sessionStorage.getItem("acxxelDisqualifiedResume") || "null");
     if (disqualifiedResume && Date.now() - Number(disqualifiedResume.savedAt || 0) < 30 * 60 * 1000) {

@@ -100,36 +100,116 @@
     return candidates.find(bidLabel) || candidates[0] || null;
   }
 
-  const describe = (node) => clean(`${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ""} ${nodeText(node) || node.value || ""}`).slice(0, 60);
+  const describe = (node) => clean(`${node.tagName.toLowerCase()}${node.id ? `#${node.id}` : ""}${typeof node.className === "string" && node.className.trim() ? `.${node.className.trim().split(/\s+/).slice(0, 2).join(".")}` : ""} ${nodeText(node) || node.value || ""}`).slice(0, 80);
 
   // Only a control that says "search" next to the box is clicked (never a plain
   // link that could leave All Bids); otherwise Enter is pressed in the box.
   // Returns what was done, for the status line.
-  function searchBid(bidNo) {
+  // Controls next to the box (up to three levels up), never a dropdown toggle
+  // such as the "Contains" search-type selector.
+  function searchControls(input) {
+    let scope = input.parentElement;
+    for (let level = 0; level < 3 && scope?.parentElement && scope.parentElement !== document.body; level += 1) {
+      if (scope.querySelector('button, input[type="submit"], [class*="fa-search" i], [id*="search" i]:not(input)')) break;
+      scope = scope.parentElement;
+    }
+    return [...(scope?.querySelectorAll('button, input[type="submit"], input[type="button"], a, span, i, [role=button]') || [])]
+      .filter((node) => node !== input && !node.contains(input) && visible(node)
+        && !node.matches('.dropdown-toggle, [data-toggle="dropdown"], [data-bs-toggle="dropdown"], [aria-haspopup]')
+        && !node.closest(".dropdown-menu")
+        && !(node.matches("a[href]") && !/^(?:#|javascript:)/i.test(node.getAttribute("href"))));
+  }
+
+  // The magnifier / Search control: its own id, class, title or text says
+  // search, or it holds a search icon. The icon itself is lifted to its button.
+  function searchButton(input) {
+    const score = (node) => {
+      const own = `${node.id} ${node.className} ${node.title || ""} ${node.getAttribute("aria-label") || ""} ${node.value || ""}`;
+      if (/fa-search|glyphicon-search|search-?icon/i.test(own)) return 3;
+      if (/^search$/i.test(nodeText(node)) || /search(?:bid|btn|button|ra)|btn-?search/i.test(own)) return 3;
+      if (node.querySelector?.('[class*="fa-search" i], [class*="glyphicon-search" i]')) return 2;
+      if (/search/i.test(own)) return 1;
+      return 0;
+    };
+    const best = searchControls(input)
+      .map((node) => ({ node, value: score(node) }))
+      .filter((item) => item.value > 0)
+      .sort((a, b) => b.value - a.value)[0]?.node;
+    if (!best) return null;
+    return best.matches("i, span") ? best.closest('button, a, [role=button], [onclick]') || best : best;
+  }
+
+  // For the status line when the search does not work.
+  const controlsNear = (input) => searchControls(input).filter((node) => node.matches("button, a, [role=button], input"))
+    .slice(0, 6).map(describe).join(" | ");
+
+  // GeM's search listens through jQuery and checks event.which === 13, which a
+  // KeyboardEvent dispatched from here never has. The page bridge (MAIN world)
+  // runs the search with jQuery's own events; the native events stay as the
+  // fallback when the bridge does not answer.
+  let searchCount = 0;
+  async function searchBid(bidNo) {
     const input = searchBox();
     if (!input) throw new Error("The search box of the GeM All Bids page was not found.");
+    const button = searchButton(input);
     input.focus();
     input.value = bidNo;
+    const searchId = `reply-search-${Date.now()}-${searchCount += 1}`;
+    input.setAttribute("data-acxxel-search-id", searchId);
+    if (button) button.setAttribute("data-acxxel-search-button-id", searchId);
+    const answered = new Promise((resolve) => {
+      const onDone = (event) => {
+        if (event.detail?.searchId !== searchId) return;
+        document.removeEventListener("acxxel-gem-searched", onDone);
+        resolve(event.detail.done || "searched");
+      };
+      document.addEventListener("acxxel-gem-searched", onDone);
+      setTimeout(() => {
+        document.removeEventListener("acxxel-gem-searched", onDone);
+        resolve("");
+      }, 1500);
+    });
+    document.dispatchEvent(new CustomEvent("acxxel-gem-search", {
+      detail: { searchId, buttonId: button ? searchId : "", value: bidNo },
+    }));
+    const bridged = await answered;
+    const target = `${describe(input)}${button ? `, button ${describe(button)}` : ""}`;
+    if (bridged) return `${bridged} in ${target}`;
     for (const type of ["input", "change", "keyup"]) input.dispatchEvent(new Event(type, { bubbles: true }));
-    const scope = input.closest(".input-group, form") || input.parentElement;
-    const button = [...(scope?.querySelectorAll('button, input[type="submit"], input[type="button"], [id*="search" i], [class*="search" i]') || [])]
-      .filter((node) => node !== input && !node.contains(input) && visible(node) && !(node.matches("a[href]") && !/^(?:#|javascript:)/i.test(node.getAttribute("href"))))
-      .find((node) => /search/i.test(`${node.id} ${node.className} ${nodeText(node)} ${node.value || ""} ${node.title || ""}`)
-        || node.querySelector?.('[class*="search" i]'));
     if (button) {
       button.click();
-      return `clicked ${describe(button)}`;
+      return `native click in ${target}`;
     }
     for (const type of ["keydown", "keypress", "keyup"]) {
       input.dispatchEvent(new KeyboardEvent(type, { key: "Enter", code: "Enter", keyCode: 13, which: 13, bubbles: true }));
     }
-    return `pressed Enter in ${describe(input)}`;
+    return `native Enter in ${target}`;
+  }
+
+  // What the page showed when a searched bid was not found, for the status.
+  function pageSummary(bidNo, searched) {
+    const box = searchBox();
+    const shown = [...new Set((document.body.innerText.match(/GEM\/\d{4}\/[BR]\/\d+/gi) || []).map((value) => value.toUpperCase()))];
+    return [
+      searched ? `search: ${searched}` : "",
+      `box value "${box?.value ?? "no box"}"`,
+      shown.length ? `page shows ${shown.length} bid(s), e.g. ${shown.slice(0, 2).join(", ")}` : "page shows no bid numbers",
+      shown.includes(bidNo.toUpperCase()) ? "the bid IS on the page" : "",
+      box ? `controls near box: ${controlsNear(box) || "none"}` : "",
+    ].filter(Boolean).join("; ");
   }
 
   // The bid's card: the largest block around its number holding one bid only.
+  // The label is the bid number itself (or "Bid No: ..."), never a longer line
+  // such as "results for GEM/..." or the search box area, which would make the
+  // whole page look like the card before the results have loaded.
   function bidCard(bidNo) {
+    const box = searchBox();
     const label = [...document.querySelectorAll("a, strong, b, span, p, h1, h2, h3, h4, h5, h6, td")]
-      .find((node) => visible(node) && !node.closest(MODAL_SELECTOR) && hasBidNo(nodeText(node), bidNo));
+      .find((node) => visible(node) && !node.closest(MODAL_SELECTOR)
+        && !(box && (node.contains(box) || node.closest(".input-group, form")?.contains(box)))
+        && nodeText(node).length <= bidNo.length + 20
+        && hasBidNo(nodeText(node), bidNo));
     if (!label) return null;
     let card = label;
     while (card.parentElement && card.parentElement !== document.body
@@ -141,10 +221,25 @@
 
   const controlIn = (root, pattern) => [...(root?.querySelectorAll(CONTROL_SELECTOR) || [])]
     .find((node) => visible(node) && pattern.test(nodeText(node))) || null;
-  const REPRESENTATION_LINK = /^view\s+representations?$/i;
+  // "View Representation(s)", also with a count or icon text around it. GeM
+  // binds some of these links with jQuery on a plain span/div, so any short
+  // element with that text counts, lifted to its clickable parent if any.
+  const REPRESENTATION_LINK = /^(?:view\s+)?(?:published?\s+)?representations?(?:\s*\(\d+\))?$/i;
   const openModals = () => [...document.querySelectorAll(MODAL_SELECTOR)].filter(visible);
-  const representationLink = (card) => controlIn(card, REPRESENTATION_LINK)
-    || openModals().map((modal) => controlIn(modal, REPRESENTATION_LINK)).find(Boolean) || null;
+  function textControlIn(root, pattern) {
+    const node = controlIn(root, pattern) || [...(root?.querySelectorAll("span, div, i, label, u, font") || [])]
+      .find((item) => visible(item) && nodeText(item).length < 40 && pattern.test(nodeText(item)));
+    return node ? node.closest(CONTROL_SELECTOR) || node : null;
+  }
+  const representationLink = (card) => textControlIn(card, REPRESENTATION_LINK)
+    || openModals().map((modal) => textControlIn(modal, REPRESENTATION_LINK)).find(Boolean) || null;
+
+  // For the status line when the link is not found: what the card offers.
+  const cardSummary = (card) => {
+    const controls = [...(card?.querySelectorAll("a, button, [role=button], [onclick], [data-toggle]") || [])]
+      .filter(visible).map((node) => nodeText(node) || node.title || node.className).filter(Boolean);
+    return `card ${describe(card).slice(0, 40)}; controls: ${[...new Set(controls)].slice(0, 8).join(" | ") || "none"}`;
+  };
 
   function replyTable(bidNo) {
     return [...document.querySelectorAll("table")].find((table) => {
@@ -168,29 +263,51 @@
 
   async function readReplies(bidNo, step) {
     await closeModals();
+    let searched = "";
     if (!bidCard(bidNo)) {
       await step("searching GeM");
-      await step(`searching GeM (${searchBid(bidNo)})`);
+      searched = await searchBid(bidNo);
+      await step(`searching GeM (${searched})`);
     }
     const card = await waitFor(() => bidCard(bidNo), 12000);
-    if (!card) return { outcome: "not_found" };
-    let link = representationLink(card);
-    if (!link) {
-      // GeM can reveal View Representation only after View Corrigendum is opened.
-      const corrigendum = controlIn(card, /^view\s+corrigendum$/i);
-      if (corrigendum) {
-        await step("opening View Corrigendum");
-        corrigendum.click();
-        link = await waitFor(() => representationLink(bidCard(bidNo)), 4000);
+    if (!card) return { outcome: "not_found", detail: pageSummary(bidNo, searched) };
+    // GeM's card has "View Corrigendum/Representation"; its popup holds the
+    // "View Representation" link that opens the replies. The results can
+    // finish rendering a moment after the bid number shows.
+    const CORRIGENDUM_LINK = /^view\s+corrigendum(?:\s*\/\s*representations?)?$/i;
+    const opener = () => {
+      const current = bidCard(bidNo) || card;
+      return representationLink(current) || textControlIn(current, CORRIGENDUM_LINK);
+    };
+    // A popup saying "No details available" means nothing is published yet:
+    // the scan moves to the next bid at once instead of waiting it out.
+    const NOTHING = /no\s+(?:details|data|records?|representations?)\s+(?:available|found)/i;
+    const nothingShown = () => openModals().some((modal) => NOTHING.test(nodeText(modal)));
+    let link = await waitFor(opener, 4000);
+    if (link && CORRIGENDUM_LINK.test(nodeText(link))) {
+      await step("opening View Corrigendum/Representation");
+      link.click();
+      link = await waitFor(() => representationLink(bidCard(bidNo)) || (nothingShown() ? "nothing" : null), 8000);
+      // A popup can say it about the corrigendum part while the representation
+      // link is still rendering, so it gets one short last look.
+      if (link === "nothing") link = await waitFor(() => representationLink(bidCard(bidNo)), 800);
+      if (!link) {
+        await closeModals();
+        return { outcome: "no_reply" };
       }
     }
     if (!link) {
+      const detail = cardSummary(bidCard(bidNo) || card);
       await closeModals();
-      return { outcome: "no_link" };
+      return { outcome: "no_link", detail };
     }
     await step("opening View Representation");
     link.click();
-    const table = await waitFor(() => replyTable(bidNo), 10000);
+    const table = await waitFor(() => replyTable(bidNo) || (nothingShown() ? "nothing" : null), 10000);
+    if (table === "nothing") {
+      await closeModals();
+      return { outcome: "no_reply" };
+    }
     if (!table) {
       await closeModals();
       return { outcome: "no_table" };
@@ -279,7 +396,9 @@
           counts.saved += Number(response.replies || 0);
           if (!response.replies) outcome = "no_match";
         }
-        if (OUTCOME_NOTES[outcome]) problems.push({ bidNo, reason: OUTCOME_NOTES[outcome] });
+        if (OUTCOME_NOTES[outcome]) {
+          problems.push({ bidNo, reason: `${OUTCOME_NOTES[outcome]}${result.detail ? ` (${result.detail})` : ""}` });
+        }
         counts.checked += 1;
         pending = pending.slice(1);
         resumes = 0;
@@ -321,6 +440,12 @@
     let marked = false;
     try { marked = sessionStorage.getItem(RUN_MARK) === "1"; } catch { /* storage blocked */ }
     if (!marked || running) return;
+    // A refresh by the user (not GeM's search, which is a normal navigation)
+    // stops the scan; gem-bid-sync.js tells the background, which clears it.
+    if (performance.getEntriesByType?.("navigation")?.[0]?.type === "reload") {
+      try { sessionStorage.removeItem(RUN_MARK); } catch { /* storage blocked */ }
+      return;
+    }
     const { [STATE_KEY]: state } = await chrome.storage.local.get(STATE_KEY);
     const fresh = state?.status === "running" && Date.now() - Number(state.updatedAt || 0) < RESUME_WITHIN_MS;
     if (!fresh || !Array.isArray(state.pending) || !state.pending.length) {

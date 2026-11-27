@@ -219,3 +219,40 @@ document.addEventListener("acxxel-gem-select-page", (event) => {
     }));
   }
 });
+
+// All Bids search (Representation Replies). GeM binds its search with jQuery
+// and checks event.which === 13; an Enter dispatched from the content script
+// always has which 0, so the search is run here with jQuery's own events.
+document.addEventListener("acxxel-gem-search", (event) => {
+  const { searchId, buttonId, value } = event.detail || {};
+  const input = searchId && document.querySelector(`[data-acxxel-search-id="${CSS.escape(searchId)}"]`);
+  const button = buttonId && document.querySelector(`[data-acxxel-search-button-id="${CSS.escape(buttonId)}"]`);
+  const done = [];
+  try {
+    if (input) {
+      const $ = window.jQuery;
+      if ($) {
+        $(input).val(value).trigger("input").trigger("change").trigger("keyup");
+        for (const type of ["keydown", "keypress", "keyup"]) {
+          $(input).trigger($.Event(type, { which: 13, keyCode: 13, key: "Enter" }));
+        }
+        done.push("jQuery Enter");
+        if (button) {
+          $(button).trigger("click");
+          done.push("jQuery click");
+        }
+      } else {
+        input.value = value;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        input.form?.requestSubmit?.();
+        if (button) button.click();
+        done.push("no jQuery: native events");
+      }
+    }
+  } finally {
+    document.dispatchEvent(new CustomEvent("acxxel-gem-searched", {
+      detail: { searchId, done: done.join(" + ") || "search box not found by the page bridge" },
+    }));
+  }
+});
