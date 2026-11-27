@@ -409,7 +409,7 @@ const AnalyserNavbar = () => {
 
           {bidsOpen && (
             <div className="mt-3 space-y-1.5 ml-2">
-              {BID_PRODUCTS.map((item) => {
+              {BID_PRODUCTS.filter(item => item.key !== "bunch").map((item) => {
                 const isEnabled = NAV_ENABLED_KEYS.has(item.key);
                 return (
                 <div

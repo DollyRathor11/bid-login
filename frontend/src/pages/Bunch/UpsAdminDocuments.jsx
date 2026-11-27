@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { upsRequest } from "../Ups/upsApi";
 
-function DocumentActions({ bidId, document, localContent }) {
+function DocumentActions({ bidId, document }) {
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   async function open(download) {
@@ -9,7 +9,7 @@ function DocumentActions({ bidId, document, localContent }) {
     const preview = download ? null : window.open("about:blank", "_blank");
     if (preview) preview.opener = null;
     try {
-      const url = document.url || (await upsRequest(`ups-bids/${bidId}/generate-docs/`, { method: "POST", body: JSON.stringify({ doc_type: document.id, local_content: localContent }) })).pdf_url;
+      const url = document.url || (await upsRequest(`ups-bids/${bidId}/generate-docs/`, { method: "POST", body: JSON.stringify({ doc_type: document.id }) })).pdf_url;
       if (download) {
         const response = await fetch(url);
         if (!response.ok) throw new Error("Unable to download document.");
@@ -26,7 +26,7 @@ function DocumentActions({ bidId, document, localContent }) {
   </div>{error && <p role="alert" className="mt-1 max-w-48 text-xs text-red-600">{error}</p>}</div>;
 }
 
-export default function UpsAdminDocuments({ bid, schema, localContent }) {
+export default function UpsAdminDocuments({ bid, schema }) {
   const [open, setOpen] = useState(false);
   const panel = useRef(null);
   useEffect(() => {
@@ -37,7 +37,7 @@ export default function UpsAdminDocuments({ bid, schema, localContent }) {
   }, []);
   const docs = [...schema.documents.filter(doc => bid.selected_general_docs.includes(doc.id)), ...(schema.analyser_documents || []).filter(doc => bid.selected_analyser_docs?.includes(doc.id)), ...(bid.upload_document ? [{ id: "bid_document", label: "Bid Document", url: bid.upload_document }] : [])];
   return <section className="my-5"><h2 className="mb-2 text-sm font-medium text-gray-700">Compliance Documents</h2>
-    <div className="grid items-start gap-4 lg:grid-cols-3">
+    <div className="grid items-start gap-4 lg:grid-cols-2">
       <div className="flex min-h-[74px] items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 p-4 text-sm">{bid.atc_special_document ? <div className="flex w-full flex-wrap items-center justify-between gap-3"><b>Special Document</b><DocumentActions bidId={bid.id} document={{ id: "special_document", url: bid.atc_special_document }} /></div> : <span className="text-gray-400">No Special Document</span>}</div>
       <div ref={panel} className="relative min-w-0">
         <button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)} className={`flex min-h-[74px] w-full items-center justify-between gap-3 rounded-lg border p-4 ${open ? "border-orange-500 bg-orange-50 ring-1 ring-orange-500" : "border-gray-200 bg-white hover:border-orange-400"}`}>
@@ -49,7 +49,6 @@ export default function UpsAdminDocuments({ bid, schema, localContent }) {
           <div className="border-t bg-gray-50 px-4 py-2 text-right"><button type="button" onClick={() => setOpen(false)} className="px-3 py-1 text-xs font-medium text-gray-500">Close Panel</button></div>
         </div>}
       </div>
-      <div className="flex min-h-[74px] flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4"><div className="flex items-center gap-3"><span aria-hidden="true" className="rounded-full bg-green-100 p-2 text-green-600">▤</span><div><h3 className="text-sm font-bold text-gray-800">Make in India</h3><p className="text-xs text-gray-500">Model: {bid.model_number || "—"}</p></div></div><DocumentActions bidId={bid.id} document={{ id: "make_in_india" }} localContent={localContent} /></div>
     </div>
   </section>;
 }

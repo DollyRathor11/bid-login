@@ -10,6 +10,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from ..models import UpsBid
+from ..ups_document_library import ups_library_pdfs
 from ..ups_specs import ANALYSER_DOCS, GENERAL_DOCS, SCHEMAS, specs_fields
 from .Gem import _require_role
 
@@ -100,8 +101,13 @@ def validate_file(file):
 
 @require_http_methods(["GET"])
 def ups_schema(request):
-    _, error = _require_role(request, {"user", "analyser", "admin"})
-    return error if error else JsonResponse({"types": SCHEMAS, "documents": [{"id": k, "label": v} for k, v in GENERAL_DOCS], "analyser_documents": [{"id": k, "label": v} for k, v in ANALYSER_DOCS]})
+    actor, error = _require_role(request, {"user", "analyser", "admin"})
+    if error:
+        return error
+    documents = [{"id": key, "label": path.stem} for key, path in ups_library_pdfs().items()]
+    if actor.role != "user":
+        documents.extend({"id": key, "label": label} for key, label in GENERAL_DOCS)
+    return JsonResponse({"types": SCHEMAS, "documents": documents, "analyser_documents": [{"id": k, "label": v} for k, v in ANALYSER_DOCS]})
 
 
 @csrf_exempt
@@ -145,7 +151,8 @@ def submit_ups_documents(request, bid_id):
         return error
     try:
         docs = json.loads(request.POST.get("selected_general_docs", "[]"))
-        if not isinstance(docs, list) or any(not isinstance(d, str) or d not in dict(GENERAL_DOCS) for d in docs):
+        valid_docs = set(ups_library_pdfs()) | dict(GENERAL_DOCS).keys()
+        if not isinstance(docs, list) or any(not isinstance(d, str) or d not in valid_docs for d in docs):
             raise ValueError("Select valid general documents.")
         upload = request.FILES.get("upload_document")
         special = request.FILES.get("atc_special_document")
@@ -249,7 +256,7 @@ def review_ups(request, bid_id):
                     if len(model) > 150:
                         raise ValueError("UPS model number cannot exceed 150 characters.")
                     bid.model_number = model
-                if action == "approved":
+                if action == "approved" and "local_content" in data:
                     bid.local_content = decimal_value(data.get("local_content", bid.local_content), "Local Content percentage (0–100)", Decimal(0), Decimal(100))
                 if action == "bid_rejected" and not str(data.get("note", "")).strip():
                     raise ValueError("Please enter the reason for rejecting this bid.")
@@ -261,3 +268,30 @@ def review_ups(request, bid_id):
         return JsonResponse(serialize_ups(bid, request))
     except (ValueError, TypeError) as exc:
         return JsonResponse({"error": str(exc)}, status=400)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+def delete_approved_ups(request, bid_id=None):
+    actor, error = _require_role(request, {"analyser"})
+    if error:
+        return error
+    if bid_id is None:
+        try:
+            data = json.loads(request.body)
+            ids = data.get("ids") if isinstance(data, dict) else None
+            if not isinstance(ids, list) or not 1 <= len(ids) <= 500 or any(type(pk) is not int or pk < 1 for pk in ids):
+                raise ValueError
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "Select valid UPS bids to delete."}, status=400)
+    else:
+        ids = [bid_id]
+    with transaction.atomic():
+        queryset = UpsBid.objects.filter(pk__in=ids, status="approved")
+        bids = list(queryset.select_for_update())
+        if len(bids) != len(set(ids)):
+            return JsonResponse({"error": "Approved UPS bid not found."}, status=404)
+        if any(bid.analyser_username != actor.username for bid in bids):
+            return JsonResponse({"error": "Only the assigned analyser can delete this UPS bid."}, status=403)
+        queryset.delete()
+    return JsonResponse({"message": "UPS bid deleted."})

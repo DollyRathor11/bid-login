@@ -11,7 +11,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 from django.utils import timezone
 
-from .models import UpsBid, User
+from .models import DesktopBid, UpsBid, User
 from .ups_specs import SCHEMAS, specs_fields
 from .views.BunchBids import bunch_status, eligible_groups
 from .views.Ups import validate_file, validate_metadata, validate_specs
@@ -125,6 +125,30 @@ class UpsWorkflowTests(TestCase):
         response = self.client_for(self.owner).post(f"/api/ups-bids/{bid_id}/documents/", {"selected_general_docs": '["manufacturer_auth"]'})
         self.assertEqual(response.status_code, 200, response.content)
 
+    def test_user_ups_library_lists_and_serves_original_pdf(self):
+        bid_id = self.create_bid()
+        client = self.client_for(self.owner)
+        filename = "UPS Certificate (1).pdf"
+        doc_id = f"library:{filename}"
+        with tempfile.TemporaryDirectory() as temporary, override_settings(BASE_DIR=Path(temporary)):
+            folder = Path(temporary) / "data" / "ups document"
+            folder.mkdir(parents=True)
+            with fitz.open() as document:
+                document.new_page().insert_text((48, 60), "Original certificate")
+                original = document.tobytes()
+            (folder / filename).write_bytes(original)
+            schema = client.get("/api/ups-bids/schema/").json()
+            self.assertEqual(schema["documents"], [{"id": doc_id, "label": "UPS Certificate (1)"}])
+            preview = client.post(f"/api/ups-bids/{bid_id}/generate-docs/",
+                                  json.dumps({"doc_type": doc_id}), content_type="application/json")
+            self.assertEqual(preview.status_code, 200)
+            self.assertEqual(preview["Content-Type"], "application/pdf")
+            self.assertEqual(b"".join(preview.streaming_content), original)
+            submitted = client.post(f"/api/ups-bids/{bid_id}/documents/",
+                                    {"selected_general_docs": json.dumps([doc_id])})
+            self.assertEqual(submitted.status_code, 200, submitted.content)
+            self.assertEqual(submitted.json()["selected_general_docs"], [doc_id])
+
     def review(self, user, bid_id, data):
         return self.client_for(user).post(f"/api/ups-bids/{bid_id}/review/", data=json.dumps(data), content_type="application/json")
 
@@ -171,6 +195,14 @@ class UpsWorkflowTests(TestCase):
         self.assertEqual(updated.status_code, 200, updated.content)
         self.assertEqual(Decimal(updated.json()["approved_price"]), Decimal("5100"))
 
+    def test_admin_can_approve_ups_without_local_content(self):
+        bid_id = self.create_bid()
+        self.submit_bid(bid_id)
+        self.assertEqual(self.send_admin(bid_id).status_code, 200)
+        response = self.review(self.admin, bid_id, {"action": "approved", "epbg": "0", "approved_price": "5000"})
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertIsNone(UpsBid.objects.get(pk=bid_id).local_content)
+
     def test_reject_requires_reason_but_not_pricing(self):
         bid_id = self.create_bid()
         self.submit_bid(bid_id)
@@ -197,6 +229,66 @@ class UpsWorkflowTests(TestCase):
         response = self.send_admin(bid_id)
         self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(UpsBid.objects.get(pk=bid_id).status, "analyzed")
+
+    def test_approved_bunch_price_paper_has_one_page_per_approved_product(self):
+        bid_id = self.create_bid()
+        UpsBid.objects.filter(pk=bid_id).update(status="approved", admin_pricing={"approved_price": "12500"})
+        DesktopBid.objects.create(bid_no=self.payload["bid_no"], date=timezone.localdate(),
+                                  status="complete", review_status="approved", total_price=25000)
+        url = "/api/bunch-bids/approved-price-paper/"
+        query = {"bid_no": self.payload["bid_no"]}
+        self.assertEqual(self.client_for(self.owner).get(url, query).status_code, 403)
+        analyser = self.client_for(self.analyser)
+        preview = analyser.get(url, {**query, "format": "json"})
+        self.assertEqual(preview.status_code, 200, preview.content)
+        self.assertEqual([item["product_name"] for item in preview.json()["items"]], ["Desktop", "UPS"])
+        response = analyser.get(url, query)
+        self.assertEqual(response.status_code, 200, response.content)
+        with fitz.open(stream=response.content, filetype="pdf") as document:
+            self.assertEqual(document.page_count, 2)
+            self.assertIn("INR 25000", document[0].get_text())
+            self.assertIn("INR 12500", document[1].get_text())
+
+    def test_only_assigned_analyser_can_delete_approved_ups(self):
+        bid_id = self.create_bid()
+        url = f"/api/ups-bids/{bid_id}/delete-approved/"
+        analyser = self.client_for(self.analyser)
+        self.assertEqual(analyser.delete(url).status_code, 404)
+        UpsBid.objects.filter(pk=bid_id).update(status="approved", analyser_username="another-analyser")
+        self.assertEqual(analyser.delete(url).status_code, 403)
+        UpsBid.objects.filter(pk=bid_id).update(analyser_username=self.analyser.username)
+        self.assertEqual(analyser.delete(url).status_code, 200)
+        self.assertFalse(UpsBid.objects.filter(pk=bid_id).exists())
+
+    def test_bulk_delete_checks_assignment_for_every_approved_ups(self):
+        ids = [self.create_bid(), self.create_bid()]
+        UpsBid.objects.filter(pk__in=ids).update(status="approved", analyser_username=self.analyser.username)
+        UpsBid.objects.filter(pk=ids[1]).update(analyser_username="another-analyser")
+        client = self.client_for(self.analyser)
+        url = "/api/ups-bids/bulk-delete-approved/"
+        body = json.dumps({"ids": ids})
+        self.assertEqual(client.delete(url, body, content_type="application/json").status_code, 403)
+        self.assertEqual(UpsBid.objects.filter(pk__in=ids).count(), 2)
+        UpsBid.objects.filter(pk=ids[1]).update(analyser_username=self.analyser.username)
+        self.assertEqual(client.delete(url, body, content_type="application/json").status_code, 200)
+        self.assertFalse(UpsBid.objects.filter(pk__in=ids).exists())
+
+    def test_admin_bunch_delete_removes_only_approved_members(self):
+        approved_ups = self.create_bid()
+        pending_ups = self.create_bid()
+        UpsBid.objects.filter(pk=approved_ups).update(status="approved")
+        UpsBid.objects.filter(pk=pending_ups).update(status="complete")
+        desktop = DesktopBid.objects.create(bid_no=self.payload["bid_no"], date=timezone.localdate(),
+                                             status="complete", review_status="approved")
+        url = "/api/bunch-bids/delete-approved/"
+        body = json.dumps({"bid_numbers": [self.payload["bid_no"]]})
+        self.assertEqual(self.client_for(self.analyser).delete(url, body, content_type="application/json").status_code, 403)
+        response = self.client_for(self.admin).delete(url, body, content_type="application/json")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["deleted_products"], 2)
+        self.assertTrue(UpsBid.objects.filter(pk=pending_ups).exists())
+        self.assertFalse(UpsBid.objects.filter(pk=approved_ups).exists())
+        self.assertFalse(DesktopBid.objects.filter(pk=desktop.pk).exists())
 
     def test_next_saves_specs_but_does_not_send_to_admin(self):
         bid_id = self.create_bid()
@@ -265,6 +357,12 @@ class UpsWorkflowTests(TestCase):
         with tempfile.TemporaryDirectory() as temporary, override_settings(MEDIA_ROOT=temporary):
             for doc in ("warranty", "technical_compliance", "data_sheet"):
                 with self.subTest(doc=doc):
+                    preview = client.post(url, json.dumps({"doc_type": doc, "preview": True}), content_type="application/json")
+                    self.assertEqual(preview.status_code, 200)
+                    self.assertEqual(preview["Content-Type"], "application/pdf")
+                    self.assertEqual(preview["Cache-Control"], "no-store")
+                    with fitz.open(stream=preview.content, filetype="pdf") as pdf:
+                        self.assertIn(self.payload["bid_no"], pdf[0].get_text())
                     response = client.post(url, json.dumps({"doc_type": doc}), content_type="application/json")
                     self.assertEqual(response.status_code, 200, response.content)
                     files = list((Path(temporary) / "generated" / "ups").glob(f"*_{doc}_*.pdf"))
@@ -277,6 +375,22 @@ class UpsWorkflowTests(TestCase):
             self.assertEqual(UpsBid.objects.get(pk=bid_id).status, "complete")
             denied = self.client_for(self.owner).post(url, json.dumps({"doc_type": "warranty"}), content_type="application/json")
             self.assertEqual(denied.status_code, 403)
+
+    def test_approved_ups_atc_bundle_includes_selected_documents_only(self):
+        bid_id = self.create_bid()
+        url = f"/api/ups-bids/{bid_id}/generate-docs/"
+        client = self.client_for(self.analyser)
+        body = json.dumps({"doc_type": "approved_atc_documents"})
+        self.assertEqual(client.post(url, body, content_type="application/json").status_code, 404)
+        UpsBid.objects.filter(pk=bid_id).update(status="approved", selected_analyser_docs=["warranty"])
+        with tempfile.TemporaryDirectory() as temporary, override_settings(MEDIA_ROOT=temporary):
+            response = client.post(url, body, content_type="application/json")
+            self.assertEqual(response.status_code, 200, response.content)
+            output = next((Path(temporary) / "generated" / "ups").glob("*.pdf"))
+            with fitz.open(output) as pdf:
+                self.assertGreater(len(pdf), 1)
+                self.assertIn("WARRANTY", pdf[0].get_text())
+                self.assertNotIn("DATA SHEET", pdf[0].get_text())
 
     def test_admin_local_content_preview_does_not_change_saved_bid(self):
         bid_id = self.create_bid()
