@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { FaCheckCircle, FaFileAlt, FaLayerGroup } from "react-icons/fa";
-import { upsRequest } from "../Ups/upsApi";
+import { UPS_API, upsRequest } from "../Ups/upsApi";
 import "../Ups/UpsDocumentUpload.css";
 
 export default function UpsAnalyserDocuments() {
@@ -32,19 +32,33 @@ export default function UpsAnalyserDocuments() {
   const toggle = docId => setSelected(previous => previous.includes(docId) ? previous.filter(id => id !== docId) : [...previous, docId]);
 
   async function preview(docId) {
-    setGenerating(docId); setError("");
+    setError("");
     const previewWindow = window.open("about:blank", "_blank");
-    if (previewWindow) previewWindow.opener = null;
+    if (!previewWindow) {
+      setError("Allow pop-ups for this site to view the UPS PDF.");
+      return;
+    }
+    previewWindow.opener = null;
+    previewWindow.document.title = "Preparing UPS PDF...";
+    previewWindow.document.body.textContent = "Preparing UPS PDF...";
+    setGenerating(docId);
     try {
-      const result = await upsRequest(`ups-bids/${id}/generate-docs/`, { method: "POST", body: JSON.stringify({ doc_type: docId }) });
-      const response = await fetch(result.pdf_url, { cache: "no-store" });
-      if (!response.ok) throw new Error("Unable to open the generated PDF.");
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+      const response = await fetch(`${UPS_API}/ups-bids/${id}/generate-docs/`, {
+        method: "POST", cache: "no-store",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_type: docId, preview: true }),
+      });
+      if (!response.ok || !response.headers.get("content-type")?.includes("application/pdf")) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Unable to open the generated UPS PDF.");
+      }
+      if (previewWindow.closed) return;
       const url = URL.createObjectURL(await response.blob());
-      if (previewWindow) previewWindow.location.href = url;
-      else { const link = document.createElement("a"); link.href = url; link.target = "_blank"; link.rel = "noopener"; link.click(); }
       setTimeout(() => URL.revokeObjectURL(url), 60000);
+      previewWindow.location.replace(url);
       setSelected(previous => [...new Set([...previous, docId])]);
-    } catch (error) { previewWindow?.close(); setError(error.message); } finally { setGenerating(""); }
+    } catch (error) { previewWindow.close(); setError(error.message); } finally { setGenerating(""); }
   }
 
   async function submit(event) {

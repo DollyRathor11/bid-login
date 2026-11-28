@@ -15,6 +15,8 @@ import AdminBidSearch from "./components/Admin/AdminBidSearch";
 import CreateDesktopBid from "./pages/Desktop/User/CreateDesktopBid";
 import CreateUpsBid from "./pages/Ups/CreateUpsBid";
 import BunchBids from "./pages/Bunch/BunchBids";
+import ApprovedBunchDetails from "./pages/Bunch/ApprovedBunchDetails";
+import ApprovedBunchDownloads from "./pages/Bunch/ApprovedBunchDownloads";
 import BunchReviewHeader from "./pages/Bunch/BunchReviewHeader";
 import BunchAdminUpsReview from "./pages/Bunch/BunchAdminUpsReview";
 import BunchUpsReview from "./pages/Bunch/BunchUpsReview";
@@ -134,6 +136,8 @@ function App() {
           <Route path="printer/bid/:id/approved-details" element={<ApprovedBiddingDetails />} />
         </Route>
 
+        <Route path="/analyser-dashboard/bunch/approved-details" element={<ApprovedBunchDetails />} />
+        <Route path="/analyser-dashboard/bunch/downloads" element={<ApprovedBunchDownloads />} />
         <Route path="/analyser-dashboard/product" element={<AnalyserProductsPage />} />
         <Route path="/analyser-dashboard/workstation/product" element={<AnalyserProductsPage />} />
         <Route path="/analyser-dashboard/desktop/bid/:id" element={<BidDetailView product="desktop" />} />

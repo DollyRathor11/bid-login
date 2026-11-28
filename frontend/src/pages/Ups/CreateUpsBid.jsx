@@ -2,9 +2,28 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import UpsConfig from "./UpsConfig";
 import UpsDocumentUpload from "./UpsDocumentUpload";
-import { getUpsFields, upsRequest, upsButtonClass } from "./upsApi";
+import { getUpsFields, UPS_API, upsRequest, upsButtonClass } from "./upsApi";
 
 const TYPES = ["line_interactive", "online_with_battery", "online_without_battery"];
+const CERTIFICATE_NAMES = new Map([
+  ["BIS-UT1200E-letter", "BIS Certification Letter"],
+  ["Cyber Power -GST", "GST Registration Certificate"],
+  ["Cyberpower _PAN_card-Revised", "Company PAN Card"],
+  ["E-Wast Authorization_Certificate", "E-Waste Authorisation Certificate"],
+  ["IEC-2023042506 Test Report_BU1000E", "IEC Test Report"],
+  ["Incorporation certificate-CPSI (1)", "Certificate of Incorporation"],
+  ["ISO 45001 (1)", "ISO 45001 Certification"],
+  ["ISO Certificate - Cyber Power Systems India Pvt Ltd", "ISO Certification"],
+  ["ISO14000-202012", "ISO 14000 Environmental Management Certificate"],
+  ["ISO9000-202012", "ISO 9000 Quality Management Certificate"],
+  ["MOFSET - PWM Technology Declaration - BU600E BU1000E", "MOSFET and PWM Technology Declaration"],
+  ["Product Test Report -BU1000E-IN", "Product Test Report"],
+  ["Revised Service Escalation Matrix (1)", "Service Support Escalation Matrix"],
+  ["RoHS Declaration of Compliancefor BU series", "RoHS Declaration of Compliance – BU Series"],
+  ["SLA Cyberpower Service Agreement Copy", "Service Level Agreement (SLA)"],
+  ["Turnover Certificate for 3 years", "Turnover Certificate – Last Three Financial Years"],
+  ["Turnover Certificate FY 2024-25 (1)", "Turnover Certificate – FY 2024–25"],
+]);
 const META = [["bid_no", "Bid Number"], ["dept_name", "Department Name"], ["organization", "Organization Name"], ["address", "Address"], ["qty", "Quantity"], ["pincode", "Buyer Pincode"]];
 const bidInputClass = "w-full bg-white border border-gray-400 text-gray-900 rounded px-3 py-[6px] text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500";
 const sessionKey = () => `ups-draft-${sessionStorage.getItem("user_id") || sessionStorage.getItem("user_username") || localStorage.getItem("user_id") || localStorage.getItem("user_username") || "user"}`;
@@ -50,15 +69,28 @@ export default function CreateUpsBid() {
   }
 
   async function previewDocument(id) {
+    const tab = window.open("about:blank", "_blank");
+    if (!tab) {
+      setError("Allow pop-ups for this site to view the PDF.");
+      return;
+    }
+    tab.opener = null;
     setPreviewing(id); setError("");
     try {
-      const result = await upsRequest(`ups-bids/${draft.id}/generate-docs/`, { method: "POST", body: JSON.stringify({ doc_type: id }) });
-      const response = await fetch(result.pdf_url, { cache: "no-store" });
-      if (!response.ok) throw new Error("Unable to open this document.");
+      const token = sessionStorage.getItem("token") || localStorage.getItem("token") || "";
+      const response = await fetch(`${UPS_API}/ups-bids/${draft.id}/generate-docs/`, {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ doc_type: id }),
+      });
+      if (!response.ok || !response.headers.get("content-type")?.includes("application/pdf")) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || "Unable to open this document.");
+      }
+      if (tab.closed) return;
       const url = URL.createObjectURL(await response.blob());
-      const link = document.createElement("a"); link.href = url; link.target = "_blank"; link.rel = "noopener"; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
-    } catch (err) { setError(err.message); } finally { setPreviewing(""); }
+      tab.location.replace(url);
+    } catch (err) { tab.close(); setError(err.message); } finally { setPreviewing(""); }
   }
 
   async function submit(event) {
@@ -137,7 +169,7 @@ export default function CreateUpsBid() {
     {modal === "general" && schema && <div className="ups-document-overlay" onClick={event => { if (event.target === event.currentTarget) setModal(""); }}><section role="dialog" aria-modal="true" aria-labelledby="ups-docs-heading" className="ups-general-modal">
       <header className="ups-general-header"><div><h2 id="ups-docs-heading">General Certificates</h2><p>Select the documents to submit. Use View PDF to preview.</p></div><button type="button" aria-label="Close general certificates" onClick={() => setModal("")}>×</button></header>
       <div className="ups-general-toolbar"><span>{docs.length} of {schema.documents.length} selected</span><div><button type="button" onClick={() => setDocs(schema.documents.map(d => d.id))}>Select All</button><button type="button" onClick={() => setDocs([])}>Clear</button></div></div>
-      <div className="ups-general-list">{schema.documents.map(d => <div key={d.id} className="ups-general-row"><label><input type="checkbox" checked={docs.includes(d.id)} onChange={e => setDocs(e.target.checked ? [...docs, d.id] : docs.filter(id => id !== d.id))} /><span title={d.label}>{d.label.toUpperCase()}</span></label><button type="button" disabled={!!previewing} onClick={() => previewDocument(d.id)} className="ups-general-view"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>{previewing === d.id ? "Generating..." : "View PDF"}</button></div>)}</div>
+      <div className="ups-general-list">{schema.documents.map(d => <div key={d.id} className="ups-general-row"><label><input type="checkbox" checked={docs.includes(d.id)} onChange={e => setDocs(e.target.checked ? [...docs, d.id] : docs.filter(id => id !== d.id))} /><span className="ups-certificate-name" title={CERTIFICATE_NAMES.get(d.label) || d.label}>{CERTIFICATE_NAMES.get(d.label) || d.label}</span></label><button type="button" disabled={!!previewing} onClick={() => previewDocument(d.id)} className="ups-general-view"><svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>{previewing === d.id ? "Opening..." : "View PDF"}</button></div>)}</div>
       <footer className="ups-general-footer"><button type="button" onClick={() => setModal("")}>Save Selection</button></footer>
     </section></div>}
   </main>;

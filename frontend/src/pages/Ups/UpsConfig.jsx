@@ -2,12 +2,12 @@ import { getUpsFields } from "./upsApi";
 
 const controlClass = "w-full min-w-0 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white text-gray-700 disabled:bg-gray-50 disabled:text-gray-500";
 
-export default function UpsConfig({ schema, type, specs, onChange, disabled = false, children, renderLabel, modelNumber, onModelChange }) {
+export default function UpsConfig({ schema, type, specs, onChange, disabled = false, children, renderLabel, renderModelLabel, modelNumber, onModelChange }) {
   const fields = getUpsFields(schema, type, specs);
   const change = (key, value) => onChange({ ...specs, [key]: value });
   const orderedFields = [...fields.filter(f => f.kind !== "textarea" && f.kind !== "multi"), ...fields.filter(f => f.kind === "multi"), ...fields.filter(f => f.kind === "textarea")];
   return <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2 lg:grid-cols-3">
-      {onModelChange && <div><label htmlFor="ups-model-number" className="mb-1 block text-sm font-medium text-gray-700">Model Number</label><input id="ups-model-number" name="model_number" maxLength={150} value={modelNumber || ""} onChange={event => onModelChange(event.target.value)} disabled={disabled} placeholder="Enter Model Number" className={controlClass} /></div>}
+      {onModelChange && <div>{renderModelLabel || <label htmlFor="ups-model-number" className="mb-1 block text-sm font-medium text-gray-700">Model Number</label>}<input id="ups-model-number" name="model_number" maxLength={150} value={modelNumber || ""} onChange={event => onModelChange(event.target.value)} disabled={disabled} placeholder="Enter Model Number" className={controlClass} /></div>}
       {orderedFields.map(field => <div key={field.key} className={field.kind === "textarea" || field.kind === "multi" ? "col-span-1 md:col-span-2 lg:col-span-3" : "col-span-1"}>
         {renderLabel ? renderLabel(field) : <div className="mb-1 flex items-center gap-2"><label htmlFor={`ups-${field.key}`} className="block text-sm font-medium text-gray-700">{field.label}</label>{!field.required && <span className="text-[11px] font-normal text-red-500">*Optional</span>}</div>}
         {field.kind === "textarea" ? <textarea id={`ups-${field.key}`} disabled={disabled} rows={2} maxLength={5000} value={specs[field.key] || ""} onChange={e => change(field.key, e.target.value)} placeholder="Technical details..." className={`${controlClass} resize-none`} />

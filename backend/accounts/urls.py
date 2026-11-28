@@ -45,7 +45,7 @@ from .views.Printer import (
 from .views import ProductDashboard as product_dashboard
 from .views.AdminBidSearch import admin_bid_search
 from .views import Ups
-from .views.BunchBids import admin_bunch_dashboard, bunch_bids
+from .views.BunchBids import admin_bunch_dashboard, approved_bunch_price_paper, bunch_bids, delete_approved_bunch_bids
 from .views.UpsDocuments import generate_ups_document
 from .views.UserDashboard import user_dashboard
 from .views.DailyActivity import daily_activity
@@ -323,7 +323,11 @@ urlpatterns = [
     path("ups-bids/<int:bid_id>/documents/", Ups.submit_ups_documents),
     path("ups-bids/<int:bid_id>/generate-docs/", generate_ups_document),
     path("ups-bids/<int:bid_id>/review/", Ups.review_ups),
+    path("ups-bids/<int:bid_id>/delete-approved/", Ups.delete_approved_ups),
+    path("ups-bids/bulk-delete-approved/", Ups.delete_approved_ups),
     path("bunch-bids/", bunch_bids),
+    path("bunch-bids/delete-approved/", delete_approved_bunch_bids),
+    path("bunch-bids/approved-price-paper/", approved_bunch_price_paper),
     path("admin/dashboard/bunch/", admin_bunch_dashboard),
     path("admin/dashboard/<str:product>/person/<str:endpoint>/", product_dashboard.admin_person_dashboard),
     path("admin/dashboard/<str:product>/bids/", product_dashboard.admin_dashboard_bids),
