@@ -256,3 +256,40 @@ document.addEventListener("acxxel-gem-search", (event) => {
     }));
   }
 });
+
+// Representation Replies: GeM opens the replies ("Publish Representations")
+// in a new window. While armed, the next window.open is caught instead: its
+// address is handed back, or, for a window GeM fills with document.write, the
+// written HTML. Nothing is opened; the arming ends after 20 seconds.
+document.addEventListener("acxxel-gem-capture-open", (event) => {
+  const captureId = event.detail?.captureId;
+  if (!captureId) return;
+  const original = window.open;
+  let finished = false;
+  let html = "";
+  const finish = (detail) => {
+    if (finished) return;
+    finished = true;
+    window.open = original;
+    document.dispatchEvent(new CustomEvent("acxxel-gem-open-captured", { detail: { captureId, ...detail } }));
+  };
+  window.open = function captureOpen(url) {
+    let address = "";
+    try { address = url ? new URL(String(url), location.href).href : ""; } catch { address = String(url || ""); }
+    if (address && !/^about:blank/i.test(address)) {
+      finish({ url: address });
+      return null;
+    }
+    // A blank window that GeM writes into: collect what it writes.
+    const fakeDocument = {
+      open() { return fakeDocument; },
+      write(...parts) { html += parts.join(""); },
+      writeln(...parts) { html += `${parts.join("")}\n`; },
+      close() { finish({ html }); },
+      body: null,
+    };
+    setTimeout(() => finish({ html }), 3000);
+    return { document: fakeDocument, focus() {}, close() {}, print() {}, closed: false, location: { href: "about:blank" } };
+  };
+  setTimeout(() => finish({}), 20000);
+});

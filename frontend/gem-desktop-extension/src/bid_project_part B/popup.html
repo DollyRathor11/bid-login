@@ -37,6 +37,11 @@
     <ul class="uses">
       <li><b>Scan Representation Replies</b> – searches GeM All Bids by bid number, only for our bids still waiting for a reply, and saves the replies to Post Bid &gt; My Representation. Log out of GeM first, or use a Chrome profile not logged in to GeM.</li>
     </ul>
+    <div class="scan-options" style="grid-template-columns:1fr">
+      <label>Check this bid first (optional)
+        <input id="replies-first-bid" type="text" placeholder="e.g. GEM/2026/B/8262297" autocomplete="off">
+      </label>
+    </div>
     <div class="button-row">
       <button id="replies-start" type="button">Scan Representation Replies</button>
       <button id="replies-stop" type="button" class="secondary" disabled>Stop</button>

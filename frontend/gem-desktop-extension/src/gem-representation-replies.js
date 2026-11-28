@@ -226,10 +226,18 @@
   // element with that text counts, lifted to its clickable parent if any.
   const REPRESENTATION_LINK = /^(?:view\s+)?(?:published?\s+)?representations?(?:\s*\(\d+\))?$/i;
   const openModals = () => [...document.querySelectorAll(MODAL_SELECTOR)].filter(visible);
+  // The innermost element whose own text is the label is clicked (the click
+  // bubbles like a real one). Lifting it to an outer [onclick] block was wrong:
+  // on All Bids that block is "View Corrigendum/Representation"'s toggle
+  // (getOtherDetails), so clicking it closed the section again. Only a link
+  // or button directly around the label is used instead.
   function textControlIn(root, pattern) {
-    const node = controlIn(root, pattern) || [...(root?.querySelectorAll("span, div, i, label, u, font") || [])]
-      .find((item) => visible(item) && nodeText(item).length < 40 && pattern.test(nodeText(item)));
-    return node ? node.closest(CONTROL_SELECTOR) || node : null;
+    const matches = [...(root?.querySelectorAll("*") || [])]
+      .filter((item) => visible(item) && nodeText(item).length < 60 && pattern.test(nodeText(item)));
+    const node = matches.find((item) => !matches.some((other) => other !== item && item.contains(other)));
+    if (!node) return null;
+    const wrapper = node.closest("a, button, [role=button]");
+    return wrapper && nodeText(wrapper).length < 60 ? wrapper : node;
   }
   const representationLink = (card) => textControlIn(card, REPRESENTATION_LINK)
     || openModals().map((modal) => textControlIn(modal, REPRESENTATION_LINK)).find(Boolean) || null;
@@ -241,13 +249,108 @@
     return `card ${describe(card).slice(0, 40)}; controls: ${[...new Set(controls)].slice(0, 8).join(" | ") || "none"}`;
   };
 
+  // The page and any same-origin frame (the replies popup can load in one).
+  const documents = () => [document, ...[...document.querySelectorAll("iframe")].map((frame) => {
+    try { return frame.contentDocument; } catch { return null; }
+  }).filter(Boolean)];
+  const isReplyHeader = (row) => {
+    const cells = [...row.querySelectorAll(":scope > td, :scope > th")].map(nodeText);
+    return cells.some((cell) => /^query/i.test(cell)) && cells.some((cell) => /^reply/i.test(cell));
+  };
+
+  // The table holding the Query / Reply header (in any row). A header kept in
+  // its own table (rows in the next one) is returned with those rows too.
   function replyTable(bidNo) {
-    return [...document.querySelectorAll("table")].find((table) => {
-      if (!visible(table)) return false;
-      const head = nodeText(table.querySelector("tr"));
-      return /query/i.test(head) && /reply/i.test(head)
-        && hasBidNo(nodeText(table.closest(MODAL_SELECTOR) || document.body), bidNo);
-    }) || null;
+    for (const doc of documents()) {
+      const tables = [...doc.querySelectorAll("table")];
+      for (const [index, table] of tables.entries()) {
+        if (!visible(table) || ![...table.querySelectorAll("tr")].some(isReplyHeader)) continue;
+        const scope = table.closest(MODAL_SELECTOR) || doc.body;
+        if (doc === document && !hasBidNo(nodeText(scope), bidNo)) continue;
+        const rows = [...table.querySelectorAll("tr")];
+        if (rows.length <= 1) {
+          const next = tables.slice(index + 1).find((item) => visible(item) && scope.contains(item));
+          if (next) rows.push(...next.querySelectorAll("tr"));
+        }
+        return { table, rows, scope };
+      }
+    }
+    return null;
+  }
+
+  // Arms the page bridge to catch the next window.open; resolves with
+  // { url } or { html } (empty object when nothing was opened in 20 s).
+  let captureCount = 0;
+  function captureWindowOpen() {
+    const captureId = `reply-open-${Date.now()}-${captureCount += 1}`;
+    return new Promise((resolve) => {
+      const onCaptured = (event) => {
+        if (event.detail?.captureId !== captureId) return;
+        document.removeEventListener("acxxel-gem-open-captured", onCaptured);
+        resolve(event.detail);
+      };
+      document.addEventListener("acxxel-gem-open-captured", onCaptured);
+      setTimeout(() => {
+        document.removeEventListener("acxxel-gem-open-captured", onCaptured);
+        resolve({});
+      }, 21000);
+      document.dispatchEvent(new CustomEvent("acxxel-gem-capture-open", { detail: { captureId } }));
+    });
+  }
+
+  const linkSummary = (link) => clean(`${link.tagName?.toLowerCase()} href="${link.getAttribute?.("href") || ""}" target="${link.getAttribute?.("target") || ""}" onclick="${(link.getAttribute?.("onclick") || "").slice(0, 80)}"`);
+
+  // A cell's text when the page was fetched (no layout): GeM keeps a short and
+  // a full copy for "Read more", so the longest single inner block wins.
+  function fetchedCellText(cell) {
+    const strip = (value) => clean(value).replace(/\s*(?:\.\.\.|…)?\s*read\s+(?:more|less)\s*$/i, "").trim();
+    const inner = [...cell.querySelectorAll("span, div, p")].map((node) => strip(node.textContent)).filter(Boolean);
+    const longest = inner.sort((a, b) => b.length - a.length)[0] || "";
+    const whole = strip(cell.textContent);
+    return longest && longest.length >= whole.length * 0.5 ? longest : whole;
+  }
+
+  // Reads the replies from the window GeM would have opened.
+  async function repliesFromWindow({ url = "", html = "" }, bidNo) {
+    let source = html;
+    if (!source && url) {
+      try {
+        const response = await fetch(url, { credentials: "include" });
+        source = await response.text();
+      } catch (error) {
+        return { outcome: "no_table", detail: `replies window ${url} could not be read: ${error.message}` };
+      }
+    }
+    const doc = new DOMParser().parseFromString(source || "", "text/html");
+    const text = clean(doc.body?.textContent);
+    if (NOTHING_PUBLISHED.test(text) && !/query/i.test(text)) return { outcome: "no_reply" };
+    const tables = [...doc.querySelectorAll("table")];
+    const index = tables.findIndex((table) => [...table.querySelectorAll("tr")].some((row) => {
+      const cells = [...row.querySelectorAll(":scope > td, :scope > th")].map((cell) => clean(cell.textContent));
+      return cells.some((cell) => /^query/i.test(cell)) && cells.some((cell) => /^reply/i.test(cell));
+    }));
+    if (index < 0) {
+      return { outcome: "no_table", detail: `replies window ${url || "(written by GeM)"} has no Query/Reply table; text: ${text.slice(0, 120)}` };
+    }
+    const rows = [...tables[index].querySelectorAll("tr")];
+    if (rows.length <= 1 && tables[index + 1]) rows.push(...tables[index + 1].querySelectorAll("tr"));
+    const cellRows = rows.map((row) => [...row.querySelectorAll(":scope > td, :scope > th")].map(fetchedCellText));
+    const parsed = parseReplyRows(cellRows);
+    if (!parsed.length) return { outcome: "no_reply", detail: `replies window table had ${cellRows.length} row(s)` };
+    if (/GEM\/\d{4}\/[BR]\/\d+/i.test(text) && !hasBidNo(text, bidNo)) {
+      return { outcome: "no_table", detail: `replies window ${url} is for another bid` };
+    }
+    return { outcome: "read", rows: parsed, published: publishedOn(text) };
+  }
+  const NOTHING_PUBLISHED = /no\s+(?:details|data|records?|representations?)\s+(?:available|found)/i;
+
+  // For the status line when the replies table is not found.
+  function popupSummary() {
+    const modals = openModals();
+    const frames = document.querySelectorAll("iframe").length;
+    const tables = documents().reduce((sum, doc) => sum + [...doc.querySelectorAll("table")].filter(visible).length, 0);
+    const texts = modals.map((modal) => nodeText(modal).slice(0, 90)).join(" | ");
+    return `${modals.length} popup(s), ${tables} visible table(s), ${frames} frame(s)${texts ? `; popup text: ${texts}` : ""}`;
   }
 
   async function closeModals() {
@@ -302,28 +405,47 @@
       return { outcome: "no_link", detail };
     }
     await step("opening View Representation");
-    link.click();
-    const table = await waitFor(() => replyTable(bidNo) || (nothingShown() ? "nothing" : null), 10000);
-    if (table === "nothing") {
+    // The corrigendum popup still open behind can itself say "No details
+    // available" (about the corrigendum); only a popup opened by this click
+    // counts for that.
+    const before = new Set(openModals());
+    const newNothing = () => openModals().some((modal) => !before.has(modal) && NOTHING.test(nodeText(modal)));
+    // GeM opens the replies in a new window: a link's own address is read
+    // directly, otherwise the page bridge catches the window GeM opens.
+    const href = link.getAttribute?.("href") || "";
+    const directUrl = href && !/^(?:#|javascript:)/i.test(href) ? new URL(href, location.href).href : "";
+    const opened = directUrl ? Promise.resolve({ url: directUrl }) : captureWindowOpen();
+    if (!directUrl) link.click();
+    let windowResult = null;
+    opened.then((value) => { windowResult = value || {}; });
+    let found = await waitFor(() => replyTable(bidNo) || (newNothing() ? "nothing" : null)
+      || (windowResult && (windowResult.url || windowResult.html) ? "window" : null), 15000);
+    if (found === "window") {
+      const fromWindow = await repliesFromWindow(windowResult, bidNo);
       await closeModals();
-      return { outcome: "no_reply" };
+      return fromWindow;
     }
-    if (!table) {
+    if (found === "nothing") found = await waitFor(() => replyTable(bidNo), 1000);
+    if (!found) {
+      const detail = `${popupSummary()}; link: ${linkSummary(link)}`;
       await closeModals();
-      return { outcome: "no_table" };
+      return { outcome: newNothing() ? "no_reply" : "no_table", detail };
     }
-    for (const more of [...table.querySelectorAll("a, span, button")]) {
+    for (const more of [...found.scope.querySelectorAll("a, span, button")]) {
       if (visible(more) && /^read\s+more$/i.test(nodeText(more))) more.click();
     }
     await sleep(300);
-    const cellRows = [...table.querySelectorAll("tr")].map((row) => (
+    const fresh = replyTable(bidNo) || found;
+    const cellRows = fresh.rows.map((row) => (
       [...row.querySelectorAll(":scope > td, :scope > th")]
         .map((cell) => String(cell.innerText || cell.textContent || "").replace(/\s*(?:\.\.\.|…)?\s*read\s+(?:more|less)\s*$/i, "").trim())
     ));
     const rows = parseReplyRows(cellRows);
-    const published = publishedOn(nodeText(table.closest(MODAL_SELECTOR) || document.body));
+    const published = publishedOn(nodeText(fresh.scope));
     await closeModals();
-    return { outcome: rows.length ? "read" : "no_reply", rows, published };
+    // An empty result from a table that is there says what it looked like.
+    const detail = rows.length ? "" : `table had ${cellRows.length} row(s); header: ${(cellRows.find((cells) => cells.some((cell) => /^query/i.test(cell))) || []).join(" / ")}`;
+    return { outcome: rows.length ? "read" : "no_reply", rows, published, detail };
   }
 
   const OUTCOME_NOTES = {
@@ -332,6 +454,7 @@
     no_table: "representation popup did not load",
     no_reply: "no reply published yet",
     no_match: "replies published, but none matched our representation text",
+    not_tracked: "reply read, but this bid is not in My Representation of the connected Acxxel (local or server); log in to the right one and refresh it",
     timeout: "GeM did not answer within a minute; skipped",
   };
   // One bid never holds the scan for more than this.
@@ -394,7 +517,7 @@
           });
           if (!response?.ok) throw new Error(`${bidNo}: reply could not be saved (${response?.error || "no response"}).`);
           counts.saved += Number(response.replies || 0);
-          if (!response.replies) outcome = "no_match";
+          if (!response.replies) outcome = (response.missing || []).includes(bidNo) ? "not_tracked" : "no_match";
         }
         if (OUTCOME_NOTES[outcome]) {
           problems.push({ bidNo, reason: `${OUTCOME_NOTES[outcome]}${result.detail ? ` (${result.detail})` : ""}` });

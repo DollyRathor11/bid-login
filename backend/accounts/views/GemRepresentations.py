@@ -101,6 +101,7 @@ def _save_replies(body):
         return JsonResponse({"error": "results must be a list."}, status=400)
     replies = 0
     bids = []
+    missing = []
     with transaction.atomic():
         for item in results:
             if not isinstance(item, dict):
@@ -109,7 +110,10 @@ def _save_replies(body):
             result = GemRepresentationResult.objects.select_for_update().filter(
                 bid_no=str(item.get("bid_no", "")).strip(),
             ).first()
-            if result is None or not isinstance(rows, list):
+            if result is None:
+                missing.append(str(item.get("bid_no", "")).strip())
+                continue
+            if not isinstance(rows, list):
                 continue
             published = [row for row in rows if isinstance(row, dict)]
             ours = result.representations if isinstance(result.representations, list) else []
@@ -119,7 +123,7 @@ def _save_replies(body):
                 result.save(update_fields=["representations", "last_synced_at"])
                 replies += count
                 bids.append(result.bid_no)
-    return JsonResponse({"replies": replies, "bid_numbers": bids})
+    return JsonResponse({"replies": replies, "bid_numbers": bids, "missing": missing})
 
 
 @csrf_exempt

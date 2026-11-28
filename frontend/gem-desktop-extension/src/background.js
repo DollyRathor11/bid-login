@@ -568,7 +568,7 @@ async function waitForTabLoaded(tabId, timeoutMs = 30000) {
   throw new Error("The GeM All Bids page did not finish loading.");
 }
 
-async function startRepresentationReplies() {
+async function startRepresentationReplies(firstBid = "") {
   await recoverAcxxelSession();
   if (!(await settings()).token) throw new Error("Open Acxxel and log in before scanning replies.");
   const { [REPLY_STATE_KEY]: current } = await chrome.storage.local.get(REPLY_STATE_KEY);
@@ -580,7 +580,11 @@ async function startRepresentationReplies() {
   await setState("starting", "Finding bids waiting for a reply...");
   let tabId = null;
   try {
-    const { bid_numbers: bidNumbers = [] } = await api("/gem/representation-results/?pending_replies=1");
+    const { bid_numbers: waiting = [] } = await api("/gem/representation-results/?pending_replies=1");
+    // "Check this bid first": that bid is searched before the rest (added even
+    // if it is not waiting, so an already-read reply can be read again).
+    const first = /^GEM\/\d{4}\/[BR]\/\d+$/i.test(String(firstBid || "").trim()) ? String(firstBid).trim().toUpperCase() : "";
+    const bidNumbers = first ? [first, ...waiting.filter((bidNo) => bidNo.toUpperCase() !== first)] : waiting;
     if (!bidNumbers.length) {
       await setState("complete", "No bid is waiting for a reply. Run My Representation first if new representations were made.");
       return { ok: true };
@@ -1042,13 +1046,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       };
     }
     if (message.type === "START_GEM_REPRESENTATION_REPLIES") {
-      return startRepresentationReplies();
+      return startRepresentationReplies(message.firstBid);
     }
     if (message.type === "SAVE_GEM_REPRESENTATION_REPLIES") {
       const body = JSON.stringify({ action: "replies", results: message.results || [] });
       const result = await api("/gem/representation-results/", { method: "POST", body });
       await mirrorToOtherBackends("/gem/representation-results/", body);
-      return { ok: true, replies: result.replies || 0 };
+      return { ok: true, replies: result.replies || 0, missing: result.missing || [] };
     }
     if (message.type === "GEM_REPRESENTATION_REPLIES_DONE") {
       if (sender.tab?.id) await chrome.tabs.remove(sender.tab.id).catch(() => {});

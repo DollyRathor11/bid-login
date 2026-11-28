@@ -29,7 +29,8 @@
     startButton.disabled = true;
     output.className = "sync-state";
     output.textContent = "Starting...";
-    chrome.runtime.sendMessage({ type: "START_GEM_REPRESENTATION_REPLIES" }, (response) => {
+    const firstBid = (document.getElementById("replies-first-bid")?.value || "").trim().toUpperCase();
+    chrome.runtime.sendMessage({ type: "START_GEM_REPRESENTATION_REPLIES", firstBid }, (response) => {
       if (chrome.runtime.lastError || !response?.ok) {
         startButton.disabled = false;
         output.className = "sync-state failed";
